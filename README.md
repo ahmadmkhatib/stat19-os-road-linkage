@@ -44,8 +44,8 @@ This project uses R (>= 4.3) and requires packages such as:
 - sf
 - tidyverse
 - data.table
-- units
-- here
+- stats19
+- stringr
 
 ---
 
@@ -65,6 +65,7 @@ It is intended for:
 ## Author
 
 Ahmad Alkhatib  
+Public Health and Policy Evaluation Unit 
 Imperial College London
 
 ---
