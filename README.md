@@ -20,13 +20,7 @@ The pipeline includes:
   - Fixed distance thresholds (50m / 100m)  
 - Validation and sensitivity checks (e.g., road class agreement)
 
-The objective is to create a clean, reproducible injury–road level dataset suitable for:
-
-- Road safety analysis  
-- Road hierarchy comparisons  
-- Clean Air Zone (CAZ) and control city evaluations  
-- Spatial modelling and mapping  
-
+The objective is to create a clean, reproducible GB injury–road level dataset
 ---
 
 # Repository Structure
@@ -54,11 +48,11 @@ Users must independently obtain:
 - **STATS19 collision, vehicle, and casualty data**  
   Source: UK Department for Transport  
 
-- **OS Open Roads network data**  
+- **OS Open Roads network shapefile**  
   Source: Ordnance Survey  
 
-- **Local Authority District boundaries**  
-  LAD_DEC_24_UK_BGC.shp  
+- **Local Authority District boundaries shapefile**  
+ Source: geoportal.statistics.gov.uk
 
 ---
 
@@ -122,7 +116,7 @@ Prepare and standardise the OS road network for spatial linkage.
   - B  
   - minor (C + Unclassified)  
 - Transform to EPSG:27700  
-- Save cleaned road network  
+- Save the cleaned road network  
 
 ## Output
 
@@ -290,9 +284,8 @@ This repository provides a generalisable UK-wide linkage framework.
 It is intended for:
 
 - Academic research  
-- Road safety evaluation  
-- Transport policy impact analysis  
-- Spatial epidemiology studies  
+- Road safety evaluations
+
 
 ---
 
