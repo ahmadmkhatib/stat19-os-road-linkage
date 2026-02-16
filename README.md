@@ -80,6 +80,7 @@ Users should create the following folder structure:
 
 data/
   raw/
+  
     OS highways all.shp
     LAD_DEC_24_UK_BGC.shp
     
