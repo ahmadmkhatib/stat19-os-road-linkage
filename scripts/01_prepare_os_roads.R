@@ -10,7 +10,7 @@ library(stringr)
 library(here)
 
 # ----------------------------------------------------------
-# 1. USER INPUT: Set Data Paths
+# USER INPUT: Set Data Paths
 # ----------------------------------------------------------
 
 # Users must download:
@@ -21,13 +21,13 @@ roads_path <- here("data", "raw", "OS highways all.shp")
 lads_path  <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
 
 # ----------------------------------------------------------
-# 2. Load LAD Boundaries
+# Load LAD Boundaries
 # ----------------------------------------------------------
 
 LADs <- st_read(lads_path, quiet = TRUE)
 
 # ----------------------------------------------------------
-# 3. Define LAD Selection (modify this section as needed)
+# Define LAD Selection (modify this section as needed)
 # ----------------------------------------------------------
 
 selected_lads <- c(
@@ -53,7 +53,7 @@ LADs_sub <- LADs %>%
 lads_union <- st_union(LADs_sub)
 
 # ----------------------------------------------------------
-# 4. Load OS Open Roads
+# Load OS Open Roads
 # ----------------------------------------------------------
 
 roads <- st_read(roads_path, quiet = TRUE)
@@ -73,7 +73,7 @@ roads <- st_read(
   quiet = TRUE
 )
 # ----------------------------------------------------------
-# 6. Recode Road Classification
+# Recode Road Classification
 # ----------------------------------------------------------
 
 roads <- roads %>%
@@ -89,7 +89,7 @@ roads <- roads %>%
   )
 
 # ----------------------------------------------------------
-# 7. Save Processed Roads
+# Save 
 # ----------------------------------------------------------
 
 output_path <- here("data", "processed", "roads_filtered.rds")
