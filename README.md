@@ -74,3 +74,14 @@ Imperial College London
 
 This project is licensed under the MIT License.
 
+## Data Setup
+
+Users should create the following folder structure:
+
+data/
+  raw/
+    os_open_roads.shp
+    LAD_DEC_24_UK_BGC.shp
+  processed/
+
+
