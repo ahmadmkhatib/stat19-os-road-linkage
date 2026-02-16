@@ -1,0 +1,6 @@
+@software{stat19-os-road-linkage,
+  author = {Ahmad Alkhatib},
+  title = {{STAT19–OS Road Linkage Pipeline}},
+  year = {2026},
+  url = {https://github.com/ahmadmkhatib/stat19-os-road-linkage}
+}
