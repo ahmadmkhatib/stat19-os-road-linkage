@@ -1,6 +1,6 @@
-# STAT19 – OS Open Roads Spatial Linkage Framework
+# STAT19 – OS Open Roads Spatial Linkage 
 
-This repository provides a reproducible spatial linkage pipeline for matching UK STATS19 road traffic collision data to OS Open Roads network links.
+This repository provides a spatial linkage pipeline for matching UK STATS19 road traffic collision data to OS Open Roads network links.
 
 The framework is designed to support road safety research, transport policy evaluation, and spatial injury analysis.
 
