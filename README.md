@@ -217,23 +217,53 @@ This dataset contains:
 
 ---
 
-# Quality Assurance
+# Script 04: Recode matched RTIs and assign Output Areas (OA)
 
-The pipeline includes checks for:
+This script processes the previously matched RTI dataset (`RTIs_final.rds`) to:
 
-- Date parsing validity  
-- Road class distribution  
-- Matching type distribution  
-- Proportion of unmatched injuries  
-- Distance summaries  
+1. Convert each RTI into a spatial point (`sf`) using British National Grid coordinates.
+2. Assign **one Output Area (OA)** per RTI using 2011 OA boundaries covering England, Wales, and Scotland.
+3. Recode and create additional temporal variables (`month_year`, `quarter_year`, `year`) for time-based analyses.
+4. Perform quality assurance checks to ensure all RTIs are assigned an OA, with fallback nearest-neighbour matching for missing points.
 
-Typical results:
+---
 
-- Majority matched via same-class rule  
-- Small proportion matched via fallback  
-- Very small percentage (>100m) excluded  
+## Workflow
 
-This reflects expected positional imprecision in STATS19 reporting.
+1. **Load matched RTI data**  
+   - Each row represents one RTI.
+   - Converts injury coordinates into `sf` points (EPSG:27700).
+
+2. **Load Output Area boundaries**  
+   - Uses `infuse_oa_lyr_2011_clipped.shp`, which covers England, Wales, and Scotland.
+   - CRS harmonisation and geometry validation applied.
+
+3. **Spatial linkage**  
+   - Primary: `st_within` ensures each RTI is assigned to the OA polygon it falls inside.
+   - Secondary: `st_nearest_feature` assigns the nearest OA for points outside any polygon.
+
+4. **Quality Assurance (QA)**  
+   - Checks total RTIs, number of missing OA assignments, and percentage missing.
+   - After nearest-neighbour fallback, the dataset should have minimal or no missing OA codes.
+
+5. **Add temporal variables**  
+   - `month_year` → first day of the month of the collision.
+   - `quarter_year` → first day of the quarter of the collision.
+   - `year` → collision year.
+
+6. **Output**  
+   - Final dataset: `RTIs_final_with_OA.rds`  
+   - Each row = one RTI, including spatial coordinates, matched road link, OA code, and recoded variables.
+
+---
+
+## Notes
+
+- OA boundaries are based on **2011 UK census geography**, as 2021 coverage does not include Scotland.  
+- The dataset is ready for further spatial analysis, including linkage to local authority or small-area indicators.
+- All operations are performed in **EPSG:27700 (British National Grid)** to maintain consistency with the road network and injury locations.
+
+---
 
 ---
 
