@@ -10,14 +10,10 @@ library(dplyr)
 library(here)
 
 # ----------------------------------------------------------
-# 1. Load Processed Data
+# Load Processed Data
 # ----------------------------------------------------------
 
-# Expected inputs (created by earlier scripts):
-# - data/processed/injuries_processed.rds
-# - data/processed/roads_filtered.rds
-
-injuries_path <- here("data", "processed", "RTIs_final.rds")
+injuries_path <- here("data", "processed", "injuries.rds")
 roads_path    <- here("data", "processed", "roads_filtered.rds")
 
 injuries <- readRDS(injuries_path)
@@ -26,9 +22,12 @@ roads    <- readRDS(roads_path)
 # Ensure CRS consistency
 stopifnot(st_crs(injuries) == st_crs(roads))
 
+## checks
+table(injuries$injury_class, useNA = "ifany")
+any(duplicated(injuries$injury_id))
 # ----------------------------------------------------------
-# 2. Split Roads by Class
-# ----------------------------------------------------------
+# Split Roads by Class
+# --------------------------------------------------------
 
 roads_A        <- roads %>% filter(road_class == "A")
 roads_B        <- roads %>% filter(road_class == "B")
@@ -36,7 +35,7 @@ roads_motorway <- roads %>% filter(road_class == "Motorway")
 roads_minor    <- roads %>% filter(road_class == "minor")
 
 # ----------------------------------------------------------
-# 3. Matching Function
+# Matching Function
 # ----------------------------------------------------------
 
 match_one_class <- function(injuries, roads_same, roads_any,
@@ -72,7 +71,7 @@ match_one_class <- function(injuries, roads_same, roads_any,
     filter(match_type != "dropped")
 }
 # ----------------------------------------------------------
-# 4. Perform Matching by Injury Class
+# Perform Matching by Injury Class
 # ----------------------------------------------------------
 
 matched_A <- match_one_class(
@@ -107,30 +106,42 @@ matched <- bind_rows(
 )
 
 # ----------------------------------------------------------
-# 5. Matching Diagnostics
+# Matching Diagnostics (injury-level)
 # ----------------------------------------------------------
 
-n_total <- nrow(injuries)
+# total unique injuries entering matching
+n_total <- injuries %>%
+  distinct(injury_id) %>%
+  nrow()
 
-matched_ids <- matched %>%
-  distinct(injury_id)
+# unique injuries successfully matched
+n_matched <- matched %>%
+  distinct(injury_id) %>%
+  nrow()
 
-n_matched <- nrow(matched_ids)
 n_unmatched <- n_total - n_matched
 
 summary_table <- tibble(
-  injuries_total = n_total,
-  injuries_matched = n_matched,
+  injuries_total    = n_total,
+  injuries_matched  = n_matched,
   injuries_unmatched = n_unmatched,
-  pct_unmatched = 100 * n_unmatched / n_total
+  pct_unmatched     = 100 * n_unmatched / n_total
 )
 
 print(summary_table)
 
-print(table(matched$match_type))
+
+####  -------
+# Check duplicates
+any(duplicated(matched$injury_id))
+
+sum(duplicated(matched$injury_id))
+
+
+
 
 # ----------------------------------------------------------
-# 6. Save Output
+# Save Output
 # ----------------------------------------------------------
 
 output_path <- here("data", "processed", "injuries_matched.rds")

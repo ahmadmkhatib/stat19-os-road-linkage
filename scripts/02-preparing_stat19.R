@@ -131,14 +131,25 @@ stats19_sf <- stats19_sf %>%
 # ----------------------------------------------------------------------
 
 stats19_sf <- stats19_sf %>%
-  mutate(injury_id = row_number())
+  mutate(
+    injury_id = paste(
+      collision_index,
+      casualty_reference,
+      sep = "_"
+    )
+  )
 
-summary(stats19$date)
+
+summary(stats19_sf$date)
+
+
+
+
 
 # ----------------------------------------------------------------------
 # Save 
 # ----------------------------------------------------------------------
 saveRDS(
   stats19_sf,
-  here("data","processed","RTIs_final.rds")
+  here("data","processed","injuries.rds")
 )

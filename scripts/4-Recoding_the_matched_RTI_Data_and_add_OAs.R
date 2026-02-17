@@ -8,15 +8,14 @@ library(lubridate)
 library(here)
 
 # ------------------------------------------------------------
-# 1. Load matched RTI data
-# ------------------------------------------------------------
-
-matched <- read_rds(here("data", "processed", "RTIs_final.rds"))
+# Load matched RTI data
+# -------------------------------
+injuries_matched <- read_rds(here("data", "processed", "injuries_matched.rds"))
 
 # Ensure RTIs are rows (each row = one RTI)
 # Convert to sf using injury coordinates (British National Grid)
 
-matched_sf <- matched %>%
+injuries_matched_sf <- injuries_matched %>%
   st_as_sf(
     coords = c("injury_x", "injury_y"),
     crs = 27700,
@@ -24,10 +23,10 @@ matched_sf <- matched %>%
   )
 
 # Check CRS
-st_crs(matched_sf)
+st_crs(injuries_matched_sf)
 
 # ------------------------------------------------------------
-# 2. Load Output Area boundaries (England & Wales and scotland 2011) ### scotland does not have 2021 
+# Load Output Area boundaries (England & Wales and scotland 2011) ### scotland does not have 2021 
 # ------------------------------------------------------------
 
 oa_2011 <- st_read("data/raw/infuse_oa_lyr_2011_clipped.shp") %>%
@@ -40,19 +39,19 @@ oa_2011 <- st_read("data/raw/infuse_oa_lyr_2011_clipped.shp") %>%
 # ------------------------------------------------------------
 
 # st_within ensures one OA per point
-RTI_DATA <- matched_sf %>%
+injuries_with_oa <- injuries_matched_sf %>%
   st_join(
     oa_2011,
     join = st_within,
     left = TRUE
   )
 
-
-# ------------------------------------------------------------
+any(duplicated(injuries_with_oa$injury_id))
+# ---------------------
 # Quality Assurance
-# ------------------------------------------------------------
+# ---------------------
 
-RTI_DATA %>%
+injuries_with_oa %>%
   summarise(
     total = n(),
     missing_oa = sum(is.na(OA_CODE)),
@@ -61,19 +60,19 @@ RTI_DATA %>%
 
 
 # fix missing using nearest feature
-missing_idx <- which(is.na(RTI_DATA$OA_CODE))
+missing_idx <- which(is.na(injuries_with_oa$OA_CODE))
 
-RTI_DATA$OA_CODE[missing_idx] <-
+injuries_with_oa$OA_CODE[missing_idx] <-
   oa_2011$OA_CODE[
-    st_nearest_feature(RTI_DATA[missing_idx, ], oa_2011)
+    st_nearest_feature(injuries_with_oa[missing_idx, ], oa_2011)
   ]
 
 
-# ------------------------------------------------------------
+# -------------------------------
 # additional time variables
-# ------------------------------------------------------------
+# --------------------------------
 
-RTI_DATA <- RTI_DATA %>%
+injuries_with_oa <- injuries_with_oa %>%
   mutate(
     date = as.Date(date),
     month_year = floor_date(date, "month"),
@@ -81,14 +80,12 @@ RTI_DATA <- RTI_DATA %>%
     year = year(date)
   )
 
-# ----------------------------------------------------------
+# -----------------------------
 
-# ------------------------------------------------------------
-# --------------------------------------
 
 write_rds(
-  RTI_DATA,
-  here("data", "processed", "RTIs_final_with_OA.rds")
+  injuries_with_oa,
+  here("data", "processed", "injuries_with_oa.rds")
 )
 
 #
