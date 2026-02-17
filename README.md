@@ -258,7 +258,7 @@ Each injury is matched to one road link only.
 ## Output
 
 ```
-data/processed/matchedRTI.rds
+data/processed/injuries_matched.rds
 ```
 
 This dataset contains:
@@ -272,7 +272,7 @@ This dataset contains:
 
 # Script 04: Recode matched RTIs and assign Output Areas (OA)
 
-This script processes the previously matched RTI dataset (`RTIs_final.rds`) to:
+This script processes the previously matched RTI dataset (`injuries_matched.rds`) to:
 
 1. Convert each RTI into a spatial point (`sf`) using British National Grid coordinates.
 2. Assign **one Output Area (OA)** per RTI using 2011 OA boundaries covering England, Wales, and Scotland.
@@ -313,7 +313,7 @@ This script processes the previously matched RTI dataset (`RTIs_final.rds`) to:
    - `year` → collision year.
 
 6. **Output**  
-   - Final dataset: `RTIs_final_with_OA.rds`  
+   - Final dataset: `injuries_with_OA.rds`  
    - Each row = one RTI, including spatial coordinates, matched road link, OA code, and recoded variables.
 
 ---
