@@ -2,6 +2,8 @@
 # STAT19 – OS Open Roads Linkage Framework
 # Script: 01_prepare_os_roads.R
 # Purpose: Prepare OS Open Roads data within selected LADs
+#          defined in Script 00 (large city subset)
+# Output:  data/processed/roads_filtered.rds
 # ==========================================================
 
 library(sf)
@@ -10,44 +12,49 @@ library(stringr)
 library(here)
 
 # ----------------------------------------------------------
-# USER INPUT: Set Data Paths
+#Paths
 # ----------------------------------------------------------
 
-# Users must download:
+#  must download:
 # - OS Open Roads
 # - LAD boundaries (ONS)
 
 roads_path <- here("data", "raw", "OS highways all.shp")
 lads_path  <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
+cities_path  <- here("data", "processed", "big_cities_with_LADs.rds")
 
 # ----------------------------------------------------------
 # Load LAD Boundaries
 # ----------------------------------------------------------
+## LADs with CAZ 
+
+CAZ_LADs <- c(
+  # England CAZ
+  "E06000022","E08000025","E08000032","E06000023",
+  "E06000044","E08000019","E08000021","E08000018", 
+  "S12000049","S12000036","S12000033", "S12000042")
 
 LADs <- st_read(lads_path, quiet = TRUE)
+cities_with_LADs <- readRDS(cities_path)
 
 # ----------------------------------------------------------
 # Define LAD Selection 
 # ----------------------------------------------------------
 
-selected_lads <- c(
-  # England CAZ
-  "E06000022","E08000025","E08000032","E06000023",
-  "E06000044","E08000019","E08000021","E08000018",
-  # Controls
-  "E06000043","E08000026","E06000015","E06000010",
-  "E08000035","E06000016","E08000012","E06000032",
-  "E08000003","E06000062","E07000148","E06000018",
-  "E06000026","E06000038","E06000045","E06000021",
-  "E08000031",
-  # Scotland
-  "S12000049","S12000036","S12000033",
-  "S12000042","S12000038","S12000029",
-  # Wales
-  "W06000015","W06000022","W06000011"
-)
+control_LADs <- cities_with_LADs %>%
+   pull(LAD24CD)  %>%
+  setdiff(CAZ_LADs) 
 
-LADs_sub <- LADs %>%
+
+selected_lads <- c(
+  #  Intervention
+  CAZ_LADs,
+    #  Controls
+  control_LADs )
+
+
+
+  LADs_sub <- LADs %>%
   filter(LAD24CD %in% selected_lads)
 
 lads_union <- st_union(LADs_sub)
@@ -58,11 +65,10 @@ lads_union <- st_union(LADs_sub)
 
 roads <- st_read(roads_path, quiet = TRUE)
 
-# for speed 
-dir.create(here("data", "processed"), showWarnings = FALSE)
+# for speed ## dealing with .gpkg is faster than .shp 
+
 roads <- roads %>% st_zm(roads, drop = TRUE, what = "ZM") %>% select(-fid)
 st_write(roads, "data/processed/roads.gpkg", delete_dsn = TRUE)
-## dealing with .gpkg is faster than .shp 
 rm(roads)
 
 roads <- st_read(
@@ -89,10 +95,9 @@ roads <- roads %>%
 # ----------------------------------------------------------
 # Save 
 # ----------------------------------------------------------
-
 output_path <- here("data", "processed", "roads_filtered.rds")
 
-dir.create(here("data", "processed"), showWarnings = FALSE)
+
 
 saveRDS(roads, output_path)
 
