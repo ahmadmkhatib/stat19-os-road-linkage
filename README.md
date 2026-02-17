@@ -2,7 +2,7 @@
 
 This repository provides a spatial linkage pipeline for matching UK STATS19 road traffic collision data to OS Open Roads network links.
 
-The framework is designed to support road safety research, transport policy evaluation, and spatial injury analysis.
+The framework is designed to support transport research and policy evaluations.
 
 ---
 
@@ -18,7 +18,7 @@ The pipeline includes:
 - Spatial linkage using:
   - Hierarchy-aware nearest-road matching  
   - Fixed distance thresholds (50m / 100m)  
-- Validation and sensitivity checks (e.g., road class agreement)
+- Validation 
 
 The objective is to create a clean, reproducible GB injury–road level dataset
 ---
