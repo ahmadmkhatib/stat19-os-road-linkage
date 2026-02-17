@@ -31,13 +31,29 @@ The objective is to create a clean, reproducible GB injury–road level dataset
 ├── scripts/
 │   ├── 01_prepare_roads.R
 │   ├── 02_prepare_stats19.R
-│   └── 03_match_injuries_to_roads.R
+│   └── 03_match_injuries_to_roads_by_type.R
+│   ├── 04_Recoding_the_matched_RTI_Data_and_add_OAs.R
+│   └── 05_validation_checks_final_data.R
+
 ├── data/
 │   ├── raw/
 │   └── processed/
 ```
 
 ---
+
+## Quick Start
+
+To run the full pipeline:
+
+```r
+source("scripts/01_prepare_roads.R")
+source("scripts/02_prepare_stats19.R")
+source("scripts/03_match_injuries_to_roads.R")
+source("scripts/04_assign_oa.R")
+source("scripts/05_validation_checks.R")
+
+```
 
 # Data Requirements
 
@@ -60,7 +76,6 @@ Users must independently obtain:
 
 Create the following folder structure:
 
-```
 data/
   raw/
     OS highways all.shp
@@ -141,7 +156,7 @@ Prepare STATS19 injury data for spatial matching.
 5. Convert injury locations to spatial points  
 6. Transform to EPSG:27700  
 7. Attach Local Authority District (LAD)  
-8. Exclude London boroughs (codes starting with E09000)  
+8. Include LADs subset only -- exclude other areas   
 9. Create:
    - `injury_id`
    - `injury_class` (Motorway, A, B, minor)
@@ -227,6 +242,14 @@ This script processes the previously matched RTI dataset (`RTIs_final.rds`) to:
 4. Perform quality assurance checks to ensure all RTIs are assigned an OA, with fallback nearest-neighbour matching for missing points.
 
 ---
+#  Script 05: validation checks on the injuries_with_oa dataset
+1. Duplicats 
+2. Spatial geometries
+3. CRS 
+4. OA coverage  
+5. Distance-to-road matches
+6. Valid temporal range 
+
 
 ## Workflow
 
