@@ -27,7 +27,7 @@ lads_path  <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
 LADs <- st_read(lads_path, quiet = TRUE)
 
 # ----------------------------------------------------------
-# Define LAD Selection (modify this section as needed)
+# Define LAD Selection 
 # ----------------------------------------------------------
 
 selected_lads <- c(
@@ -64,8 +64,6 @@ roads <- roads %>% st_zm(roads, drop = TRUE, what = "ZM") %>% select(-fid)
 st_write(roads, "data/processed/roads.gpkg", delete_dsn = TRUE)
 ## dealing with .gpkg is faster than .shp 
 rm(roads)
-gc()
-## n = 824790
 
 roads <- st_read(
   "data/processed/roads.gpkg",
