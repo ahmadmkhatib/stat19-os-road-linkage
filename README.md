@@ -42,19 +42,6 @@ The objective is to create a clean, reproducible GB injury–road level dataset
 
 ---
 
-## Quick Start
-
-To run the full pipeline:
-
-```r
-source("scripts/01_prepare_roads.R")
-source("scripts/02_prepare_stats19.R")
-source("scripts/03_match_injuries_to_roads.R")
-source("scripts/04_assign_oa.R")
-source("scripts/05_validation_checks.R")
-
-```
-
 # Data Requirements
 
 Due to licensing restrictions, raw datasets are **not included** in this repository.
