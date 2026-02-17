@@ -12,13 +12,16 @@ This project spatially links individual STATS19 road traffic injury (RTI) record
 
 The pipeline includes:
 
-- Cleaning and preparing STATS19 collision-level data  
-- Cleaning and preparing the OS Open Roads network data  
-- Coordinate reference system harmonisation  
-- Spatial linkage using:
-  - Hierarchy-aware nearest-road matching  
-  - Fixed distance thresholds (50m / 100m)  
-- Validation 
+This project:
+
+1. Defines a reproducible set of large UK cities (≥100,000 population)
+2. Create LADs subset
+3. Constructs a control LAD pool from the remaining large cities
+4. Prepares OS Open Roads within selected LADs
+5. Prepares STATS19 injury data
+6. Performs hierarchy-aware spatial road linkage
+7. Assigns Output Areas (OA)
+8. Validation checks
 
 The objective is to create a clean, reproducible GB injury–road level dataset
 ---
@@ -29,7 +32,8 @@ The objective is to create a clean, reproducible GB injury–road level dataset
 ├── README.md
 ├── RS_project.Rproj
 ├── scripts/
-│   ├── 01_prepare_roads.R
+│   ├── 00_create_large_city_LAD_subset.R
+|   ├── 01_prepare_roads.R
 │   ├── 02_prepare_stats19.R
 │   └── 03_match_injuries_to_roads_by_type.R
 │   ├── 04_Recoding_the_matched_RTI_Data_and_add_OAs.R
@@ -97,9 +101,56 @@ This ensures:
 
 # Workflow
 
-The analysis consists of three scripts that must be run in sequence.
+The analysis consists of  scripts that must be run in sequence.
 
 ---
+
+---
+
+# Script 00 – Create Large City LAD Subset
+
+Creates a dataset of UK cities with population ≥100,000 and assigns LAD codes.
+
+### Inputs
+
+- LAD boundaries (ONS)
+- Built-Up Areas (England & Wales)
+- Scotland settlement population file
+- City latitude/longitude file
+
+### Output
+data/processed/big_cities_with_LADs.rds
+
+Contains:
+
+- City name  
+- LAD code (LAD24CD)  
+- LAD name (LAD24NM)  
+- Population  
+- Country  
+
+This file is used downstream to define control LADs.
+
+---
+
+# Script 01 – Prepare OS Roads
+
+Purpose: Prepare OS Open Roads data within selected LADs.
+
+### Steps
+
+- Load LAD boundaries
+- Define treatment LADs (England CAZ + Scotland LEZ)
+- Construct Control LADs dynamically
+- Subset LAD geometries
+- Load OS Open Roads
+- Spatially filter roads to selected LADs
+- Recode road hierarchy
+- Save processed roads
+
+### Output
+
+
 
 # 01_prepare_roads.R
 
