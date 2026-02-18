@@ -184,21 +184,54 @@ data/processed/roads_final.rds
 ## Purpose
 
 Prepare STATS19 injury data for spatial matching.
+Each row in the final dataset represents one casualty (one injury).
+The dataset is constructed starting from the casualty table.
 
-## Steps
+Joins are performed as:
 
-1. Import collision, vehicle, and casualty datasets  
-2. Join datasets using `collision_index`  
-3. Parse dates and filter to 2015 onwards  
-4. Recode road hierarchy variables  
-5. Convert injury locations to spatial points  
-6. Transform to EPSG:27700  
-7. Attach Local Authority District (LAD)  
-8. Include LADs subset only -- exclude other areas   
-9. Create:
-   - `injury_id`
-   - `injury_class` (Motorway, A, B, minor)
+Casualty → Collision (by collision_index)
 
+Casualty → Vehicle (by collision_index + vehicle_reference)
+
+Steps
+
+Import collision, vehicle, and casualty datasets
+
+Parse collision dates and filter to 2015 onwards
+
+Select required variables only (memory efficient)
+
+Join:
+
+Collision data to casualties
+
+Vehicle data to casualties using collision_index + vehicle_reference
+
+Create a unique injury identifier:
+
+injury_id = collision_index + "_" + casualty_reference
+
+Recode:
+
+Road class hierarchy
+
+Casualty severity (KSI / Slight)
+
+Vehicle type
+
+Propulsion type
+
+Convert to spatial points using:
+
+location_easting_osgr
+
+location_northing_osgr
+
+Set CRS to EPSG:27700 (British National Grid)
+
+Attach Local Authority District (LAD)
+
+Filter to the selected LAD subset only
 ## Output
 
 ```
