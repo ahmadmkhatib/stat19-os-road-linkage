@@ -56,6 +56,10 @@ selected_lads <- c(
 
   LADs_sub <- LADs %>%
   filter(LAD24CD %in% selected_lads)
+  
+  ### save the LADs sub 
+
+saveRDS(LADs_sub, here("data", "processed", "LADs_sub.rds"))
 
 lads_union <- st_union(LADs_sub)
 

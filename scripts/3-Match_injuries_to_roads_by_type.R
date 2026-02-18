@@ -16,18 +16,27 @@ library(here)
 injuries_path <- here("data", "processed", "injuries.rds")
 roads_path    <- here("data", "processed", "roads_filtered.rds")
 
+
 injuries <- readRDS(injuries_path)
 roads    <- readRDS(roads_path)
+
 
 # Ensure CRS consistency
 stopifnot(st_crs(injuries) == st_crs(roads))
 
-## checks
-table(injuries$injury_class, useNA = "ifany")
-any(duplicated(injuries$injury_id))
+
+
 # ----------------------------------------------------------
 # Split Roads by Class
 # --------------------------------------------------------
+
+#### recode class
+injuries <- injuries %>% 
+  mutate (injury_class = 
+            case_when( first_road_class_label %in% c("Motorway","A","B") ~ first_road_class_label, 
+                       first_road_class_label %in% c("C","Unclassified") ~ "minor", TRUE ~ NA_character_))
+                          
+table(injuries$injury_class)
 
 roads_A        <- roads %>% filter(road_class == "A")
 roads_B        <- roads %>% filter(road_class == "B")
@@ -132,14 +141,6 @@ print(summary_table)
 
 
 ####  -------
-# Check duplicates
-any(duplicated(matched$injury_id))
-
-sum(duplicated(matched$injury_id))
-
-
-
-
 # ----------------------------------------------------------
 # Save Output
 # ----------------------------------------------------------
