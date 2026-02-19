@@ -486,26 +486,47 @@ Raw datasets are subject to their respective licences:
 
 
 # Data Dictionary
-Injury-Level Dataset (injuries_final.rds) 
 
-| Variable           | Description                                              | Source               |
-| ------------------ | -------------------------------------------------------- | -------------------- |
-| injury_id          | Unique identifier (collision_index + casualty_reference) | Derived              |
-| collision_index    | Unique collision identifier                              | STATS19              |
-| casualty_reference | Casualty ID within collision                             | STATS19              |
-| date               | Date of collision                                        | STATS19              |
-| year               | Calendar year                                            | Derived              |
-| month_year         | Year–month                                               | Derived              |
-| quarter_year       | Year–quarter                                             | Derived              |
-| severity           | KSI vs slight                                            | Derived (STATS19)    |
-| casualty_type      | Pedestrian / cyclist / vehicle occupant                  | STATS19 (harmonised) |
-| vehicle_type       | Simplified vehicle class                                 | STATS19 (harmonised) |
-| propulsion_type    | Fuel type category                                       | STATS19              |
-| road_class         | Motorway / A / B / minor                                 | Harmonised           |
-| junction           | Binary indicator of junction involvement                 | STATS19              |
-| LAD24CD            | Local Authority District code                            | Spatial join         |
-| geometry           | Injury point (EPSG:27700)                                | Derived              |
+Injury-Level Analytical Dataset (injuries_OA.rds)
 
+
+| Variable                | Description                                                     | Source                     |
+| ----------------------- | --------------------------------------------------------------- | -------------------------- |
+| injury_id               | Unique injury identifier (collision_index + casualty_reference) | Derived                    |
+| collision_index         | Unique collision identifier                                     | STATS19                    |
+| casualty_reference      | Casualty ID within collision                                    | STATS19                    |
+| date                    | Date of collision                                               | STATS19                    |
+| year                    | Calendar year                                                   | Derived                    |
+| month                   | Calendar month (1–12)                                           | Derived                    |
+| month_year              | Year–month identifier                                           | Derived                    |
+| quarter                 | Calendar quarter (1–4)                                          | Derived                    |
+| quarter_year            | Year–quarter identifier                                         | Derived                    |
+| severity                | Binary indicator: KSI (Killed/Seriously Injured) vs Slight      | Derived (STATS19)          |
+| casualty_severity       | Original STATS19 severity code                                  | STATS19                    |
+| casualty_type           | Pedestrian / Cyclist / Vehicle occupant (harmonised)            | STATS19                    |
+| age                     | Casualty age                                                    | STATS19                    |
+| sex                     | Casualty sex                                                    | STATS19                    |
+| vehicle_type            | Simplified vehicle class                                        | STATS19 (harmonised)       |
+| propulsion_type         | Fuel/propulsion category                                        | STATS19                    |
+| junction                | Binary indicator of junction involvement                        | STATS19                    |
+| road_class_police       | Road class recorded in STATS19                                  | STATS19                    |
+| speed_limit             | Posted speed limit (mph)                                        | STATS19                    |
+| easting                 | British National Grid easting                                   | STATS19                    |
+| northing                | British National Grid northing                                  | STATS19                    |
+| geometry                | Injury point geometry (EPSG:27700)                              | Derived                    |
+| road_link_id            | OS Open Roads unique segment identifier                         | OS Open Roads              |
+| road_class_matched      | Road class of matched segment                                   | OS Open Roads              |
+| road_name               | Road name (if available)                                        | OS Open Roads              |
+| trunk_road              | Indicator for trunk road (if available)                         | OS Open Roads              |
+| road_distance_m         | Distance from injury to matched road segment (metres)           | Derived (spatial matching) |
+| match_type              | Matching type (same-class ≤50m / fallback ≤100m)                | Derived                    |
+| LAD24CD                 | Local Authority District code                                   | Spatial join               |
+| LAD24NM                 | Local Authority District name                                   | Spatial join               |
+| OA11CD                  | Output Area code (2011 boundaries)                              | Spatial join               |
+| OA_assignment_method    | Within-OA polygon or nearest-OA centroid                        | Derived                    |
+| intervention_area       | Indicator for CAZ/LEZ intervention LAD (if applicable)          | Derived                    |
+| intervention_start_year | Policy implementation year (if merged)                          | Derived                    |
+| post_policy             | Post-intervention indicator                                     | Derived                    |
 
 
 ```mermaid
