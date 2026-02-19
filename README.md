@@ -1,8 +1,20 @@
-# STAT19 – OS Open Roads Spatial Linkage
+# STAT19 – OS Open Roads Spatial Linkage & Area Assignment (UK)
 
-This repository provides a spatial linkage pipeline for matching UK STATS19 road traffic collision data to OS Open Roads network links.
+![Reproducible Research](https://img.shields.io/badge/Reproducible-Yes-brightgreen)
+![R Version](https://img.shields.io/badge/R-%3E%3D4.3-blue)
+![Spatial CRS](https://img.shields.io/badge/CRS-EPSG%3A27700-lightgrey)
 
-The framework is designed to support transport research and policy evaluations.
+
+
+This repository provides a spatial linkage framework connecting the UK STATS19 road traffic injuries and collision data to:
+UK Road network geometry from the OS Open Roads network links.
+
+Local Authority Districts (LADs)
+
+Output Areas (OA, 2011 boundaries)
+ 
+
+The framework is designed to create an injury-level dataset matched to road segments and small-area geography to support transport research and policy evaluations.
 
 ---
 
@@ -10,18 +22,25 @@ The framework is designed to support transport research and policy evaluations.
 
 This project spatially links individual STATS19 road traffic injury (RTI) records to the most plausible road link in the Ordnance Survey (OS) Open Roads network.
 
-The pipeline includes:
+The pipeline:
 
-This project:
+Selects large UK cities (≥100,000 population)
 
-1. Defines a reproducible set of large UK cities (≥100,000 population)
-2. Create LADs subset
-3. Constructs a control LAD pool from the remaining large cities
-4. Prepares OS Open Roads within selected LADs
-5. Prepares STATS19 injury data
-6. Performs hierarchy-aware spatial road linkage
-7. Assigns Output Areas (OA)
-8. Validation checks
+Identifies intervention and control areas
+
+Filters OS Open Roads to selected LADs
+
+Constructs injury-level STATS19 dataset (2015+)
+
+Data Quality Assurance 
+
+Spatially matches injuries to plausible road segments
+
+Assigns Output Areas
+
+Runs validation checks
+
+All spatial operations use British National Grid (EPSG:27700).
 
 The objective is to create a clean, reproducible GB injury–road level dataset
 ---
@@ -29,19 +48,23 @@ The objective is to create a clean, reproducible GB injury–road level dataset
 # Repository Structure
 
 ```
-├── README.md
-├── RS_project.Rproj
-├── scripts/
-│   ├── 00_create_large_city_LAD_subset.R
-|   ├── 01_prepare_roads.R
-│   ├── 02_prepare_stats19.R
-│   └── 03_match_injuries_to_roads_by_type.R
-│   ├── 04_Recoding_the_matched_RTI_Data_and_add_OAs.R
-│   └── 05_validation_checks_final_data.R
+data/
+ ├── raw/                # Raw input datasets (not versioned)
+ ├── processed/          # Derived RDS and spatial outputs
+ │    ├── injuries_final.rds
+ │    ├── injuries_matched.rds
+ │    ├── injuries_with_oa.rds
+ │    ├── roads_filtered.rds
+ │    ├── LADs_sub.rds
+ │    └── validation_summary.rds
+scripts/
+ ├── 00_create_large_city_LAD_subset.R
+ ├── 01_prepare_os_roads.R
+ ├── 02_prepare_stats19_injuries.R
+ ├── 03_match_injuries_to_roads_by_type.R
+ ├── 04_assign_output_areas.R
+ └── 05_validation_checks.R
 
-├── data/
-│   ├── raw/
-│   └── processed/
 ```
 
 ---
@@ -151,7 +174,6 @@ Purpose: Prepare OS Open Roads data within selected LADs.
 ### Output
 
 
-
 # 01_prepare_roads.R
 
 ## Purpose
@@ -160,7 +182,7 @@ Prepare and standardise the OS road network for spatial linkage.
 
 ## Steps
 
-- Load OS roads shapefile  
+- Load the OS roads shapefile  
 - Clean attribute fields  
 - Standardise road classification  
 - Create simplified road class variable:
@@ -235,18 +257,18 @@ Filter to the selected LAD subset only
 ## Output
 
 ```
-data/processed/RTIs_final.rds
+data/processed/injuries_final.rds
 ```
 
 This file contains one spatial record per injury.
 
 ---
 
-# 03_match_injuries_to_roads.R
+## 03_match_injuries_to_roads_by_type.R
 
 ## Purpose
 
-Link each injury to the most plausible road link using hierarchy-aware spatial matching.
+Link each injury to the nearest most plausible road link using hierarchy-aware spatial matching.
 
 ---
 
@@ -275,6 +297,11 @@ the injury is matched to the nearest road of any class within 100 metres.
 Injuries more than 100 metres from any road link are excluded.
 
 ---
+## Matching uses:
+
+st_nearest_feature()
+
+st_distance()
 
 ## Distance Variables Recorded
 
@@ -310,17 +337,36 @@ This script processes the previously matched RTI dataset (`injuries_matched.rds`
 1. Convert each RTI into a spatial point (`sf`) using British National Grid coordinates.
 2. Assign **one Output Area (OA)** per RTI using 2011 OA boundaries covering England, Wales, and Scotland.
 3. Recode and create additional temporal variables (`month_year`, `quarter_year`, `year`) for time-based analyses.
-4. Perform quality assurance checks to ensure all RTIs are assigned an OA, with fallback nearest-neighbour matching for missing points.
+
 
 ---
 #  Script 05: validation checks on the injuries_with_oa dataset
-1. Duplicats 
-2. Spatial geometries
-3. CRS 
-4. OA coverage  
-5. Distance-to-road matches
-6. Valid temporal range 
+1. Purpose:
+Formal QA and validation of linkage pipeline.
 
+Checks Performed:
+
+Duplicate injury_id
+
+Empty geometries
+
+Invalid geometries
+
+CRS verification
+
+OA assignment completeness
+
+Road distance plausibility (>100m flagged)
+
+Date range consistency
+
+Future-dated injuries
+
+Missingness summary
+
+Output:
+
+validation_summary.rds
 
 ## Workflow
 
@@ -367,30 +413,38 @@ R (>= 4.3 recommended)
 
 Required packages:
 
-- sf  
-- tidyverse  
-- data.table  
-- stats19  
-- stringr  
-- lubridate  
-- here  
+sf
+tidyverse
+lubridate
+readxl
+stringr
+here
+tmap
+
 
 Install using:
 
 ```r
-install.packages(c("sf","tidyverse","data.table","stats19","stringr","lubridate","here"))
+install.packages(c("sf","tidyverse","tmap","stats19","stringr","lubridate","here"))
 ```
 
 ---
 
 # Reproducing the Full Pipeline
-
+Place raw datasets into:
+```r
+data/raw/
+```
 Run scripts in order:
 
 ```r
-source("scripts/01_prepare_roads.R")
-source("scripts/02_prepare_stats19.R")
-source("scripts/03_match_injuries_to_roads.R")
+00_create_large_city_LAD_subset.R
+01_prepare_os_roads.R
+02_prepare_stats19_injuries.R
+03_match_injuries_to_roads_by_type.R
+04_assign_output_areas.R
+05_validation_checks.R
+
 ```
 
 Processed outputs will appear in:
@@ -428,4 +482,50 @@ This project is licensed under the MIT License.
 Raw datasets are subject to their respective licences:
 
 - Department for Transport STATS19 licence  
-- Ordnance Survey Open Government Licence  
+- Ordnance Survey Open Government Licence
+
+
+# Data Dictionary
+Injury-Level Dataset (injuries_final.rds) 
+
+| Variable           | Description                                              | Source               |
+| ------------------ | -------------------------------------------------------- | -------------------- |
+| injury_id          | Unique identifier (collision_index + casualty_reference) | Derived              |
+| collision_index    | Unique collision identifier                              | STATS19              |
+| casualty_reference | Casualty ID within collision                             | STATS19              |
+| date               | Date of collision                                        | STATS19              |
+| year               | Calendar year                                            | Derived              |
+| month_year         | Year–month                                               | Derived              |
+| quarter_year       | Year–quarter                                             | Derived              |
+| severity           | KSI vs slight                                            | Derived (STATS19)    |
+| casualty_type      | Pedestrian / cyclist / vehicle occupant                  | STATS19 (harmonised) |
+| vehicle_type       | Simplified vehicle class                                 | STATS19 (harmonised) |
+| propulsion_type    | Fuel type category                                       | STATS19              |
+| road_class         | Motorway / A / B / minor                                 | Harmonised           |
+| junction           | Binary indicator of junction involvement                 | STATS19              |
+| LAD24CD            | Local Authority District code                            | Spatial join         |
+| geometry           | Injury point (EPSG:27700)                                | Derived              |
+
+
+
+```mermaid
+flowchart TD
+
+A[STATS19 Raw Data] --> B[Filter 2015+ Collisions]
+B --> C[Construct Injury-Level Dataset]
+C --> D[Spatial Join to LADs]
+
+E[OS Open Roads] --> F[Filter to Selected LADs]
+F --> G[Recode Road Classes]
+
+D --> H[Class-Based Nearest Matching]
+G --> H
+
+H --> I[Matched Injury-Road Dataset]
+I --> J[Assign Output Areas]
+
+J --> K[Final Analytical Dataset]
+K --> L[Validation & QA Report]
+
+
+
