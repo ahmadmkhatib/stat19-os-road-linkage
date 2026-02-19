@@ -3,6 +3,8 @@
 # ============================================================
 
 library(sf)
+library(tmap)
+library(mapview)
 library(tidyverse)
 library(lubridate)
 library(here)
@@ -87,5 +89,33 @@ write_rds(
   injuries_with_oa,
   here("data", "processed", "injuries_with_oa.rds")
 )
+
+
+
+dir.create("data/processed/shp_files", recursive = TRUE)
+
+names(injuries_with_oa) <- substr(names(injuries_with_oa), 1, 10)
+
+
+
+st_write(injuries_with_oa,
+         here("data","processed","shp_files","injuries_final.gpkg"),
+         layer = "injuries_final",
+         delete_layer = TRUE)
+
+
+inj <- st_read("data/processed/shp_files/injuries_final.gpkg")
+
+
+
+
+inj_sample <- inj %>% slice(1:50000)
+
+tmap_mode("view")
+tm_shape(inj_sample) + tm_dots(col = "blue", size = 0.03)
+
+mapview(inj_sample)
+
+
 
 

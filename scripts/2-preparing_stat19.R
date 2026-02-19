@@ -248,6 +248,14 @@ injuries_sf <- st_join(injuries_sf,
                        left = F)
 
 
+st_write(LADs,
+         here("data","processed","shp_files","LADs.shp"))
+
+st_write(LADs_filtered,
+         here("data","processed","shp_files","LADs_filtered.shp"))
+
+
+
 #filter injuries on the LADs subset 
 injuries_sf <- injuries_sf  %>%
   filter(LAD24CD %in% LADs_sub$LAD24CD)
