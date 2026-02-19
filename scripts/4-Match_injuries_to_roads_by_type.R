@@ -1,7 +1,7 @@
 # ==========================================================
 # STAT19 – OS Open Roads Linkage Framework
 # Script: 03_match_injuries_to_roads_by_type.R
-# Purpose: Match STATS19 injuries to nearest plausible road link
+# Purpose: Match STATS19 injuries subset to nearest plausible road link
 # CRS: British National Grid (EPSG:27700)
 # ==========================================================
 
@@ -13,7 +13,7 @@ library(here)
 # Load Processed Data
 # ----------------------------------------------------------
 
-injuries_path <- here("data", "processed", "injuries.rds")
+injuries_path <- here("data", "processed", "injuries_final.rds")
 roads_path    <- here("data", "processed", "roads_filtered.rds")
 
 
@@ -21,22 +21,21 @@ injuries <- readRDS(injuries_path)
 roads    <- readRDS(roads_path)
 
 
-# Ensure CRS consistency
-stopifnot(st_crs(injuries) == st_crs(roads))
-
-
-
 # ----------------------------------------------------------
 # Split Roads by Class
 # --------------------------------------------------------
+table(roads$road_class)
+table(injuries$first_road_class_label1)
+
+
 
 #### recode class
 injuries <- injuries %>% 
-  mutate (injury_class = 
-            case_when( first_road_class_label %in% c("Motorway","A","B") ~ first_road_class_label, 
-                       first_road_class_label %in% c("C","Unclassified") ~ "minor", TRUE ~ NA_character_))
+  mutate (road_class = 
+            case_when( first_road_class_label1 %in% c("Motorway","A","B") ~ first_road_class_label1, 
+                       first_road_class_label1 %in% c("C","Unclassified") ~ "minor", TRUE ~ NA_character_))
                           
-table(injuries$injury_class)
+table(injuries$road_class)
 
 roads_A        <- roads %>% filter(road_class == "A")
 roads_B        <- roads %>% filter(road_class == "B")
@@ -84,25 +83,25 @@ match_one_class <- function(injuries, roads_same, roads_any,
 # ----------------------------------------------------------
 
 matched_A <- match_one_class(
-  injuries %>% filter(injury_class == "A"),
+  injuries %>% filter(road_class == "A"),
   roads_A,
   roads
 )
 
 matched_B <- match_one_class(
-  injuries %>% filter(injury_class == "B"),
+  injuries %>% filter(road_class == "B"),
   roads_B,
   roads
 )
 
 matched_motorway <- match_one_class(
-  injuries %>% filter(injury_class == "Motorway"),
+  injuries %>% filter(road_class == "Motorway"),
   roads_motorway,
   roads
 )
 
 matched_minor <- match_one_class(
-  injuries %>% filter(injury_class == "minor"),
+  injuries %>% filter(road_class == "minor"),
   roads_minor,
   roads
 )
@@ -115,7 +114,7 @@ matched <- bind_rows(
 )
 
 # ----------------------------------------------------------
-# Matching Diagnostics (injury-level)
+#   Diagnostics 
 # ----------------------------------------------------------
 
 # total unique injuries entering matching
@@ -123,7 +122,7 @@ n_total <- injuries %>%
   distinct(injury_id) %>%
   nrow()
 
-# unique injuries successfully matched
+# unique injuries  matched
 n_matched <- matched %>%
   distinct(injury_id) %>%
   nrow()
@@ -149,4 +148,4 @@ output_path <- here("data", "processed", "injuries_matched.rds")
 
 saveRDS(matched, output_path)
 
-cat("Matching complete. Output saved to:", output_path)
+cat("Output saved to:", output_path)

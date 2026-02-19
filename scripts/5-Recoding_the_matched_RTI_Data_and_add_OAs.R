@@ -48,7 +48,7 @@ injuries_with_oa <- injuries_matched_sf %>%
 
 any(duplicated(injuries_with_oa$injury_id))
 # ---------------------
-# Quality Assurance
+# some quality Assurance
 # ---------------------
 
 injuries_with_oa %>%
@@ -88,4 +88,4 @@ write_rds(
   here("data", "processed", "injuries_with_oa.rds")
 )
 
-#
+
