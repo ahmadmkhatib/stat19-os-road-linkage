@@ -74,7 +74,7 @@ scripts/
 This project uses publicly available data:
 
 - STATS19 Road Safety Data (Department for Transport)  
-  https://data.dft.gov.uk/road-accidents-safety-data/
+  https://www.gov.uk/government/statistical-data-sets/road-safety-open-data 
 
 - OS Open Roads  
   https://www.ordnancesurvey.co.uk/products/os-open-roads
