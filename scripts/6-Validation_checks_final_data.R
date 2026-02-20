@@ -8,13 +8,13 @@ library(lubridate)
 library(here)
 
 # ------------------------------------------------------------
-# 1. Load matched injuries_with_oa data
+# Load matched injuries_with_oa data
 # ------------------------------------------------------------
 
 injuries_with_oa <- read_rds(here("data", "processed", "injuries_with_oa.rds"))
 
 # ------------------------------------------------------------
-# 2. Basic Structure Checks
+# Basic Structure Checks
 # ------------------------------------------------------------
 
 cat("Total injuries_with_oa:", nrow(injuries_with_oa), "\n")
@@ -24,7 +24,7 @@ dup_count <- sum(duplicated(injuries_with_oa$injury_id))
 cat("Duplicate injury_id count:", dup_count, "\n")
 
 # ------------------------------------------------------------
-# 3. Coordinate / Geometry Checks
+# Coordinate / Geometry Checks
 # ------------------------------------------------------------
 
 # Check if any geometries are empty
@@ -39,7 +39,7 @@ cat("Invalid geometries:", invalid_geom, "\n")
 cat("CRS (EPSG):", st_crs(injuries_with_oa)$epsg, "\n")
 
 # ------------------------------------------------------------
-# 4. Output Area (OA) Assignment Validation
+# Output Area (OA) Assignment Validation
 # ------------------------------------------------------------
 
 oa_summary <- injuries_with_oa %>%
@@ -52,7 +52,7 @@ oa_summary <- injuries_with_oa %>%
 print(oa_summary)
 
 # ------------------------------------------------------------
-# 5. Road Linkage Distance Check (if matched road geometry available)
+# Road Linkage Distance Check (if matched road geometry available)
 # ------------------------------------------------------------
 
 if("road_geom" %in% names(injuries_with_oa)) {
@@ -75,7 +75,7 @@ if("road_geom" %in% names(injuries_with_oa)) {
 }
 
 # ------------------------------------------------------------
-# 6. Temporal Validation
+# Temporal Validation
 # ------------------------------------------------------------
 
 date_check <- injuries_with_oa %>%
@@ -106,7 +106,7 @@ if(!all(is.na(injuries_with_oa$OA_CODE))) {
 }
 
 # ------------------------------------------------------------
-# 8. Save Validation Summary
+# Save Summary
 # ------------------------------------------------------------
 
 validation_report <- list(

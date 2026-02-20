@@ -109,13 +109,3 @@ inj <- st_read("data/processed/shp_files/injuries_final.gpkg")
 
 
 
-inj_sample <- inj %>% slice(1:50000)
-
-tmap_mode("view")
-tm_shape(inj_sample) + tm_dots(col = "blue", size = 0.03)
-
-mapview(inj_sample)
-
-
-
-
