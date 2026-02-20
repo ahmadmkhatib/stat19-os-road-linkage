@@ -69,20 +69,20 @@ scripts/
 
 ---
 
-# Data Requirements
+## Data Sources
 
-Due to licensing restrictions, raw datasets are **not included** in this repository.
+This project uses publicly available data:
 
-Users must independently obtain:
+- STATS19 Road Safety Data (Department for Transport)  
+  https://data.dft.gov.uk/road-accidents-safety-data/
 
-- **STATS19 collision, vehicle, and casualty data**  
-  Source: UK Department for Transport  
+- OS Open Roads  
+  https://www.ordnancesurvey.co.uk/products/os-open-roads
 
-- **OS Open Roads network shapefile**  
-  Source: Ordnance Survey  
+- Output Area Boundaries (ONS Open Geography Portal)  
+  https://geoportal.statistics.gov.uk/
 
-- **Local Authority District boundaries shapefile**  
- Source: geoportal.statistics.gov.uk
+Raw data are not distributed in this repository. See `DATA_SOURCES.md` for detailed download instructions.
 
 ---
 
