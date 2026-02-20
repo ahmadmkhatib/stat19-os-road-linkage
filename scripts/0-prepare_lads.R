@@ -1,7 +1,7 @@
 # ==========================================================
 # Script: 00_create_large_city_LAD_subset.R
 # Purpose: Create a subset of large UK cities (>=100k population)
-#          and assign corresponding Local Authority District (LAD)
+#          and assign the corresponding Local Authority District (LAD)
 #          codes using spatial joins.
 # Output:  data/processed/big_cities_with_LADs.rds
 # ==========================================================
@@ -20,8 +20,6 @@ lads_path          <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
 buas_path          <- here("data", "raw", "BUAs.xlsx")
 scotland_pop_path  <- here("data", "raw", "scot_pop.xlsx")
 cities_path        <- here("data", "raw", "ukcities.csv")
-
-
 
 dir.create(here("data", "processed"), showWarnings = FALSE)
 output_path <- here("data", "processed", "big_cities_with_LADs.rds")
