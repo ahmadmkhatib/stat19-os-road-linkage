@@ -11,7 +11,7 @@ library(here)
 # Load matched injuries_with_oa data
 # ------------------------------------------------------------
 
-injuries_with_oa <- read_rds(here("data", "processed", "injuries_with_oa.rds"))
+injuries_with_oa <- read_rds(here("data", "processed", "injuries_matched_OA.rds"))
 
 # ------------------------------------------------------------
 # Basic Structure Checks

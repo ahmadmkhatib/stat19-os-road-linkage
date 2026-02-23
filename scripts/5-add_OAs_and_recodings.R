@@ -71,7 +71,7 @@ injuries_with_oa$OA_CODE[missing_idx] <-
 
 
 # -------------------------------
-# additional time variables
+#  time variables
 # --------------------------------
 
 injuries_with_oa <- injuries_with_oa %>%
@@ -82,16 +82,15 @@ injuries_with_oa <- injuries_with_oa %>%
     year = year(date)
   )
 
-# -----------------------------
 
 
 write_rds(
   injuries_with_oa,
-  here("data", "processed", "injuries_with_oa.rds")
+  here("data", "processed", "injuries_matched_OA.rds")
 )
 
 
-
+# ----------------------------- create a shp file 
 dir.create("data/processed/shp_files", recursive = TRUE)
 
 names(injuries_with_oa) <- substr(names(injuries_with_oa), 1, 10)
