@@ -1,4 +1,4 @@
-# STAT19 – OS Open Roads Spatial Linkage & Area Assignment (UK)
+# STAT19 – OS Open Roads Spatial Linkage (UK)
 
 ![Reproducible Research](https://img.shields.io/badge/Reproducible-Yes-brightgreen)
 ![R Version](https://img.shields.io/badge/R-%3E%3D4.3-blue)
