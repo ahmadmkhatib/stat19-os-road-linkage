@@ -51,19 +51,24 @@ The objective is to create a clean, reproducible GB injury–road level dataset
 data/
  ├── raw/                # Raw input datasets (not versioned)
  ├── processed/          # Derived RDS and spatial outputs
- │    ├── injuries_final.rds
+ │    ├── big_cities_with_LADs.rds 
+ |    ├── injuries_final.rds
  │    ├── injuries_matched.rds
  │    ├── injuries_with_oa.rds
+ |    ├── injuries_matched_final.rds
  │    ├── roads_filtered.rds
- │    ├── LADs_sub.rds
+ |    ├── LADs_sub.rds
  │    └── validation_summary.rds
+        ├── shp_files
 scripts/
- ├── 00_create_large_city_LAD_subset.R
- ├── 01_prepare_os_roads.R
- ├── 02_prepare_stats19_injuries.R
- ├── 03_match_injuries_to_roads_by_type.R
- ├── 04_assign_output_areas.R
- └── 05_validation_checks.R
+ ├── 0-prepare_lads_subset.R
+ ├── 1-prepare_os_roads.R
+ ├── 2-prepare_stats19.R
+ ├── 3-auditbefore_matching.R
+ ├── 4-match_injuries_to_roads_by_type.R
+ ├── 5-add_OAs_and_recodings.R
+ └── 6-validation_checks.R
+ ├── 7-KSI_and_severity_adjustment.R
 
 ```
 
