@@ -29,12 +29,15 @@ cities_path  <- here("data", "processed", "big_cities_with_LADs.rds")
 ## LADs with CAZ 
 
 CAZ_LADs <- c(
-  # England CAZ
+  # CAZ
   "E06000022","E08000025","E08000032","E06000023",
   "E06000044","E08000019","E08000021","E08000018", 
   "S12000049","S12000036","S12000033", "S12000042")
 
 LADs <- st_read(lads_path, quiet = TRUE)
+
+View(caz_LADS<-LADs %>% filter(LAD24CD %in% CAZ_LADs))
+
 cities_with_LADs <- readRDS(cities_path)
 
 # ----------------------------------------------------------

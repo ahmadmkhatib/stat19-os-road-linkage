@@ -1,6 +1,6 @@
 # ==========================================================
 # Script: 00_create_large_city_LAD_subset.R
-# Purpose: Create a subset of large UK cities (>=100k population)
+# Purpose: Create a subset of large UK cities (>=100k population) without the CAZ
 #          and assign the corresponding Local Authority District (LAD)
 #          codes using spatial joins.
 # Output:  data/processed/big_cities_with_LADs.rds
@@ -22,7 +22,6 @@ scotland_pop_path  <- here("data", "raw", "scot_pop.xlsx")
 cities_path        <- here("data", "raw", "ukcities.csv")
 
 dir.create(here("data", "processed"), showWarnings = FALSE)
-output_path <- here("data", "processed", "big_cities_with_LADs.rds")
 
 # ----------------------------------------------------------
 # Load spatial boundaries
@@ -43,15 +42,16 @@ wales <- read_excel(buas_path, sheet = 2) %>%
 
 buas <- bind_rows(england, wales) %>%
   filter(Counts >= 100000)
+buas$`BUA name`
 
-# Remove large conurbations handled separately if required
+# Remove cities with CAZ -- handled separately in the next script
 buas <- buas %>%
   filter(!`BUA name` %in% c(
     "Bath", "Birmingham", "Bradford", "Bristol",
-    "Newcastle upon Tyne", "Portsmouth", "Sheffield"
+    "Newcastle upon Tyne", "Portsmouth", "Sheffield", "Oxford"
   ))
 
-# ----------------------------------------------------------
+# ---`BUA name`# ----------------------------------------------------------
 # Clean city names for matching
 # ----------------------------------------------------------
 
@@ -144,11 +144,19 @@ scotland <- read_excel(scotland_pop_path) %>%
   ) %>%
   filter(population >= 100000) %>% 
   mutate(country = "Scotland")
+
+# Remove cities with LEZ -- handled separately in the next script
+scotland$LAD24NM
+
+scotland<- scotland %>%
+  filter(!LAD24NM %in% c(
+    "Aberdeen, Milltimber, and Peterculter", "Edinburgh", "Greater Glasgow"
+  ))
 # ----------------------------------------------------------
 # Combine all countries
 # ----------------------------------------------------------
 
-final_dataset <- bind_rows(
+big_cities_with_LADs <- bind_rows(
   cities_with_LAD,
   scotland
 )
@@ -157,6 +165,7 @@ final_dataset <- bind_rows(
 # Save output
 # ----------------------------------------------------------
 
-saveRDS(final_dataset, output_path)
+saveRDS(big_cities_with_LADs, here("data", "processed", "big_cities_with_LADs.rds"))
+
 
 

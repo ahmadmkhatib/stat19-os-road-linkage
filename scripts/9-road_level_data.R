@@ -1,29 +1,24 @@
 library(tidyverse)
 library(lubridate)
 library(here)
+library(sf)
 
 # ------------------------------------------------------------
 # Load matched RTI data
 # -------------------------------
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
+
 injuries <- injuries %>%
   st_drop_geometry()  %>%
   rename(identifier = matched_roadID)
 
-n_distinct(injuries$matched_roadID)
+n_distinct(injuries$identifier)
 
 table(injuries$casualty_type1)
-
-roads_filtered<- read_rds(here("data", "processed", "roads_filtered.rds"))
-names(roads_filtered)
-
-n_distinct(roads_filtered$identifier)
-table(roads_filtered$road_class)
+injuries <- injuries %>%  
+  mutate(casualty_type1=if_else(casualty_type1 =="Car or van driver or occupant","Car/Van", casualty_type1))
 
 
-road_attributes <- roads_filtered %>%
-  select(identifier, road_class, geom) %>%
-  distinct(identifier, .keep_all = TRUE)
 
 
 # Aggregate at road × quarter x type
@@ -42,7 +37,7 @@ roadlevel_long <- injuries %>%
       .groups = "drop"
     )
   
-# Pivot to wide (mode-specific columns)
+# Pivot to wide
 # ------------------------------------------------------------
 injury_wide <- roadlevel_long %>%
   pivot_wider(
@@ -83,11 +78,73 @@ road_panel_complete <- road_panel_complete %>%
 stopifnot(
   all(
     road_panel_complete %>%
-      st_drop_geometry() %>%
       select(starts_with("KSI_adj")) %>%
       as.matrix() >= 0
   )
 )
 
- saveRDS(road_panel_complete, here("data", "processed", "road_panel_complete.rds"))
+
+
+
+------------------------------------------------------------
+  # Prepare panel quarter variable
+  # ------------------------------------------------------------
+
+road_panel_complete <- road_panel_complete %>%
+  mutate(
+    quarter_yq = as.yearqtr(quarter_year, format = "%Y Q%q")
+  )
+
+# ------------------------------------------------------------
+# 8. Join CAZ exposure to panel
+# ------------------------------------------------------------
+
+road_panel_treated <- road_panel_complete %>%
+  left_join(road_caz_first, by = "identifier") %>%
+  mutate(
+    treated = if_else(
+      !is.na(caz_start_q) & quarter_yq >= caz_start_q,
+      1, 0
+    ),
+    ever_treated = if_else(!is.na(caz_start_q), 1, 0)
+  )
+
+# ------------------------------------------------------------
+# Create optional DiD event-time variable
+# ------------------------------------------------------------
+
+road_panel_treated <- road_panel_treated %>%
+  mutate(
+    event_time = if_else(
+      ever_treated == 1,
+      as.numeric(quarter_yq - caz_start_q),
+      NA_real_
+    )
+  )
+
+# ------------------------------------------------------------
+# 10. Final checks
+# ------------------------------------------------------------
+
+summary(road_panel_treated$treated)
+table(road_panel_treated$ever_treated)
+
+# ------------------------------------------------------------
+# 11. Save output
+# ------------------------------------------------------------
+
+saveRDS(
+  road_panel_treated,
+  here("data", "processed", "road_panel_with_CAZ_treatment.rds")
+  
+  
+  
+  
+  
+
+ saveRDS(road_panel_complete %>% 
+           st_drop_geometry(), 
+         here("data", "processed", "road_panel_complete.rds"))
+ 
+saveRDS(road_attributes, here("data", "processed", "road_attributes.rds"))
  
