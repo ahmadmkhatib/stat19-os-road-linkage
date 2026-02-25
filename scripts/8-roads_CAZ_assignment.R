@@ -18,6 +18,15 @@ caz_polygons <- st_read(
   quiet = TRUE
 )
 
+
+### all raods and thier attributes 
+road_attributes<- read_rds(here("data", "processed", "roads_filtered.rds")) %>%
+  select(identifier, road_class, geom) %>%
+  distinct(identifier, .keep_all = TRUE) %>%
+  st_as_sf()
+
+
+
 # ------------------------------------------------------------
 # prepare CAZ data
 # ------------------------------------------------------------
@@ -54,15 +63,6 @@ table(caz$start_date)
 caz <- caz %>%
    group_by(scheme, start_date, LocAuth1, Class) %>%
   summarise(geometry = st_union(geometry), .groups = "drop")
-
-# ------------------------------------------------------------
-# Load roads
-# ------------------------------------------------------------
-
-road_attributes<- read_rds(here("data", "processed", "roads_filtered.rds")) %>%
-  select(identifier, road_class, geom) %>%
-  distinct(identifier, .keep_all = TRUE) %>%
-  st_as_sf()
 
 
 # same crs
@@ -105,6 +105,7 @@ road_caz %>%
  road_caz_prop <- road_caz_prop %>%
    left_join(road_lengths, by = "identifier") %>%
    mutate(prop_inside = int_length / total_length)
+ # prop_inside = proportion of link inside CAZ
 
 summary(road_caz_prop$prop_inside)
 table(road_caz_prop$scheme)
@@ -121,4 +122,4 @@ road_caz_prop <- road_caz_prop%>%
 
 saveRDS(road_caz_prop,  here("data", "processed", "roads_caz_props.rds"))
 
-
+saveRDS(road_attributes, here("data", "processed", "road_attributes.rds"))

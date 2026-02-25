@@ -11,15 +11,15 @@ library(here)
 # data
 # ----------------------------------------------------------------------
 
-collisions  <- read_csv(here("data","raw",
+collisions  <- read_csv(here("../stat19-os-road-linkage-data",
                              "dft-road-casualty-statistics-collision-1979-latest-published-year.csv"),
                         show_col_types = FALSE)
 
-vehicles    <- read_csv(here("data","raw",
+vehicles    <- read_csv(here("../stat19-os-road-linkage-data",
                              "dft-road-casualty-statistics-vehicle-1979-latest-published-year.csv"),
                         show_col_types = FALSE)
 
-casualties  <- read_csv(here("data","raw",
+casualties  <- read_csv(here("../stat19-os-road-linkage-data",
                              "dft-road-casualty-statistics-casualty-1979-latest-published-year.csv"),
                         show_col_types = FALSE)
 

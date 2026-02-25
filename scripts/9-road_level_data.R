@@ -1,13 +1,26 @@
+
+
+
 library(tidyverse)
 library(lubridate)
 library(here)
 library(sf)
+library(zoo)
 
 # ------------------------------------------------------------
-# Load matched RTI data
-# -------------------------------
+# RTI matched data
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
-
+# all roads with thier attribute  - roads as rows 
+road_attributes<- readRDS(here("data", "processed", "road_attributes.rds"))
+# roads inside the CAZs  == the treatment @ road level 
+road_caz_prop<- readRDS(here("data", "processed", "roads_caz_props.rds"))
+#create treatment indicator 
+road_caz_prop<- road_caz_prop %>%
+  mutate(
+    ever_treated = 1
+  )
+    
+## recode the injuries for the joins     
 injuries <- injuries %>%
   st_drop_geometry()  %>%
   rename(identifier = matched_roadID)
@@ -18,10 +31,7 @@ table(injuries$casualty_type1)
 injuries <- injuries %>%  
   mutate(casualty_type1=if_else(casualty_type1 =="Car or van driver or occupant","Car/Van", casualty_type1))
 
-
-
-
-# Aggregate at road × quarter x type
+# Aggregate injuries to road × quarter x type
 #------------------------------------------------------------
 #-----
 
@@ -37,7 +47,7 @@ roadlevel_long <- injuries %>%
       .groups = "drop"
     )
   
-# Pivot to wide
+# Pivot - road * quarter to wide
 # ------------------------------------------------------------
 injury_wide <- roadlevel_long %>%
   pivot_wider(
@@ -68,7 +78,6 @@ road_panel_complete <- road_panel %>%
 # ------------------------------------------------------------
 
 # Attach road attributes 
-
 road_panel_complete <- road_panel_complete %>%
   left_join(road_attributes, by = "identifier")
 
@@ -83,68 +92,35 @@ stopifnot(
   )
 )
 
+# ------------------------------------------------------------
+#  Join CAZ ttt to the panel
+# ------------------------------------------------------------
+### 
+road_panel_complete <- road_panel_complete %>%
+  left_join(road_caz_prop, by = "identifier") 
 
-
-
-------------------------------------------------------------
-  # Prepare panel quarter variable
-  # ------------------------------------------------------------
 
 road_panel_complete <- road_panel_complete %>%
   mutate(
-    quarter_yq = as.yearqtr(quarter_year, format = "%Y Q%q")
-  )
-
-# ------------------------------------------------------------
-# 8. Join CAZ exposure to panel
-# ------------------------------------------------------------
-
-road_panel_treated <- road_panel_complete %>%
-  left_join(road_caz_first, by = "identifier") %>%
-  mutate(
+    ever_treated = replace_na(ever_treated, 0),
     treated = if_else(
-      !is.na(caz_start_q) & quarter_yq >= caz_start_q,
+      ever_treated == 1 & quarter_yq >= caz_start_q,
       1, 0
-    ),
-    ever_treated = if_else(!is.na(caz_start_q), 1, 0)
-  )
-
-# ------------------------------------------------------------
-# Create optional DiD event-time variable
-# ------------------------------------------------------------
-
-road_panel_treated <- road_panel_treated %>%
-  mutate(
-    event_time = if_else(
-      ever_treated == 1,
-      as.numeric(quarter_yq - caz_start_q),
-      NA_real_
     )
   )
 
-# ------------------------------------------------------------
-# 10. Final checks
-# ------------------------------------------------------------
 
-summary(road_panel_treated$treated)
-table(road_panel_treated$ever_treated)
 
-# ------------------------------------------------------------
-# 11. Save output
-# ------------------------------------------------------------
+sum(road_panel_complete$treated)
+sum(road_panel_complete$ever_treated)
 
-saveRDS(
-  road_panel_treated,
-  here("data", "processed", "road_panel_with_CAZ_treatment.rds")
-  
-  
-  
-  
-  
 
- saveRDS(road_panel_complete %>% 
-           st_drop_geometry(), 
-         here("data", "processed", "road_panel_complete.rds"))
- 
-saveRDS(road_attributes, here("data", "processed", "road_attributes.rds"))
+
+saveRDS(road_panel_complete %>% 
+          st_drop_geometry(), 
+        here("data", "processed", "road_panel_complete.rds"))
+
+
+# road_panel_complete <- readRDS(here("data", "processed", "road_panel_complete.rds"))
+
  

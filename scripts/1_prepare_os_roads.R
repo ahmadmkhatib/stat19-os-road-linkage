@@ -19,9 +19,9 @@ library(here)
 # - OS Open Roads
 # - LAD boundaries (ONS)
 
-roads_path <- here("data", "raw", "OS highways all.shp")
-lads_path  <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
-cities_path  <- here("data", "processed", "big_cities_with_LADs.rds")
+roads_path <- here("../stat19-os-road-linkage-data", "OS highways all.shp")
+lads_path  <- here("../stat19-os-road-linkage-data", "LAD_DEC_24_UK_BGC.shp")
+cities_path  <- here("../stat19-os-road-linkage-data", "big_cities_with_LADs.rds")
 
 # ----------------------------------------------------------
 # Load LAD Boundaries

@@ -16,10 +16,10 @@ library(here)
 # Paths
 # ----------------------------------------------------------
 
-lads_path          <- here("data", "raw", "LAD_DEC_24_UK_BGC.shp")
-buas_path          <- here("data", "raw", "BUAs.xlsx")        #from https://github.com/ahmadmkhatib/stat19-os-road-linkage
-scotland_pop_path  <- here("data", "raw", "scot_pop.xlsx")
-cities_path        <- here("data", "raw", "ukcities.csv")
+lads_path          <- here("../stat19-os-road-linkage-data", "LAD_DEC_24_UK_BGC.shp")
+buas_path          <- here("../stat19-os-road-linkage-data", "BUAs.xlsx")
+scotland_pop_path  <- here("../stat19-os-road-linkage-data", "scot_pop.xlsx")
+cities_path        <- here("../stat19-os-road-linkage-data", "ukcities.csv")
 
 dir.create(here("data", "processed"), showWarnings = FALSE)
 
