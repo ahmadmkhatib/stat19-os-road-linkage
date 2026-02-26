@@ -83,11 +83,26 @@ injuries_with_oa <- injuries_with_oa %>%
   )
 
 
+# Recode casualty_type1
+# -----------------------------
+injuries_with_oa <- injuries_with_oa %>%
+  st_drop_geometry() %>%
+  rename(identifier = matched_roadID) %>%
+  mutate(
+    casualty_type1 = if_else(
+      casualty_type1 == "Car or van driver or occupant",
+      "Car/Van",
+      casualty_type1
+    )
+  )
+
+
 
 write_rds(
   injuries_with_oa,
   here("data", "processed", "injuries_matched_OA.rds")
 )
+
 
 
 # ----------------------------- create a shp file 

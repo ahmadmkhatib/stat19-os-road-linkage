@@ -1,8 +1,11 @@
 library(tidyverse)
 library(lubridate)
 library(here)
+library(sf)
+library(qs)
 
-road_panel_complete<- readRDS(here("data", "processed", "road_panel_complete.rds"))
+road_panel_complete<- readRDS(here("data", "processed", "road_panel_complete.rds")) %>% 
+  st_drop_geometry() 
 
 
 glimpse(road_panel_complete)
