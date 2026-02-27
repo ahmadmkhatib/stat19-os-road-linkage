@@ -10,7 +10,7 @@ library(here)
 library(zoo)
 
 # ------------------------------------------------------------
-#  Load CAZ 
+#  Load data 
 # ------------------------------------------------------------
 
 caz_polygons <- st_read(
@@ -24,6 +24,20 @@ road_attributes<- read_rds(here("data", "processed", "roads_filtered.rds")) %>%
   select(identifier, road_class, geom) %>%
   distinct(identifier, .keep_all = TRUE) %>%
   st_as_sf()
+
+
+## geo data 
+lads_sub<-readRDS (here("data", "processed", "LADs_sub.rds"))
+oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
+  st_transform(27700) %>%
+  st_make_valid() %>%
+  rename(OA_CODE = geo_code) 
+
+st_crs(road_attributes)
+st_crs(lads_sub)
+st_crs(oa_2011)
+
+
 
 
 
@@ -121,5 +135,44 @@ road_caz_prop <- road_caz_prop%>%
 
 
 saveRDS(road_caz_prop,  here("data", "processed", "roads_caz_props.rds"))
+
+names(road_attributes)
+attr(road_attributes, "sf_column")
+
+### create roads attributes dataset 
+road_attributes <- road_attributes %>%
+  
+  # Attach LAD
+  st_join(
+    lads_sub %>% select(LAD24CD, LAD24NM),
+    join = st_intersects,
+    left = TRUE
+  ) %>%
+  
+  #  Compute total road length
+  mutate(total_length = st_length(.)) %>%
+  
+  # Intersect with OA polygons
+  st_intersection(
+    oa_2011 %>% select(OA_CODE)
+  ) %>%
+  
+  # Compute share inside each OA
+  mutate(
+    segment_length = st_length(.),
+    share = as.numeric(segment_length / total_length)
+  ) %>%
+  # Keep OA with largest share
+  group_by(identifier) %>%
+  slice_max(order_by = share, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(
+    identifier,
+    road_class,
+    LAD24CD,
+    LAD24NM,
+    OA_CODE
+  )
+  )
 
 saveRDS(road_attributes, here("data", "processed", "road_attributes.rds"))

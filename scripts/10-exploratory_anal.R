@@ -4,19 +4,18 @@ library(here)
 library(sf)
 library(qs)
 
-road_panel_complete<- readRDS(here("data", "processed", "road_panel_complete.rds")) %>% 
-  st_drop_geometry() 
+road_panel_model<-arrow::open_dataset(here("data","processed","road_panel_dataset")) %>% collect()
 
 
-glimpse(road_panel_complete)
+glimpse(road_panel_model)
 
-road_panel_complete %>% select(treated) %>% table(useNA = "always")
+road_panel_model %>% select(treated) %>% table(useNA = "always")
 
 # check the dimensions  in the matrix
-n_distinct(road_panel_complete$identifier) * n_distinct(road_panel_complete$quarter_year)
+n_distinct(road_panel_model$identifier) * n_distinct(road_panel_model$quarter_year)
 
 
-road_panel %>% 
+road_panel_model %>% 
   summarise(
     n_roads = n_distinct(identifier),
     n_quarters = n_distinct(quarter_year),
@@ -27,8 +26,7 @@ road_panel %>%
 
 ## balance - panel per road 
 
-
-road_panel %>%
+road_panel_model %>%
   count(identifier) %>%
   summarise(
     min_obs = min(n),
@@ -36,15 +34,15 @@ road_panel %>%
   )
 
 
-## ttt roads 
-road_panel %>%
-  distinct(identifier, ever_treated) %>%
-  count(ever_treated
+## ever treated roads 
+road_panel_model %>%
+  distinct(identifier, treated_group) %>%
+  count(treated_group
         )
 
 #ttt timmimg 
-road_panel %>%
-  filter(ever_treated == 1) %>%
+road_panel_model %>%
+  filter(treated_group == 1) %>%
   distinct(identifier, caz_start_q) %>%
   count(caz_start_q)
 

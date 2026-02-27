@@ -31,7 +31,7 @@ st_crs(injuries_matched_sf)
 # Load Output Area boundaries (England & Wales and scotland 2011) ### scotland does not have 2021 
 # ------------------------------------------------------------
 
-oa_2011 <- st_read("data/raw/infuse_oa_lyr_2011_clipped.shp") %>%
+oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
   st_transform(27700) %>%
   st_make_valid() %>%
   rename(OA_CODE = geo_code) 

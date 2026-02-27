@@ -81,8 +81,6 @@
 #
 # 
 # ============================================================
-
-
 library(tidyverse)
 library(lubridate)
 library(here)
@@ -90,6 +88,8 @@ library(sf)
 library(zoo)
 library(arrow)
 library(units)
+
+options(arrow.use_mmap = FALSE)
 
 # --data
 # RTI matched data
@@ -238,6 +238,11 @@ road_panel_model <- road_panel_complete %>%
     starts_with("Slight"),
     starts_with("total_inj")
   )
+
+### add some road and city vars 
+
+
+
 
 write_dataset(
   road_panel_model,
