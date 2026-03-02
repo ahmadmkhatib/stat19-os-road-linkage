@@ -103,7 +103,6 @@ road_caz_prop<- road_caz_prop %>%
   mutate(
     ever_treated = 1
   )
-    
 names(road_attributes)
 names(road_caz_prop)
 

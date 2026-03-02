@@ -102,9 +102,11 @@ roads <- roads %>%
 # ----------------------------------------------------------
 # Save 
 # ----------------------------------------------------------
-output_path <- here("data", "processed", "roads_filtered.rds")
+### remove Wales
+lads_sub <- lads_sub %>% filter(!grepl("^W", LAD24CD))
 
 
+roads_filtered<- readRDS(here("data", "processed", "roads_filtered.rds"))
 
-saveRDS(roads, output_path)
+saveRDS(roads, here("data", "processed", "roads_filtered.rds"))
 

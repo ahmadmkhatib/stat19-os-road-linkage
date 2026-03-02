@@ -21,9 +21,7 @@ caz_polygons <- st_read(
 
 ### all raods and thier attributes 
 road_attributes<- read_rds(here("data", "processed", "roads_filtered.rds")) %>%
-  select(identifier, road_class, geom) %>%
-  distinct(identifier, .keep_all = TRUE) %>%
-  st_as_sf()
+  select(identifier, road_class, geom)
 
 
 ## geo data 
@@ -36,9 +34,6 @@ oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.sh
 st_crs(road_attributes)
 st_crs(lads_sub)
 st_crs(oa_2011)
-
-
-
 
 
 # ------------------------------------------------------------
@@ -101,8 +96,6 @@ road_caz %>%
   filter(n > 1)
 
 
-
-
 ## Instead of "any overlap", compute proportion of road length inside CAZ:
  road_caz_prop <- st_intersection(
     road_attributes,
@@ -123,9 +116,9 @@ road_caz %>%
 
 summary(road_caz_prop$prop_inside)
 table(road_caz_prop$scheme)
-# ------------------------------------------------------------
+# -----------------#-----------------#
 # Convert CAZ start date → quarter
-# ------------------------------------------------------------
+# ----------------###------------------#
 
 road_caz_prop <- road_caz_prop%>%
   mutate(
@@ -139,40 +132,43 @@ saveRDS(road_caz_prop,  here("data", "processed", "roads_caz_props.rds"))
 names(road_attributes)
 attr(road_attributes, "sf_column")
 
-### create roads attributes dataset 
+road_attributes <- st_make_valid(road_attributes)
+
+
+# Pre-crop OAs to roads extent
+oa_2011_sub <- st_filter(
+  oa_2011 %>% select(OA_CODE),
+  road_attributes,
+  .predicate = st_intersects
+)
+
+
 road_attributes <- road_attributes %>%
-  
-  # Attach LAD
+     # 1️⃣ Keep only roads that intersect selected LADs
+  st_filter(lads_sub) %>%   
+  # Attach LAD (largest overlap)
   st_join(
     lads_sub %>% select(LAD24CD, LAD24NM),
     join = st_intersects,
-    left = TRUE
+    largest = TRUE,
+    left = FALSE  # automatically drops non-matching
   ) %>%
   
-  #  Compute total road length
-  mutate(total_length = st_length(.)) %>%
-  
-  # Intersect with OA polygons
-  st_intersection(
-    oa_2011 %>% select(OA_CODE)
+  #  Attach OA (largest overlap)
+  st_join(
+    oa_2011_sub %>% select(OA_CODE),
+    join = st_intersects,
+    largest = TRUE,
+    left = FALSE   # drop roads with no OA
   ) %>%
   
-  # Compute share inside each OA
-  mutate(
-    segment_length = st_length(.),
-    share = as.numeric(segment_length / total_length)
-  ) %>%
-  # Keep OA with largest share
-  group_by(identifier) %>%
-  slice_max(order_by = share, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
+  #  Keep only required columns
   select(
     identifier,
     road_class,
     LAD24CD,
     LAD24NM,
     OA_CODE
-  )
   )
 
 saveRDS(road_attributes, here("data", "processed", "road_attributes.rds"))
