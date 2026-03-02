@@ -141,7 +141,7 @@ city_centroids <- non_caz_roads %>%
   summarise(geometry = st_union(geom)) %>%
   st_centroid()
 
-# Create 3km buffer around centroid
+# Create 1km buffer around centroid
 city_buffers <- st_buffer(city_centroids, dist = 1000)
 
 # Roads within buffer → pseudo city centres
@@ -249,7 +249,7 @@ write_dataset(
   format = "parquet"
 )
 
-
+saveRDS(road_classification, here("data", "processed", "road_classification.rds"))
 
 table(road_panel_model$`KSI_adj_Car/Van`)
 sum(road_panel_model$`KSI_adj_Car/Van`)
