@@ -1,86 +1,124 @@
 
 # ============================================================
 # Panel Construction
-# a road × quarter panel dataset
+# Road × Quarter Panel Dataset
+# ============================================================
 
+# This script constructs the analytical panel used to evaluate
+# the impact of Clean Air Zones (CAZ) on road traffic injuries.
+#
 # The treatment is defined at the road level:
-#   A road is treated if it lies inside a CAZ boundary
-#   AND the quarter is after the CAZ implementation date.
+#
+#   A road is treated if:
+#       • it lies inside a CAZ boundary
+#       • AND the quarter occurs after CAZ implementation.
 #
 # The key identifying variation comes from comparing:
-##   • Roads inside CAZ boundaries (treated)
+#
+#   • Roads inside CAZ boundaries (treated)
 #   • Roads outside CAZ boundaries (controls)
 #
 # The counterfactual question is:
-#   What would have happened to treated roads in the absence of CAZ?
 #
-#  three control groups.
+#   What would have happened to treated roads
+#   in the absence of CAZ implementation?
 #
 # ------------------------------------------------------------
 # CONTROL GROUP DEFINITIONS
 # ------------------------------------------------------------
 #
-# Control Group 1: Same-city controls # -----------------------------------------------------
-# Roads located in the same CAZ cities but outside CAZ boundaries.
+# Buffer Control (Spillover Zone)
+# ------------------------------------------------------------
+# Roads located within 1 km outside the CAZ boundary.
 #
-##   - Same macroeconomic conditions
-#   - Same contex  and infrastructure
-
-# Control Group 2: City-centre roads in non-CAZ cities
-# -----------------------------------------------------
-# proxy "city centre" 
+# These roads may experience behavioural spillovers due to:
 #
-#   1. Compute the centroid of each non-CAZ city
-#   2. Create a 1 km buffer around the centroid
-#   3. Classify roads within this buffer as pseudo-city-centre roads
+#   • traffic displacement
+#   • rerouting around CAZ areas
+#   • avoidance behaviour
 #
-#  - Ensures comparable traffic density and urban structure
-#   - Avoids comparing treated urban cores to suburban/rural roads
+# Estimating effects in this zone allows testing for
+# potential spatial spillover effects.
 #
 #
-# Control Group 3: Mixed controls
-# --------------------------------
-# Combination of Control Group 1 and Control Group 2.
+# Control Group 1: Same-City Controls
+# ------------------------------------------------------------
+# Roads located in the same CAZ cities but outside
+# the 1 km CAZ buffer.
 #
-## ------------------------------------------------------------
-# # Steps:
-#   1. Classify roads as treated / control at road level
-#   2. Keep only roads relevant for analysis
-#   3. Expand selected roads to quarter panel
-#   4. Aggregate injuries to road × quarter level
-#   5. Merge treatment timing and construct post indicator
-#   6. Export as Parquet dataset using Arrow
+# These roads share:
+#
+#   • the same economic conditions
+#   • the same road network
+#   • the same city-specific policies
+#
+# This provides the **primary counterfactual**.
+#
+#
+# Control Group 2: City-Centre Roads in Non-CAZ Cities
+# ------------------------------------------------------------
+# Roads located near the centre of cities that
+# never implemented CAZ.
+#
+# City centres are approximated by:
+#
+#   1. Computing the centroid of each non-CAZ city
+#   2. Creating a 1 km buffer around the centroid
+#   3. Selecting roads intersecting that buffer
+#
+# This ensures comparable:
+#
+#   • traffic density
+#   • urban road environments
+#
+#
+# ------------------------------------------------------------
+# DATA CONSTRUCTION STEPS
+# ------------------------------------------------------------
+#
+#   1. Identify treated roads inside CAZ
+#   2. Construct a 1 km CAZ spillover buffer
+#   3. Classify roads into treatment and control groups
+#   4. Restrict dataset to relevant roads
+#   5. Expand roads into a road × quarter panel
+#   6. Aggregate injuries to road × quarter level
+#   7. Merge treatment timing
+#   8. Export dataset using Arrow
+#
 #
 # ------------------------------------------------------------
 # OUTCOME VARIABLES
 # ------------------------------------------------------------
 #
-# Injuries  aggregated to road × quarter level.
+# Road traffic injuries aggregated to road × quarter level.
 #
-# Outcomes separate for:
-#   - KSI_adj     (Killed or Seriously Injured, adjusted)
-#   - Slight_adj  (Slight injuries, adjusted)
+# Separate outcomes are constructed for:
 #
-# This allows estimating heterogeneous effects by severity.
+#   • KSI_adj       (Killed or Seriously Injured)
+#   • Slight_adj    (Slight injuries)
+#
+# Additional disaggregation is available by casualty type.
 #
 #
 # ------------------------------------------------------------
 # FINAL DATASET STRUCTURE
 # ------------------------------------------------------------
 #
-#   identifier              : Road ID
-#   quarter_year            : Time period
-#   treated                 : Post-treatment indicator
-#   treated_group           : Ever-treated road indicator
-#   control_group1          : Same-city outer roads
-#   control_group2          : Non-CAZ city-centre roads
-#   control_group3_mixed    : Combined controls
-#   KSI_adj                 : Severe injuries
-#   Slight_adj              : Slight injuries
+# identifier        : Road identifier
+# quarter_year      : Quarter of observation
+# treated           : Post-treatment indicator
+# treated_group     : Ever-treated road indicator
+# buffer_control    : Roads within 1 km outside CAZ
+# control_group1    : Same-city roads outside buffer
+# control_group2    : Non-CAZ city-centre roads
 #
+# KSI_adj_*         : Severe injuries by road user type
+# Slight_adj_*      : Slight injuries by road user type
+# total_inj_adj_*   : Total injuries
 #
-# 
 # ============================================================
+
+
 library(tidyverse)
 library(lubridate)
 library(here)
@@ -91,9 +129,27 @@ library(units)
 
 options(arrow.use_mmap = FALSE)
 
+
+# ============================================================
+#=================================================
+# # ============================================================
+library(tidyverse)
+library(lubridate)
+library(here)
+library(sf)
+library(zoo)
+library(arrow)
+library(units)
+
+options(arrow.use_mmap = FALSE)
+
+
+# road_panel_dataset<- open_dataset( here("data","processed","road_panel_dataset")) %>% collect()
+
 # --data
 # RTI matched data
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
+
 # all roads with thier attribute  - @ road level 
 road_attributes<- readRDS(here("data", "processed", "road_attributes.rds"))
 # roads inside the CAZs  == the treatment @ road level 
@@ -249,10 +305,11 @@ write_dataset(
   format = "parquet"
 )
 
-saveRDS(road_classification, here("data", "processed", "road_classification.rds"))
+saveRDS(analysis_roads, here("data", "processed", "analysis_roads.rds"))
 
 table(road_panel_model$`KSI_adj_Car/Van`)
 sum(road_panel_model$`KSI_adj_Car/Van`)
+
 
 sum (injuries$KSI_adj)
 

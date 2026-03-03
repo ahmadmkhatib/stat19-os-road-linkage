@@ -1,100 +1,201 @@
-#Construct a cross-sectional Output Area (OA) dataset
+============================================================
+  # OA-Level Cross-Section Dataset
+  # ============================================================
 
+# This script constructs a cross-sectional Output Area (OA)
+# dataset used to define treatment and control groups for
+# the CAZ policy evaluation.
+#
+# Treatment and control status are defined purely using
+# spatial relationships between OAs and CAZ boundaries.
+#
+# No road-level data are used in the classification.
+#
+#
+# ------------------------------------------------------------
+# GROUP DEFINITIONS
+# ------------------------------------------------------------
+#
+# Treatment OAs
+# ------------------------------------------------------------
+# Output Areas that intersect CAZ boundaries.
+#
+#
+# Buffer / Spillover OAs
+# ------------------------------------------------------------
+# Output Areas within 1 km outside CAZ boundaries.
+#
+# These areas may experience behavioural spillovers
+# due to traffic rerouting or displacement.
+#
+#
+# Control Group 1: Same-City Controls
+# ------------------------------------------------------------
+# OAs located in the same cities as CAZ zones but
+# outside both the CAZ boundary and the 1 km buffer.
+#
+# These areas share the same macro environment but
+# are unlikely to experience direct policy effects.
+#
+#
+# Control Group 2: Non-CAZ City Centres
+# ------------------------------------------------------------
+# OAs located near the centres of cities without CAZ.
+#
+# These are constructed by:
+#
+#   1. Computing city centroids
+#   2. Creating a 1 km buffer
+#   3. Selecting OAs intersecting the buffer
+#
+# This provides comparable urban environments.
+#
+#
+# ------------------------------------------------------------
+# OUTPUT DATASET
+# ------------------------------------------------------------
+#
+# OA_CODE
+# LAD24CD
+# LAD24NM
+#
+# treated_OA
+# buffer_OA
+# control_group1_OA
+# control_group2_OA
+#
+# ============================================================
 
 library(tidyverse)
 library(sf)
 library(here)
 
+# ============================================================
+# Load Data
+# ============================================================
+### lads subset
+lads_sub<-readRDS (here("data", "processed", "LADs_sub.rds"))
 
-# Road attributes with OA linkage       ###       (from script 8)
-road_attributes <- readRDS(
-  here("data", "processed", "road_attributes.rds")
+
+# Output Area geometries
+oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
+  st_transform(27700) %>%
+  st_make_valid() %>%
+  rename(OA_CODE = geo_code) 
+
+
+# CAZ boundaries
+caz_boundaries <- st_read(
+  here("data", "processed", "shp_files", "CAZ_areas.shp"),
+  quiet = TRUE
 )
 
-# Road-level treatment classification       ###   (from script 9)
-road_classification <- readRDS(
-  here("data", "processed", "road_classification.rds")
+st_crs(oa_2011)
+st_crs(caz_boundaries)
+caz_boundaries <-  st_transform(caz_boundaries, st_crs(oa_2011)) %>% st_make_valid()
+oa_2011<-st_make_valid(oa_2011)
+
+
+# Attach LAD to each OA
+oa_2011 <- st_join(
+  oa_2011,
+  lads_sub %>% select(LAD24CD),
+  join = st_intersects,
+  largest = TRUE,  # largest overlap
+  left = TRUE
 )
 
-names(road_classification)
-# ------------------------------
-# Attach road treatment classification to OA
-# -------------------------------------------------
+oa_2011 <- oa_2011 %>% filter(!is.na(LAD24CD))    # crop OA that are not in the samepl 
+# Treatment OAs (inside CAZ)
 
-road_OA_classification <- road_attributes %>% 
+treated_OAs <- oa_2011 %>%
+  st_join(caz_boundaries, join = st_intersects, left = FALSE) %>%
+  pull(OA_CODE) %>% unique()
+
+
+# ============================================================
+# Spillover Buffer (1 km outside CAZ)
+# ============================================================
+
+
+caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
+  st_difference(caz_boundaries)
+
+
+buffer_OAs <- oa_2011 %>%
+  filter(!OA_CODE %in% treated_OAs) %>%  # exclude treated
+  st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
+  pull(OA_CODE) %>% unique()
+
+
+# Treated LADs
+#Treated LADs (for same-city control)
+treated_LADs <- oa_2011 %>%
+  filter(OA_CODE %in% treated_OAs) %>%
+  distinct(LAD24CD) %>% pull(LAD24CD)
+
+# OA Classification
+OA_classification <- oa_2011 %>%
   st_drop_geometry() %>%
-  select(identifier, OA_CODE) %>%
-  left_join(
-    road_classification %>%
-      st_drop_geometry() %>%
-      select(identifier,
-             treated_group,
-             control_group1,
-             control_group2,
-             control_group3_mixed,
-             scheme),
-    by = "identifier"
-  )  %>%
+  select(OA_CODE, LAD24CD) %>%
   mutate(
-    across(
-      c(treated_group,
-        control_group1,
-        control_group2,
-        control_group3_mixed),
-      ~replace_na(., 0)
+    treated_OA = if_else(OA_CODE %in% treated_OAs, 1, 0),
+    buffer_OA = if_else(OA_CODE %in% buffer_OAs, 1, 0),
+    control_group1_OA = if_else(
+      LAD24CD %in% treated_LADs & treated_OA == 0 & buffer_OA == 0, 1, 0
     )
   )
 
-# -------------------------------------------------
-#  Collapse to OA level
-# -------------------------------------------------
-
-OA_level <- road_OA_classification %>%
-  group_by(OA_CODE) %>%
-  summarise(
-    treated_OA  = max(treated_group, na.rm = TRUE),
-    control_group1_OA = max(control_group1, na.rm = TRUE),
-    control_group2_OA = max(control_group2, na.rm = TRUE),
-    control_group3_mixed_OA = max(control_group3_mixed, na.rm = TRUE),
-    LAD24CD = first(LAD24CD),
-    scheme  = first(scheme),
-    .groups = "drop"
-  )
+OA_classification_sf <- oa_2011 %>%
+  filter(!OA_CODE %in% treated_OAs & !OA_CODE %in% buffer_OAs) %>%  # Non-CAZ, non-buffer
+  select(OA_CODE, LAD24CD, geometry) %>%
+  st_as_sf()
 
 
-#
-####  Define Spillover Buffer OAs (Same LAD as Treated)
-# ------------------------------------------
+#Compute city centroids for non-CAZ cities
+city_centroids <- OA_classification_sf %>%
+  group_by(LAD24CD) %>%
+  summarise(geometry = st_union(geometry)) %>%
+  st_centroid()
 
-treated_LADs <- OA_level %>%
-  filter(treated_OA == 1) %>%
-  distinct(LAD24CD) %>%
-  pull(LAD24CD)
+# 1 km buffer around centroids
+city_buffers <- st_buffer(city_centroids, 1000)
 
-OA_level <- OA_level %>%
+# Find OAs intersecting the city-centre buffers
+city_centre_OAs <- st_join(OA_classification_sf, city_buffers, join = st_intersects, left = FALSE) %>%
+  pull(OA_CODE)
+
+# Assign control_group2_OA
+OA_classification <- OA_classification %>%
   mutate(
-    buffer_OA = if_else(
-      LAD24CD %in% treated_LADs & treated_OA == 0,
-      1,
-      0
-    )
-  )
-
-# Restrict to Relevant OAs
-# ---------------------------
-
-OA_analysis <- OA_level %>%
-  filter(
-    treated_OA == 1 |
-      buffer_OA == 1 |
-      control_group2_OA == 1
+    control_group2_OA =
+      if_else(
+        OA_CODE %in% city_centre_OAs &
+          treated_OA == 0 &
+          buffer_OA == 0 &
+          control_group1_OA == 0,
+        1,0
+      )
   )
 
 
+# 6️⃣ Restrict to relevant OAs
+OA_analysis <- OA_classification %>%
+  filter(treated_OA == 1 | buffer_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1)
 
-write_rds(
-  OA_analysis,
-  here("data", "processed", "OA_cross_sectios.rds")
-)
+OA_analysis %>%
+  mutate(group_count =
+           treated_OA +
+           buffer_OA +
+           control_group1_OA +
+           control_group2_OA) %>%
+  count(group_count)
 
 
+
+
+
+saveRDS(OA_analysis, here("data", "processed", "OA_level_from_polygons.rds"))
+OA_analysis<-read_rds(here("data", "processed", "OA_level_from_polygons.rds"))
+
+                      
