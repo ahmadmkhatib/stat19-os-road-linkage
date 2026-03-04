@@ -10,17 +10,8 @@ library(here)
 # 1️⃣ Load Data
 # -----------------------------
 
-# Injuries matched to roads
+# Injuries matched to roads (points)
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
-
-# Road attributes (with geometry)
-road_attributes <- st_read(
-  here("data","processed","road_attributes.gpkg"))
-
-
-# Road → CAZ mapping
-road_caz_prop <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%
-  mutate(ever_treated = 1)
 
 # Output Areas
 oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
@@ -48,13 +39,11 @@ oa_2011 <- st_join(
   filter(!is.na(LAD24CD))
 
 # -----------------------------
-# 3️⃣ Map injuries → roads → OAs
+# 3️⃣ Map injuries → OAs
 # -----------------------------
-# Make sure injuries has geometry (point or road line)
 injuries_sf <- injuries %>%
-  st_as_sf(coords = c("x_coord", "y_coord"), crs = 27700)  # replace with your point columns
+  st_as_sf(coords = c("x_coord", "y_coord"), crs = 27700)
 
-# Spatial join injuries → OAs
 injuries_oa <- st_join(
   injuries_sf,
   oa_2011 %>% select(OA_CODE, LAD24CD),
@@ -62,15 +51,6 @@ injuries_oa <- st_join(
   left = FALSE
 )
 
-# Map injuries to OAs via spatial join
-injuries_oa <- st_join(
-  injuries,
-  oa_2011 %>% select(OA_CODE, LAD24CD),
-  join = st_intersects,
-  left = FALSE
-)
-
-injuries_oa$OA
 # -----------------------------
 # 4️⃣ Aggregate injuries to OA level
 # -----------------------------
@@ -88,9 +68,10 @@ oa_injuries <- injuries_oa %>%
   )
 
 # -----------------------------
-# Assign OA Groups (as in OA_analysis)
+# 5️⃣ Assign OA Groups (same logic as original OA_analysis)
 # -----------------------------
-# Treated OAs (intersect CAZ)
+
+# Treated OAs
 treated_OAs <- st_join(
   oa_2011,
   caz_boundaries,
@@ -99,7 +80,7 @@ treated_OAs <- st_join(
 ) %>%
   pull(OA_CODE) %>% unique()
 
-# Buffer OAs (1 km outside CAZ)
+# Spillover buffer OAs (1 km outside CAZ)
 caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
   st_difference(caz_boundaries)
 
@@ -108,14 +89,16 @@ buffer_OAs <- oa_2011 %>%
   st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
   pull(OA_CODE) %>% unique()
 
-# Treated LADs for control_group1
+# Treated LADs (for same-city controls)
 treated_LADs <- oa_2011 %>%
   filter(OA_CODE %in% treated_OAs) %>%
   distinct(LAD24CD) %>%
   pull(LAD24CD)
 
-# Initialize OA classification
-OA_classification1 <- oa_injuries %>%
+# -----------------------------
+# 6️⃣ Initialize OA classification
+# -----------------------------
+OA_classification <- oa_injuries %>%
   mutate(
     treated_OA = if_else(OA_CODE.x %in% treated_OAs, 1, 0),
     buffer_OA = if_else(OA_CODE.x %in% buffer_OAs, 1, 0),
@@ -125,27 +108,27 @@ OA_classification1 <- oa_injuries %>%
   )
 
 # -----------------------------
-# 6️⃣ Control group 2 (non-CAZ city centres)
+# 7️⃣ Control Group 2 (non-CAZ city centres)
 # -----------------------------
-OA_classification_sf <- oa_2011 %>%
+# OAs not treated or buffer
+OA_sf_for_centres <- oa_2011 %>%
   filter(!OA_CODE %in% treated_OAs & !OA_CODE %in% buffer_OAs) %>%
   select(OA_CODE, LAD24CD, geometry)
 
-# City centroids
-city_centroids <- OA_classification_sf %>%
+# City centroids & 1 km buffer
+city_centroids <- OA_sf_for_centres %>%
   group_by(LAD24CD) %>%
-  summarise(geometry = st_union(geometry)) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
   st_centroid()
 
-# 1 km buffer
 city_buffers <- st_buffer(city_centroids, 1000)
 
 # OAs intersecting city-centres
-city_centre_OAs <- st_join(OA_classification_sf, city_buffers, join = st_intersects, left = FALSE) %>%
+city_centre_OAs <- st_join(OA_sf_for_centres, city_buffers, join = st_intersects, left = FALSE) %>%
   pull(OA_CODE)
 
 # Assign control_group2
-OA_classification1 <- OA_classification1 %>%
+OA_classification <- OA_classification %>%
   mutate(
     control_group2_OA = if_else(
       OA_CODE.x %in% city_centre_OAs &
@@ -157,28 +140,21 @@ OA_classification1 <- OA_classification1 %>%
   )
 
 # -----------------------------
-# 7️⃣ Restrict to relevant OAs
+# 8️⃣ Restrict to relevant OAs
 # -----------------------------
-OA_analysis2 <- OA_classification1 %>%
+OA_analysis_injuries <- OA_classification %>%
   filter(treated_OA == 1 | buffer_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1)
 
 # Check mutual exclusivity
-OA_analysis2 %>%
+OA_analysis_injuries %>%
   mutate(group_count = treated_OA + buffer_OA + control_group1_OA + control_group2_OA) %>%
   count(group_count)
 
 # -----------------------------
-# 8️⃣ Save OA-level dataset
+# 9️⃣ Save OA-level dataset
 # -----------------------------
-saveRDS(OA_analysis2, here("data", "processed", "OA_level_from_injuries.rds"))
+saveRDS(OA_analysis_injuries, here("data", "processed", "OA_level_from_injuries.rds"))
 
-
-
-
-
-common_OAs <- intersect(OA_analysis$OA_CODE, OA_analysis2$OA_CODE.x)
+# Optional: check overlap with original OA_analysis
+common_OAs <- intersect(OA_analysis$OA_CODE, OA_analysis_injuries$OA_CODE)
 length(common_OAs)
-
-
-
-
