@@ -14,7 +14,9 @@ library(here)
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
 
 # Road attributes (with geometry)
-road_attributes <- readRDS(here("data", "processed", "road_attributes.rds"))
+road_attributes <- st_read(
+  here("data","processed","road_attributes.gpkg"))
+
 
 # Road → CAZ mapping
 road_caz_prop <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%

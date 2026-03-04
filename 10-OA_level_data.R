@@ -106,18 +106,15 @@ oa_2011 <- st_join(
 )
 
 oa_2011 <- oa_2011 %>% filter(!is.na(LAD24CD))    # crop OA that are not in the samepl 
+
 # Treatment OAs (inside CAZ)
 
 treated_OAs <- oa_2011 %>%
   st_join(caz_boundaries, join = st_intersects, left = FALSE) %>%
   pull(OA_CODE) %>% unique()
 
-
-# ============================================================
 # Spillover Buffer (1 km outside CAZ)
 # ============================================================
-
-
 caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
   st_difference(caz_boundaries)
 
@@ -125,61 +122,83 @@ caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
 buffer_OAs <- oa_2011 %>%
   filter(!OA_CODE %in% treated_OAs) %>%  # exclude treated
   st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
-  pull(OA_CODE) %>% unique()
+ pull(OA_CODE) %>% unique()
 
-
-# Treated LADs
+# Treated LADs 
 #Treated LADs (for same-city control)
 treated_LADs <- oa_2011 %>%
   filter(OA_CODE %in% treated_OAs) %>%
   distinct(LAD24CD) %>% pull(LAD24CD)
 
-# OA Classification
+n_distinct(treated_LADs)
+n_distinct(caz_boundaries$scheme)
+
+unique(treated_LADs)
+unique(caz_boundaries$scheme)
+
+lads_sub %>% filter(LAD24CD %in% treated_LADs) %>% View() 
+### there are 1 scheam for 2 LADs 
+
+
+
+
+# city centroids for non-CAZ cities
+city_centroids <- oa_2011 %>%
+  group_by(LAD24CD) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_centroid()
+# ============================================================
+# Distance from OA to City Centre
+# ============================================================
+
+oa_centroids <- st_centroid(oa_2011)
+
+oa_with_centroid <- oa_centroids %>%
+  left_join(
+    city_centroids %>%
+      st_drop_geometry() %>%
+      mutate(city_geometry = city_centroids$geometry),
+    by = "LAD24CD"
+  )
+
+dist_citycentre <- st_distance(
+  st_geometry(oa_centroids),
+  city_centroids[match(oa_centroids$LAD24CD, city_centroids$LAD24CD), ]$geometry,
+  by_element = TRUE
+) %>%
+  as.numeric()
+
+
 OA_classification <- oa_2011 %>%
   st_drop_geometry() %>%
   select(OA_CODE, LAD24CD) %>%
   mutate(
+    
     treated_OA = if_else(OA_CODE %in% treated_OAs, 1, 0),
+    
     buffer_OA = if_else(OA_CODE %in% buffer_OAs, 1, 0),
+    
     control_group1_OA = if_else(
-      LAD24CD %in% treated_LADs & treated_OA == 0 & buffer_OA == 0, 1, 0
+      LAD24CD %in% treated_LADs &
+        treated_OA == 0 &
+        buffer_OA == 0,
+      1, 0
+    ),
+    
+    control_group2_OA = if_else(
+      !LAD24CD %in% treated_LADs  &
+        treated_OA == 0 &
+        buffer_OA == 0,
+      1, 0
     )
+    
   )
 
-OA_classification_sf <- oa_2011 %>%
-  filter(!OA_CODE %in% treated_OAs & !OA_CODE %in% buffer_OAs) %>%  # Non-CAZ, non-buffer
-  select(OA_CODE, LAD24CD, geometry) %>%
-  st_as_sf()
+# add dist
+OA_classification$dist_citycentre <- dist_citycentre
 
 
-#Compute city centroids for non-CAZ cities
-city_centroids <- OA_classification_sf %>%
-  group_by(LAD24CD) %>%
-  summarise(geometry = st_union(geometry)) %>%
-  st_centroid()
-
-# 1 km buffer around centroids
-city_buffers <- st_buffer(city_centroids, 1000)
-
-# Find OAs intersecting the city-centre buffers
-city_centre_OAs <- st_join(OA_classification_sf, city_buffers, join = st_intersects, left = FALSE) %>%
-  pull(OA_CODE)
-
-# Assign control_group2_OA
-OA_classification <- OA_classification %>%
-  mutate(
-    control_group2_OA =
-      if_else(
-        OA_CODE %in% city_centre_OAs &
-          treated_OA == 0 &
-          buffer_OA == 0 &
-          control_group1_OA == 0,
-        1,0
-      )
-  )
-
-
-# 6️⃣ Restrict to relevant OAs
+# relevant OAs
 OA_analysis <- OA_classification %>%
   filter(treated_OA == 1 | buffer_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1)
 
@@ -193,9 +212,9 @@ OA_analysis %>%
 
 
 
-
+summary(OA_analysis$dist_citycentre)
 
 saveRDS(OA_analysis, here("data", "processed", "OA_level_from_polygons.rds"))
-OA_analysis<-read_rds(here("data", "processed", "OA_level_from_polygons.rds"))
+OA_analysi_old<-read_rds(here("data", "processed", "OA_level_from_polygons.rds"))
 
                       
