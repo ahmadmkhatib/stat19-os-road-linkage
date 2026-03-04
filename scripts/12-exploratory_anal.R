@@ -1,10 +1,159 @@
-library(tidyverse)
-library(lubridate)
-library(here)
-library(sf)
-library(qs)
+# ============================================================
+# Exploratory & Descriptive Summaries
+# Road-Level Panel + OA-Level Data
+# ============================================================
 
+library(tidyverse)
+library(here)
+library(arrow)
+library(sf)
+library(zoo)
+
+# -----------------------------
+# Load Relevant Data
+# -----------------------------
+
+# Road-level panel and classification
 road_panel_model<-arrow::open_dataset(here("data","processed","road_panel_dataset")) %>% collect()
+analysis_roads   <- readRDS(here("data", "processed", "analysis_roads.rds"))
+
+# OA-level data
+OA_analysis <- readRDS(here("data", "processed", "OA_level_from_polygons.rds"))
+
+# Injuries data
+injuries <- readRDS(here("data", "processed", "injuries_matched_final.rds"))
+
+
+# -----------------------------
+# Road-Level Counts
+# -----------------------------
+road_summary <- analysis_roads %>%
+  summarise(
+    n_roads_total = n(),
+    n_treated = sum(treated_group),
+    n_control1 = sum(control_group1),
+    n_control2 = sum(control_group2)
+  )
+
+# -----------------------------
+#  Injury Summaries by Treatment/Control
+inj_summary <- road_panel_model %>%
+  group_by(treated_group, control_group1, control_group2) %>%
+  summarise(
+    total_KSI = sum(across(starts_with("KSI_adj")), na.rm = TRUE),
+    total_Slight = sum(across(starts_with("Slight_adj")), na.rm = TRUE),
+    total_injuries = sum(across(starts_with("total_inj_adj")), na.rm = TRUE),
+    n_roads = n_distinct(identifier),
+    .groups = "drop"
+  )
+# -----------------------------
+# Quarterly Injury Distribution
+# -----------------------------
+quarterly_summary <- road_panel_model %>%
+  group_by(quarter_year) %>%
+  summarise(
+    total_KSI = sum(across(starts_with("KSI_adj")), na.rm = TRUE),
+    total_Slight = sum(across(starts_with("Slight_adj")), na.rm = TRUE),
+    total_injuries = sum(across(starts_with("total_inj_adj")), na.rm = TRUE)
+  )
+
+# -----------------------------
+#  OA-Level Descriptive Statistics
+# -----------------------------
+OA_summary <- OA_analysis %>%
+  summarise(
+    n_OAs_total = n(),
+    n_treated = sum(treated_OA),
+    n_buffer = sum(buffer_OA),
+    n_control1 = sum(control_group1_OA),
+    n_control2 = sum(control_group2_OA),
+    median_dist_to_centre = median(dist_citycentre),
+    mean_dist_to_centre = mean(dist_citycentre),
+    min_dist_to_centre = min(dist_citycentre),
+    max_dist_to_centre = max(dist_citycentre)
+  )
+
+# -----------------------------
+#### Injuries per OA Group
+# -----------------------------
+OA_injuries_summary <- OA_analysis %>%
+  left_join(
+    injuries %>% st_drop_geometry() %>%
+      group_by(OA_CODE) %>%
+      summarise(
+        total_KSI = sum(KSI_adj, na.rm = TRUE),
+        total_Slight = sum(Slight_adj, na.rm = TRUE),
+        total_inj = sum(KSI_adj + Slight_adj, na.rm = TRUE)
+      ),
+    by = "OA_CODE"
+  ) %>%
+  group_by(treated_OA, buffer_OA, control_group1_OA, control_group2_OA) %>%
+  summarise(
+    total_KSI = sum(total_KSI, na.rm = TRUE),
+    total_Slight = sum(total_Slight, na.rm = TRUE),
+    total_inj = sum(total_inj, na.rm = TRUE),
+    n_OAs = n(),
+    .groups = "drop"
+  )
+
+library(knitr)
+
+road_summary %>% st_drop_geometry() %>%kable(
+  caption = "Road-Level Counts by Treatment and Control Groups"
+)
+
+
+inj_summary %>% st_drop_geometry() %>%kable(
+  caption = "Total Injuries by Road Group"
+)
+
+quarterly_summary %>% st_drop_geometry() %>% kable(
+  caption = "Quarterly Injury Distribution"
+)
+
+OA_summary %>% st_drop_geometry() %>%kable(
+  caption = "OA-Level Summary Statistics"
+)
+
+
+OA_injuries_summary %>% st_drop_geometry() %>%kable(
+  caption = "Injuries by OA Treatment and Control Group"
+)
+
+
+
+
+
+
+
+
+
+library(flextable)
+library(officer)
+
+doc <- read_docx()
+
+doc <- body_add_flextable(doc,
+                          flextable(st_drop_geometry(road_summary)))
+
+doc <- body_add_flextable(doc,
+                          flextable(st_drop_geometry(inj_summary)))
+
+print(doc, target = "tables.docx")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 glimpse(road_panel_model)

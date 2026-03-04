@@ -44,25 +44,9 @@
 # This provides the **primary counterfactual**.
 #
 #
-# Control Group 2: City-Centre Roads in Non-CAZ Cities
+# Control Group 2:  Non-CAZ Cities
 # ------------------------------------------------------------
-# Roads located near the centre of cities that
-# never implemented CAZ.
-#
-# City centres are approximated by:
-#
-#   1. Computing the centroid of each non-CAZ city
-#   2. Creating a 1 km buffer around the centroid
-#   3. Selecting roads intersecting that buffer
-#
-# This ensures comparable:
-#
-#   • traffic density
-#   • urban road environments
-#
-#
-# ------------------------------------------------------------
-# DATA CONSTRUCTION STEPS
+# STEPS
 # ------------------------------------------------------------
 #
 #   1. Identify treated roads inside CAZ
@@ -95,7 +79,7 @@
 # treated_group     : Ever-treated road indicator
 # buffer_control    : Roads within 1 km outside CAZ
 # control_group1    : Same-city roads outside buffer
-# control_group2    : Non-CAZ city-centre roads
+# control_group2    : Non-CAZ citys roads
 #
 # KSI_adj_*         : Severe injuries by road user type
 # Slight_adj_*      : Slight injuries by road user type
@@ -117,26 +101,16 @@ options(arrow.use_mmap = FALSE)
 
 # ============================================================
 #=================================================
-# # ============================================================
-library(tidyverse)
-library(lubridate)
-library(here)
-library(sf)
-library(zoo)
-library(arrow)
-library(units)
 
-options(arrow.use_mmap = FALSE)
-
-
-# road_panel_dataset<- open_dataset( here("data","processed","road_panel_dataset")) %>% collect()
 
 # --data
 # RTI matched data
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
 
 # all roads with thier attribute  - @ road level 
-road_attributes<- readRDS(here("data", "processed", "road_attributes.rds"))
+road_attributes <- st_read(here("data","processed","road_attributes.gpkg"))
+  
+  
 # roads inside the CAZs  == the treatment @ road level 
 road_caz_prop<- readRDS(here("data", "processed", "roads_caz_props.rds"))
 #create treatment indicator 
@@ -160,57 +134,30 @@ treated_cities <- road_caz_prop %>%
 # Control 1: Same city, outside CAZ
 # -----------------------------
 road_classification <- road_attributes %>%
-  left_join(road_caz_prop %>% select(identifier, scheme, ever_treated),
-            by = "identifier") %>%
+  left_join(road_caz_prop %>% select(identifier, scheme, ever_treated), by="identifier") %>%
   mutate(
     ever_treated = replace_na(ever_treated, 0),
-    scheme = scheme, # assign scheme for non-CAZ roads
     control_group1 = if_else(scheme %in% treated_cities & ever_treated == 0, 1, 0)
   )
 
 # -----------------------------
 #  Control 2: City centre roads in non-CAZ cities
 # -----------------------------
-# Non-CAZ roads
-non_caz_roads <- road_classification %>%
-  filter(!scheme %in% treated_cities) %>%
-  st_as_sf()
-
-# Compute city centroids
-city_centroids <- non_caz_roads %>%
-  group_by(scheme) %>%
-  summarise(geometry = st_union(geom)) %>%
-  st_centroid()
-
-# Create 1km buffer around centroid
-city_buffers <- st_buffer(city_centroids, dist = 1000)
-
-# Roads within buffer → pseudo city centres
-roads_in_centres <- st_join(non_caz_roads, city_buffers, join = st_within, left = FALSE) %>%
-  pull(identifier)
-
-# Add indicator
 road_classification <- road_classification %>%
   mutate(
-    control_group2 = if_else(identifier %in% roads_in_centres, 1, 0)
+    control_group2 = if_else(!scheme %in% treated_cities & ever_treated == 0, 1, 0)
   )
 
-# -----------------------------
-# Control 3: Mixed (1 + 2)
-# -----------------------------
+# Create treated_group and mixed control
 road_classification <- road_classification %>%
   mutate(
     treated_group = ever_treated,
     control_group3_mixed = if_else(control_group1 == 1 | control_group2 == 1, 1, 0)
   )
 
-# -----------------------------
-# Restrict to Relevant Roads for Analysis
-# -----------------------------
+# Keep only relevant roads
 analysis_roads <- road_classification %>%
-  filter(treated_group == 1 | control_group1 == 1 | control_group2 == 1) %>%
-  select(identifier, treated_group, control_group1, control_group2, control_group3_mixed)
-
+  filter(treated_group == 1 | control_group1 == 1 | control_group2 == 1)
 # -----------------------------
 # Create Road × Quarter Panel
 # -----------------------------
@@ -224,19 +171,18 @@ road_panel <- expand_grid(
 # -----------------------------
 # Aggregate Injuries (KSI & Slight separate)
 # -----------------------------
-injuries <- injuries %>%
+injuries <- injuries %>% filter()
   st_drop_geometry() 
 
-
-roadlevel_long <- injuries  %>%
-  group_by(identifier, quarter_year, casualty_type1) %>%
+roadlevel_long <- injuries %>%
+  group_by(identifier=matched_roadID, quarter_year, casualty_type1) %>%
   summarise(
-    KSI_adj      = sum(KSI_adj, na.rm = TRUE),
-    Slight_adj   = sum(Slight_adj, na.rm = TRUE),
-    KSI_unadj    = sum(KSI_unadj, na.rm = TRUE),
-    Slight_unadj = sum(Slight_unadj, na.rm = TRUE),
-    total_inj_adj   = sum(KSI_adj + Slight_adj, na.rm = TRUE),
-    total_inj_unadj = sum(KSI_unadj + Slight_unadj, na.rm = TRUE),
+    KSI_adj = sum(KSI_adj, na.rm=TRUE),
+    Slight_adj = sum(Slight_adj, na.rm=TRUE),
+    KSI_unadj = sum(KSI_unadj, na.rm=TRUE),
+    Slight_unadj = sum(Slight_unadj, na.rm=TRUE),
+    total_inj_adj = sum(KSI_adj + Slight_adj, na.rm=TRUE),
+    total_inj_unadj = sum(KSI_unadj + Slight_unadj, na.rm=TRUE),
     .groups = "drop"
   )
 
@@ -251,16 +197,23 @@ injury_wide <- roadlevel_long %>%
 # Merge panel + injuries + controls + treatment timing
 # -----------------------------
 road_panel_complete <- road_panel %>%
-  left_join(injury_wide, by = c("identifier","quarter_year")) %>%
+  left_join(injury_wide, by=c("identifier","quarter_year")) %>%
   mutate(across(starts_with(c("KSI","Slight","total_inj")), ~replace_na(.,0))) %>%
-  left_join(analysis_roads, by = "identifier") %>%
-  left_join(road_caz_prop %>% select(identifier, caz_start_q), by = "identifier") %>%
+  left_join(analysis_roads, by="identifier") %>%
+  left_join(road_caz_prop %>% select(identifier, caz_start_q), by="identifier") %>%
   mutate(
     quarter_year = as.yearqtr(quarter_year),
     caz_start_q  = as.yearqtr(caz_start_q),
     treated = if_else(treated_group == 1 & quarter_year >= caz_start_q, 1, 0)
   )
 
+road_panel_model <- road_panel_complete %>%
+  st_drop_geometry() %>%
+  select(
+    identifier, quarter_year, treated, treated_group,
+    control_group1, control_group2, control_group3_mixed,
+    starts_with("KSI"), starts_with("Slight"), starts_with("total_inj")
+  )
 # -----------------------------
 # Arrow Dataset
 # -----------------------------
