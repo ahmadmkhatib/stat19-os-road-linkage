@@ -4,25 +4,14 @@
 # Road × Quarter Panel Dataset
 # ============================================================
 
-# This script constructs the analytical panel used to evaluate
-# the impact of Clean Air Zones (CAZ) on road traffic injuries.
-#
+# This script constructs the analytical panel data 
 # The treatment is defined at the road level:
 #
 #   A road is treated if:
 #       • it lies inside a CAZ boundary
 #       • AND the quarter occurs after CAZ implementation.
 #
-# The key identifying variation comes from comparing:
-#
-#   • Roads inside CAZ boundaries (treated)
-#   • Roads outside CAZ boundaries (controls)
-#
-# The counterfactual question is:
-#
-#   What would have happened to treated roads
-#   in the absence of CAZ implementation?
-#
+# 
 # ------------------------------------------------------------
 # CONTROL GROUP DEFINITIONS
 # ------------------------------------------------------------
@@ -83,10 +72,7 @@
 #   5. Expand roads into a road × quarter panel
 #   6. Aggregate injuries to road × quarter level
 #   7. Merge treatment timing
-#   8. Export dataset using Arrow
-#
-#
-# ------------------------------------------------------------
+## ------------------------------------------------------------
 # OUTCOME VARIABLES
 # ------------------------------------------------------------
 #
@@ -99,8 +85,7 @@
 #
 # Additional disaggregation is available by casualty type.
 #
-#
-# ------------------------------------------------------------
+## ------------------------------------------------------------
 # FINAL DATASET STRUCTURE
 # ------------------------------------------------------------
 #

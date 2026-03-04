@@ -6,9 +6,6 @@ library(tidyverse)
 library(sf)
 library(here)
 
-# -----------------------------
-# 1️⃣ Load Data
-# -----------------------------
 
 # Injuries matched to roads (points)
 injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
@@ -28,7 +25,7 @@ caz_boundaries <- st_read(here("data", "processed", "shp_files", "CAZ_areas.shp"
   st_make_valid()
 
 # -----------------------------
-# 2️⃣ Attach LADs to OAs
+# Attach LADs to OAs
 # -----------------------------
 oa_2011 <- st_join(
   oa_2011,
@@ -39,7 +36,7 @@ oa_2011 <- st_join(
   filter(!is.na(LAD24CD))
 
 # -----------------------------
-# 3️⃣ Map injuries → OAs
+#Map injuries → OAs
 # -----------------------------
 injuries_sf <- injuries %>%
   st_as_sf(coords = c("x_coord", "y_coord"), crs = 27700)
@@ -52,7 +49,7 @@ injuries_oa <- st_join(
 )
 
 # -----------------------------
-# 4️⃣ Aggregate injuries to OA level
+# Aggregate injuries to OA level
 # -----------------------------
 oa_injuries <- injuries_oa %>%
   st_drop_geometry() %>%
@@ -68,7 +65,7 @@ oa_injuries <- injuries_oa %>%
   )
 
 # -----------------------------
-# 5️⃣ Assign OA Groups (same logic as original OA_analysis)
+# Assign OA Groups (same logic as original OA_analysis)
 # -----------------------------
 
 # Treated OAs
@@ -96,7 +93,7 @@ treated_LADs <- oa_2011 %>%
   pull(LAD24CD)
 
 # -----------------------------
-# 6️⃣ Initialize OA classification
+# Initialize OA classification
 # -----------------------------
 OA_classification <- oa_injuries %>%
   mutate(
@@ -108,7 +105,7 @@ OA_classification <- oa_injuries %>%
   )
 
 # -----------------------------
-# 7️⃣ Control Group 2 (non-CAZ city centres)
+# Control Group 2 (non-CAZ city centres)
 # -----------------------------
 # OAs not treated or buffer
 OA_sf_for_centres <- oa_2011 %>%
@@ -140,7 +137,7 @@ OA_classification <- OA_classification %>%
   )
 
 # -----------------------------
-# 8️⃣ Restrict to relevant OAs
+# Restrict to relevant OAs
 # -----------------------------
 OA_analysis_injuries <- OA_classification %>%
   filter(treated_OA == 1 | buffer_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1)
@@ -150,11 +147,10 @@ OA_analysis_injuries %>%
   mutate(group_count = treated_OA + buffer_OA + control_group1_OA + control_group2_OA) %>%
   count(group_count)
 
-# -----------------------------
-# 9️⃣ Save OA-level dataset
+##############
 # -----------------------------
 saveRDS(OA_analysis_injuries, here("data", "processed", "OA_level_from_injuries.rds"))
 
-# Optional: check overlap with original OA_analysis
-common_OAs <- intersect(OA_analysis$OA_CODE, OA_analysis_injuries$OA_CODE)
+#  overlap with original OA_analysis
+common_OAs <- intersect(OA_analysis$OA_CODE, OA_analysis_injuries$OA_CODE.x)
 length(common_OAs)

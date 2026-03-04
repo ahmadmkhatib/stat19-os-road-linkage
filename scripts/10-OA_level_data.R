@@ -1,16 +1,15 @@
-============================================================
-  # OA-Level Cross-Section Dataset
+#============================================================
+  # OA-Level Data
   # ============================================================
 
-# This script constructs a cross-sectional Output Area (OA)
+# This script constructs Output Area (OA)
 # dataset used to define treatment and control groups for
 # the CAZ policy evaluation.
 #
-# Treatment and control status are defined purely using
+# Treatment and control status are defined  using
 # spatial relationships between OAs and CAZ boundaries.
 #
 # No road-level data are used in the classification.
-#
 #
 # ------------------------------------------------------------
 # GROUP DEFINITIONS
@@ -38,17 +37,9 @@
 # are unlikely to experience direct policy effects.
 #
 #
-# Control Group 2: Non-CAZ City Centres
-# ------------------------------------------------------------
-# OAs located near the centres of cities without CAZ.
+# Control Group 2: # OAs  of cities without CAZ.
 #
-# These are constructed by:
-#
-#   1. Computing city centroids
-#   2. Creating a 1 km buffer
-#   3. Selecting OAs intersecting the buffer
-#
-# This provides comparable urban environments.
+# with distance to city centre 
 #
 #
 # ------------------------------------------------------------
@@ -63,6 +54,7 @@
 # buffer_OA
 # control_group1_OA
 # control_group2_OA
+# distance 
 #
 # ============================================================
 
