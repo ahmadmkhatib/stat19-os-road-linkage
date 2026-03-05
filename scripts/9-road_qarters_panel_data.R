@@ -171,9 +171,6 @@ road_panel <- expand_grid(
 # -----------------------------
 # Aggregate Injuries (KSI & Slight separate)
 # -----------------------------
-injuries <- injuries %>% filter()
-  st_drop_geometry() 
-
 roadlevel_long <- injuries %>%
   group_by(identifier=matched_roadID, quarter_year, casualty_type1) %>%
   summarise(
@@ -207,35 +204,25 @@ road_panel_complete <- road_panel %>%
     treated = if_else(treated_group == 1 & quarter_year >= caz_start_q, 1, 0)
   )
 
+names(road_panel_complete)
+
 road_panel_model <- road_panel_complete %>%
   st_drop_geometry() %>%
   select(
-    identifier, quarter_year, treated, treated_group,
+    identifier, quarter_year, treated, treated_group, scheme,
     control_group1, control_group2, control_group3_mixed,
     starts_with("KSI"), starts_with("Slight"), starts_with("total_inj")
   )
 # -----------------------------
 # Arrow Dataset
 # -----------------------------
-road_panel_model <- road_panel_complete %>%
-  st_drop_geometry() %>%
-  select(
-    identifier,
-    quarter_year,
-    treated,
-    treated_group,
-    control_group1,
-    control_group2,
-    control_group3_mixed,
-    starts_with("KSI"),
-    starts_with("Slight"),
-    starts_with("total_inj")
-  )
+
 
 ### add some road and city vars 
 
-
-
+road_panel_model <- road_panel_model %>%
+  rename_with(~make.names(.x))
+names(road_panel_model)
 
 write_dataset(
   road_panel_model,
@@ -265,4 +252,10 @@ sum(road_panel_model$`KSI_adj_Car/Van`)
 sum(road_panel_model$KSI_adj_Pedestrian)
 sum(road_panel_model$KSI_adj_Cyclist)
 sum(road_panel_model$KSI_adj)
+
+
+
+
+# road_panel_model<-arrow::open_dataset(here("data","processed","road_panel_dataset")) %>% collect()
+
  

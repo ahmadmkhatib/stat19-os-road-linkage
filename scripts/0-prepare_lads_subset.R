@@ -39,7 +39,7 @@ england <- read_excel(buas_path, sheet = 1) %>%
 ### wales <- read_excel(buas_path, sheet = 2) %>%   mutate(country = "Wales")    ### decided to remove 
 
 
-buas <- bind_rows(england, wales) %>%
+buas <- bind_rows(england) %>%
   filter(Counts >= 100000)
 buas$`BUA name`
 
@@ -50,7 +50,7 @@ buas <- buas %>%
     "Newcastle upon Tyne", "Portsmouth", "Sheffield", "Oxford"
   ))
 
-# ---`BUA name`# ----------------------------------------------------------
+# -------------------------------------------------------------
 # Clean city names for matching
 # ----------------------------------------------------------
 
@@ -61,7 +61,7 @@ buas <- buas %>%
     BUA_clean = case_when(
       `BUA name` == "Southend-on-Sea" ~ "Southend",
       `BUA name` == "St Helens (St. Helens)" ~ "Saint Helens",
-      `BUA name` == "Swansea" ~ "Abertawe",
+     `BUA name` == "Swansea" ~ "Abertawe",
       `BUA name` == "Kingswood and Fishponds" ~ "Kingswood",
       TRUE ~ BUA_clean
     )
@@ -88,19 +88,40 @@ cities <- read_csv(cities_path, show_col_types = FALSE) %>%
 cities_joined <- buas %>%
   left_join(cities, by = c("BUA_clean" = "city")) %>%
   select(
-    `BUA name`,
+    BUA_name=`BUA name`,
     population = Counts,
     lat,
     lng,
-    country 
+    country, id 
   )
+
+# --------------------
+# clean cities joined 
+#--------------------
+cities_joined %>%  View()
+cities_joined_clean <- cities_joined %>%
+  
+  # Remove Kingswood 
+  filter(BUA_name != "Kingswood and Fishponds") %>%
+  
+  #  Keep only the decided correct city IDs where duplicates exist
+  filter(
+    !(BUA_name == "Blackburn (Blackburn with Darwen)" & id != 1826802533),
+    !(BUA_name == "Gillingham (Medway)" & id != 1826642243),
+    !(BUA_name == "St Helens (St. Helens)" & id != 1826775771),
+    !(BUA_name == "Swindon (Swindon)" & id != 1826498106),
+    !(BUA_name == "Southend-on-Sea" & id != 1826524208)
+  )
+
+
+cities_joined_clean %>% select(BUA_name) %>%  n_distinct()
 
 # ----------------------------------------------------------
 # Convert to sf and match to LAD boundaries
 # ----------------------------------------------------------
 
 cities_sf <- st_as_sf(
-  cities_joined,
+  cities_joined_clean,
   coords = c("lng", "lat"),
   crs = 4326,
   remove = FALSE
@@ -115,7 +136,7 @@ cities_with_LAD <- st_join(
 ) %>%
   st_drop_geometry() %>%
   select(
-    `BUA name`,
+    `BUA_name`,
     population,
     lat,
     lng,
@@ -137,7 +158,7 @@ scotland <- read_excel(scotland_pop_path) %>%
     population = `All ages`
       ) %>%
   rename(
-    `BUA name` = `Settlement name`,
+    `BUA_name` = `Settlement name`,
     LAD24NM    = `Settlement name`,
     LAD24CD    = `Settlement code`
   ) %>%
@@ -151,9 +172,9 @@ scotland<- scotland %>%
   filter(!LAD24NM %in% c(
     "Aberdeen, Milltimber, and Peterculter", "Edinburgh", "Greater Glasgow"
   ))
-# ----------------------------------------------------------
-# Combine all countries
-# ----------------------------------------------------------
+# ---------------
+# Combined
+# ----------------
 
 big_cities_with_LADs <- bind_rows(
   cities_with_LAD,
