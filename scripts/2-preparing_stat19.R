@@ -28,7 +28,7 @@ names(vehicles)    <- tolower(names(vehicles))
 names(casualties)  <- tolower(names(casualties))
 
 # -------------------------------------------------------
-# Filter to 2015+
+# Filtering
 # --------------------------------------------------------
 
 collisions <- collisions %>%
@@ -46,7 +46,7 @@ vehicles <- vehicles %>%
 
 
 ### Ensure keys unique BEFORE join
-# ----------------------------------------------------------------------
+# ----------------------------------------
 
 nrow(casualties) - (casualties %>%
   distinct(collision_index, casualty_reference, .keep_all = TRUE) %>%  nrow()
@@ -233,7 +233,7 @@ nrow(collisions_missing)
 # Attach LAD 
 # ----------------------------------------------------------------------
 
-LADs <- st_read(here("data","raw","LAD_DEC_24_UK_BGC.shp"), quiet = TRUE) %>%
+LADs <- st_read( here("../stat19-os-road-linkage-data", "LAD_DEC_24_UK_BGC.shp"), quiet = TRUE) %>%
   st_transform(27700)
 
 LADs_sub <- readRDS(here("data","processed","LADs_sub.rds"))
@@ -247,34 +247,10 @@ injuries_sf <- st_join(injuries_sf,
                        join = st_intersects,
                        left = F)
 
-
-st_write(LADs,
-         here("data","processed","shp_files","LADs.shp"))
-
 st_write(LADs_filtered,
          here("data","processed","shp_files","LADs_filtered.shp"))
 
-
-
-#filter injuries on the LADs subset 
-injuries_sf <- injuries_sf  %>%
-  filter(LAD24CD %in% LADs_sub$LAD24CD)
-
-
-# ----------------------------------------------------------------------
-#  checks
-# ----------------------------------------------------------------------
-
-cat("Rows in the LADs subset:", nrow(injuries_sf), "\n")
-cat("Rows in all LADs:", nrow(stats19), "\n")
-cat("Unique injury_id:", length(unique(injuries_sf$injury_id)), "\n")
-cat("Duplicates:", sum(duplicated(injuries_sf$injury_id)), "\n")
-
-stopifnot(sum(duplicated(injuries_sf$injury_id)) == 0)
-
-
-# Save
-
+sum(duplicated(injuries_sf$injury_id))
 
 saveRDS(injuries_sf,
         here("data","processed","injuries_final.rds"))

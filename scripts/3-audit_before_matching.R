@@ -102,9 +102,9 @@ if ("date" %in% names(injuries_sf)) {
   print(table(year(injuries_sf$date)))
 }
 
-# ==========================================================
-# ROAD CLASS DISTRIBUTIONS
-# ==========================================================
+# ========================== = 
+#  DISTRIBUTIONS
+# ================================== =====
 
 if ("first_road_class1" %in% names(injuries_sf)) {
   print(injuries_sf %>% st_drop_geometry() %>% count(first_road_class1))
@@ -132,7 +132,7 @@ if (all(c("casualty_severity", "casualty_severity1") %in% names(injuries_sf))) {
 
 # ==========================================================
 #  MATCHING KEY COMPLETENESS
-# ==========================================================
+# ================================ 
 
 matching_keys <- c("USRN", "TOID")
 

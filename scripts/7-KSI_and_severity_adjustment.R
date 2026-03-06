@@ -64,8 +64,7 @@ injuries %>%
   summarise(mean_KSI_adj = mean(KSI_adj))
 
 # # # #Adjusted KSI is very close to unadjusted KSI (difference = 20). 
-##Slight decreases a lot after adjustment - -  ie reweighted toward Serious.
-
+##Slight decreases a lot after adjustment - - 
 
 
 write_rds(

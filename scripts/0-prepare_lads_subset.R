@@ -1,7 +1,7 @@
 # ==========================================================
 # Script: 00_create_large_city_LAD_subset.R
 # Purpose: Create a subset of large UK cities (>=100k population) without the CAZ
-#          and assign the corresponding Local Authority District (LAD)
+#          and assign the corresponding Local Authority District (LAD24)
 #          codes using spatial joins.
 # Output:  data/processed/big_cities_with_LADs.rds
 # ==========================================================

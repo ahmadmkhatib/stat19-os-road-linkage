@@ -19,17 +19,12 @@ caz_polygons <- st_read(
 )
 
 
-## geo data 
+lads_sub<-readRDS(here("data", "processed", "LADs_sub.rds"))
 
 
-lads_union <- lads_union <- lads_sub %>%
-  st_union()
-
-
-oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
+oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
   st_transform(27700) %>%
-  st_make_valid() %>%
-  rename(OA_CODE = geo_code) 
+  st_make_valid() 
 
 
 ### all raods and thier attributes 
@@ -44,7 +39,6 @@ st_write(
                          
 road_attributes <- st_read(
   here("data","processed","road_attributes.gpkg"),
-  wkt_filter = st_as_text(lads_union),
   quiet = TRUE
 ) %>%  select(identifier, road_class, length)
 
@@ -52,7 +46,7 @@ road_attributes <- st_read(
 
 st_crs(road_attributes)
 st_crs(lads_sub)
-st_crs(oa_2011)
+st_crs(oa)
 
 
 # ------------------------------------------------------------
@@ -60,6 +54,8 @@ st_crs(oa_2011)
 # ------------------------------------------------------------
 
 glimpse(caz_polygons)
+table(caz_polygons$scheme)
+table(caz_polygons$LocAuth1)
 class(caz_polygons$startDt)
 
 caz <- caz_polygons %>%
@@ -68,9 +64,6 @@ caz <- caz_polygons %>%
     caz_id = row_number()
   )   %>%    st_make_valid()
 
-
-
-View(caz)
 
 # recode caz  
 
@@ -110,11 +103,6 @@ road_caz <- st_intersection(
   group_by(identifier) 
 
 
-road_caz %>%
-  count(identifier) %>%
-  filter(n > 1)
-
-
 ## Instead of "any overlap", compute proportion of road length inside CAZ:
  road_caz_prop <- st_intersection(
     road_attributes,
@@ -129,16 +117,21 @@ road_caz %>%
    select(identifier, total_length)
  
  road_caz_prop <- road_caz_prop %>%
-   left_join(road_lengths, by = "identifier") %>%
+   left_join(road_lengths, by = "identifier")
+ 
+ 
+ road_caz_prop<- road_caz_prop %>%
    mutate(prop_inside = int_length / total_length)
+ 
  # prop_inside = proportion of link inside CAZ
 
 summary(road_caz_prop$prop_inside)
 table(road_caz_prop$scheme)
+
 # -----------------#-----------------#
 # Convert CAZ start date → quarter
 # ----------------###------------------#
-
+glimpse(road_caz_prop)
 road_caz_prop <- road_caz_prop%>%
   mutate(
     caz_start_q = as.yearqtr(start_date)
@@ -152,12 +145,8 @@ names(road_attributes)
 attr(road_attributes, "sf_column")
 
 
-
-road_attributes <- st_make_valid(road_attributes)
-road_attributes<- road_attributes %>%  st_filter(st_union(lads_sub)) #remove the roads not in the LADs_subset (initially inculded Wales)
-
 # Pre-crop OAs to roads extent
-oa_2011_sub <- st_filter(
+oa_sub <- st_filter(
   oa_2011 %>% select(OA_CODE),
   road_attributes,
   .predicate = st_intersects

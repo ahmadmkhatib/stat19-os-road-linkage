@@ -21,7 +21,7 @@ library(here)
 
 roads_path <- here("../stat19-os-road-linkage-data", "OS highways all.shp")
 lads_path  <- here("../stat19-os-road-linkage-data", "LAD_DEC_24_UK_BGC.shp")
-cities_path  <- here("../stat19-os-road-linkage-data", "big_cities_with_LADs.rds")
+cities_path  <- here("data", "processed", "big_cities_with_LADs.rds")
 
 # ----------------------------------------------------------
 # Load LAD Boundaries
@@ -32,7 +32,7 @@ CAZ_LADs <- c(
   # CAZ
   "E06000022","E08000025","E08000032","E06000023",
   "E06000044","E08000019","E08000021","E08000018", 
-  "S12000049","S12000036","S12000033", "S12000042")
+  "S12000049","S12000036","S12000033", "S12000042","E07000178")
 
 LADs <- st_read(lads_path, quiet = TRUE)
 
@@ -61,7 +61,7 @@ selected_lads <- c(
   filter(LAD24CD %in% selected_lads)
   
   ### remove Wales
-  LADs_sub <- lads_sub %>% filter(!grepl("^W", LAD24CD))
+  LADs_sub <- LADs_sub %>% filter(!grepl("^W", LAD24CD))
   
   
   
@@ -72,11 +72,9 @@ saveRDS(LADs_sub, here("data", "processed", "LADs_sub.rds"))
 lads_union <- st_union(LADs_sub)
 
 # ----------------------------------------------------------
-# Load OS Open Roads
+# Load OS Open Roads (only for the lads subset)
 # ----------------------------------------------------------
-
 roads <- st_read(roads_path, quiet = TRUE)
-
 # for speed ## dealing with .gpkg is faster than .shp 
 
 roads <- roads %>% st_zm(roads, drop = TRUE, what = "ZM") %>% select(-fid)
@@ -91,6 +89,8 @@ roads <- st_read(
 # ----------------------------------------------------------
 # Recode Road Classification
 # ----------------------------------------------------------
+table(roads$roadClassi)
+
 
 roads <- roads %>%
   mutate(
@@ -103,14 +103,6 @@ roads <- roads %>%
       TRUE ~ NA_character_
     )
   )
-
-# ----------------------------------------------------------
-# Save 
-# ----------------------------------------------------------
-
-
-roads_filtered<- readRDS(here("data", "processed", "roads_filtered.rds"))
-
 
 saveRDS(roads, here("data", "processed", "roads_filtered.rds"))
 

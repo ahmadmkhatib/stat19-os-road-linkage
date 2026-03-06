@@ -1,6 +1,6 @@
 # ==========================================================
 # STAT19 – OS Open Roads Linkage Framework
-# Script: 03_match_injuries_to_roads_by_type.R
+# Script: 4_match_injuries_to_roads_by_type.R
 # Purpose: Match STATS19 injuries subset to nearest plausible road link
 # CRS: British National Grid (EPSG:27700)
 # ==========================================================
@@ -12,13 +12,8 @@ library(here)
 # ----------------------------------------------------------
 # Load Processed Data
 # ----------------------------------------------------------
-
-injuries_path <- here("data", "processed", "injuries_final.rds")
-roads_path    <- here("data", "processed", "roads_filtered.rds")
-
-
-injuries <- readRDS(injuries_path)
-roads    <- readRDS(roads_path)
+injuries <- readRDS(here("data", "processed", "injuries_final.rds"))
+roads    <- readRDS( here("data", "processed", "roads_filtered.rds"))
 
 
 # ----------------------------------------------------------
@@ -26,7 +21,6 @@ roads    <- readRDS(roads_path)
 # --------------------------------------------------------
 table(roads$road_class)
 table(injuries$first_road_class_label1)
-
 
 
 #### recode class
@@ -138,12 +132,6 @@ summary_table <- tibble(
 
 print(summary_table)
 
-# ----------------------------------------------------------
-# Save Output
-# ----------------------------------------------------------
+saveRDS(matched, here("data", "processed", "injuries_matched.rds"))
 
-output_path <- here("data", "processed", "injuries_matched.rds")
 
-saveRDS(matched, output_path)
-
-cat("Output saved to:", output_path)

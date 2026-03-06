@@ -70,10 +70,13 @@ lads_sub<-readRDS (here("data", "processed", "LADs_sub.rds"))
 
 
 # Output Area geometries
-oa_2011 <- st_read("../stat19-os-road-linkage-data/infuse_oa_lyr_2011_clipped.shp") %>%
+oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
   st_transform(27700) %>%
-  st_make_valid() %>%
-  rename(OA_CODE = geo_code) 
+  st_make_valid()
+
+
+oa<- oa %>%
+  rename(OA_CODE = OA) 
 
 
 # CAZ boundaries
@@ -82,26 +85,25 @@ caz_boundaries <- st_read(
   quiet = TRUE
 )
 
-st_crs(oa_2011)
 st_crs(caz_boundaries)
-caz_boundaries <-  st_transform(caz_boundaries, st_crs(oa_2011)) %>% st_make_valid()
-oa_2011<-st_make_valid(oa_2011)
+
+caz_boundaries <-  st_transform(caz_boundaries, st_crs(oa)) %>% st_make_valid()
+oa<-st_make_valid(oa)
 
 
 # Attach LAD to each OA
-oa_2011 <- st_join(
-  oa_2011,
+oa_sub <- st_join(
+  oa,
   lads_sub %>% select(LAD24CD),
-  join = st_intersects,
-  largest = TRUE,  # largest overlap
-  left = TRUE
+  join = st_within
 )
 
-oa_2011 <- oa_2011 %>% filter(!is.na(LAD24CD))    # crop OA that are not in the samepl 
+sum(duplicated(oa_sub$OA_CODE))
+oa_sub <-oa_sub %>% filter(!is.na(LAD24CD))    # crop OA that are not in the samepl 
 
 # Treatment OAs (inside CAZ)
 
-treated_OAs <- oa_2011 %>%
+treated_OAs <- oa_sub %>%
   st_join(caz_boundaries, join = st_intersects, left = FALSE) %>%
   pull(OA_CODE) %>% unique()
 
@@ -111,14 +113,14 @@ caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
   st_difference(caz_boundaries)
 
 
-buffer_OAs <- oa_2011 %>%
+buffer_OAs <- oa_sub %>%
   filter(!OA_CODE %in% treated_OAs) %>%  # exclude treated
   st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
  pull(OA_CODE) %>% unique()
 
 # Treated LADs 
-#Treated LADs (for same-city control)
-treated_LADs <- oa_2011 %>%
+#Treated LADs 
+treated_LADs <- oa_sub %>%
   filter(OA_CODE %in% treated_OAs) %>%
   distinct(LAD24CD) %>% pull(LAD24CD)
 
@@ -133,9 +135,8 @@ lads_sub %>% filter(LAD24CD %in% treated_LADs) %>% View()
 
 
 
-
 # city centroids for non-CAZ cities
-city_centroids <- oa_2011 %>%
+city_centroids <- oa_s %>%
   group_by(LAD24CD) %>%
   summarise(geometry = st_union(geometry), .groups = "drop") %>%
   st_centroid()
