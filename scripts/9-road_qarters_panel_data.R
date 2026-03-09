@@ -105,7 +105,7 @@ options(arrow.use_mmap = FALSE)
 
 # --data
 # RTI matched data
-injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))
+injuries <- read_rds(here("data", "processed", "injuries_matched_final.rds"))      #from 7
 
 # all roads with thier attribute  - @ road level 
 road_attributes <- st_read(here("data","processed","road_attributes.gpkg"))
@@ -113,11 +113,15 @@ road_attributes <- st_read(here("data","processed","road_attributes.gpkg"))
   
 # roads inside the CAZs  == the treatment @ road level 
 road_caz_prop<- readRDS(here("data", "processed", "roads_caz_props.rds"))
-#create treatment indicator 
-road_caz_prop<- road_caz_prop %>%
+
+#create treatment indicators 
+road_caz_prop <- road_caz_prop %>%
   mutate(
-    ever_treated = 1
+    ever_treated_any   = 1,
+    ever_treated_50pct = if_else(prop_inside >= 0.5, 1, 0)
   )
+
+
 names(road_attributes)
 names(road_caz_prop)
 
@@ -134,30 +138,28 @@ treated_cities <- road_caz_prop %>%
 # Control 1: Same city, outside CAZ
 # -----------------------------
 road_classification <- road_attributes %>%
-  left_join(road_caz_prop %>% select(identifier, scheme, ever_treated), by="identifier") %>%
-  mutate(
-    ever_treated = replace_na(ever_treated, 0),
-    control_group1 = if_else(scheme %in% treated_cities & ever_treated == 0, 1, 0)
-  )
+  left_join(road_caz_prop %>% select(identifier, scheme, ever_treated_any, ever_treated_50pct), by="identifier") 
 
-# -----------------------------
-#  Control 2: City centre roads in non-CAZ cities
-# -----------------------------
 road_classification <- road_classification %>%
   mutate(
-    control_group2 = if_else(!scheme %in% treated_cities & ever_treated == 0, 1, 0)
-  )
-
-# Create treated_group and mixed control
-road_classification <- road_classification %>%
-  mutate(
-    treated_group = ever_treated,
+    ever_treated_any   = replace_na(ever_treated_any, 0),
+    ever_treated_50pct = replace_na(ever_treated_50pct, 0),
+    
+    # Control groups for 50%+ definition (can also adapt for any)
+    control_group1 = if_else(scheme %in% treated_cities & ever_treated_50pct == 0, 1, 0),
+    control_group2 = if_else(!scheme %in% treated_cities & ever_treated_50pct == 0, 1, 0),
+    
+    treated_group_any   = ever_treated_any,
+    treated_group_50pct = ever_treated_50pct,
+    
     control_group3_mixed = if_else(control_group1 == 1 | control_group2 == 1, 1, 0)
   )
 
+
 # Keep only relevant roads
 analysis_roads <- road_classification %>%
-  filter(treated_group == 1 | control_group1 == 1 | control_group2 == 1)
+  filter(treated_group_any == 1 | treated_group_50pct == 1 | control_group1 == 1 | control_group2 == 1) 
+
 # -----------------------------
 # Create Road × Quarter Panel
 # -----------------------------
@@ -172,7 +174,7 @@ road_panel <- expand_grid(
 # Aggregate Injuries (KSI & Slight separate)
 # -----------------------------
 roadlevel_long <- injuries %>%
-  group_by(identifier=matched_roadID, quarter_year, casualty_type1) %>%
+  group_by(identifier, quarter_year, casualty_type1) %>%
   summarise(
     KSI_adj = sum(KSI_adj, na.rm=TRUE),
     Slight_adj = sum(Slight_adj, na.rm=TRUE),
@@ -201,7 +203,10 @@ road_panel_complete <- road_panel %>%
   mutate(
     quarter_year = as.yearqtr(quarter_year),
     caz_start_q  = as.yearqtr(caz_start_q),
-    treated = if_else(treated_group == 1 & quarter_year >= caz_start_q, 1, 0)
+    
+    # Two post-treatment indicators
+    treated_any   = if_else(treated_group_any == 1 & quarter_year >= caz_start_q, 1, 0),
+    treated_50pct = if_else(treated_group_50pct == 1 & quarter_year >= caz_start_q, 1, 0)
   )
 
 names(road_panel_complete)
@@ -209,10 +214,22 @@ names(road_panel_complete)
 road_panel_model <- road_panel_complete %>%
   st_drop_geometry() %>%
   select(
-    identifier, quarter_year, treated, treated_group, scheme,
+    identifier, quarter_year,
+    treated_any, treated_50pct,
+    treated_group_any, treated_group_50pct,
+    scheme,
     control_group1, control_group2, control_group3_mixed,
     starts_with("KSI"), starts_with("Slight"), starts_with("total_inj")
-  )
+  ) %>%
+  rename_with(~make.names(.x))
+
+# Save as Parquet
+write_dataset(
+  road_panel_model,
+  path = here("data","processed","road_panel_dataset"),
+  format = "parquet"
+)
+
 # -----------------------------
 # Arrow Dataset
 # -----------------------------
@@ -232,12 +249,6 @@ write_dataset(
 
 saveRDS(analysis_roads, here("data", "processed", "analysis_roads.rds"))
 
-table(road_panel_model$`KSI_adj_Car/Van`)
-sum(road_panel_model$`KSI_adj_Car/Van`)
-
-
-sum (injuries$KSI_adj)
-
 
 # How many unique roads are in injuries vs panel?
 length(unique(injuries$identifier))
@@ -247,11 +258,6 @@ length(unique(road_panel_model$identifier))
 sum(!injuries$identifier %in% road_panel_model$identifier)
 
 
-
-sum(road_panel_model$`KSI_adj_Car/Van`)
-sum(road_panel_model$KSI_adj_Pedestrian)
-sum(road_panel_model$KSI_adj_Cyclist)
-sum(road_panel_model$KSI_adj)
 
 
 

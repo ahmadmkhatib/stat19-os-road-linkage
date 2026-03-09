@@ -74,11 +74,6 @@ oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
   st_transform(27700) %>%
   st_make_valid()
 
-
-oa<- oa %>%
-  rename(OA_CODE = OA) 
-
-
 # CAZ boundaries
 caz_boundaries <- st_read(
   here("data", "processed", "shp_files", "CAZ_areas.shp"),
@@ -103,25 +98,61 @@ oa_sub <-oa_sub %>% filter(!is.na(LAD24CD))    # crop OA that are not in the sam
 
 # Treatment OAs (inside CAZ)
 
-treated_OAs <- oa_sub %>%
+treated_OAs_any <- oa_sub %>%
   st_join(caz_boundaries, join = st_intersects, left = FALSE) %>%
-  pull(OA_CODE) %>% unique()
+  pull(OA) %>% unique()
 
-# Spillover Buffer (1 km outside CAZ)
+# ------------------------------
+# Majority (>=50% area inside CAZ)
+# ------------------------------
+
+oa_intersection <- st_intersection(
+  oa_sub %>% select(OA),
+  caz_boundaries %>% select(scheme)
+)
+
+oa_intersection <- oa_intersection %>%
+  mutate(intersection_area = st_area(geometry))
+
+oa_area <- oa_sub %>%
+  mutate(total_area = st_area(geometry)) %>%
+  st_drop_geometry() %>%
+  select(OA, total_area)
+
+oa_prop <- oa_intersection %>%
+  st_drop_geometry() %>%
+  left_join(oa_area, by="OA") %>%
+  mutate(prop_inside =as.numeric (intersection_area / total_area))
+
+
+summary(oa_prop$prop_inside)
+
+treated_OAs_50pct <- oa_prop %>%
+  filter(prop_inside >= 0.5) %>%
+  pull(OA)
+
+
+table(
+  any = oa_prop$prop_inside > 0,
+  pct50 = oa_prop$prop_inside >= 0.5
+)
+
+
+# Spillover Buffer OAs (1 km outside CAZ)
 # ============================================================
 caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
   st_difference(caz_boundaries)
 
 
 buffer_OAs <- oa_sub %>%
-  filter(!OA_CODE %in% treated_OAs) %>%  # exclude treated
+  filter(!OA %in% treated_OAs) %>%  # exclude treated
   st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
- pull(OA_CODE) %>% unique()
+ pull(OA) %>% unique()
 
 # Treated LADs 
 #Treated LADs 
 treated_LADs <- oa_sub %>%
-  filter(OA_CODE %in% treated_OAs) %>%
+  filter(OA %in% treated_OAs) %>%
   distinct(LAD24CD) %>% pull(LAD24CD)
 
 n_distinct(treated_LADs)
@@ -131,20 +162,21 @@ unique(treated_LADs)
 unique(caz_boundaries$scheme)
 
 lads_sub %>% filter(LAD24CD %in% treated_LADs) %>% View() 
-### there are 1 scheam for 2 LADs 
-
 
 
 # city centroids for non-CAZ cities
-city_centroids <- oa_s %>%
+
+city_centroids <- oa_sub %>%
   group_by(LAD24CD) %>%
   summarise(geometry = st_union(geometry), .groups = "drop") %>%
   st_centroid()
+
+
 # ============================================================
 # Distance from OA to City Centre
 # ============================================================
 
-oa_centroids <- st_centroid(oa_2011)
+oa_centroids <- st_centroid(oa_sub)
 
 oa_with_centroid <- oa_centroids %>%
   left_join(
@@ -162,52 +194,63 @@ dist_citycentre <- st_distance(
   as.numeric()
 
 
-OA_classification <- oa_2011 %>%
+OA_classification <- oa_sub %>%
   st_drop_geometry() %>%
-  select(OA_CODE, LAD24CD) %>%
+  select(OA, LAD24CD) %>%
   mutate(
+    treated_OA_any = if_else(OA %in% treated_OAs_any, 1, 0),
     
-    treated_OA = if_else(OA_CODE %in% treated_OAs, 1, 0),
+    treated_OA_50pct = if_else(OA %in% treated_OAs_50pct, 1, 0),
     
-    buffer_OA = if_else(OA_CODE %in% buffer_OAs, 1, 0),
+    buffer_OA = if_else(OA %in% buffer_OAs, 1, 0),
     
     control_group1_OA = if_else(
       LAD24CD %in% treated_LADs &
-        treated_OA == 0 &
+        treated_OA_any == 0 &
         buffer_OA == 0,
-      1, 0
+      1,0
     ),
     
     control_group2_OA = if_else(
-      !LAD24CD %in% treated_LADs  &
-        treated_OA == 0 &
+      !LAD24CD %in% treated_LADs &
+        treated_OA_any == 0 &
         buffer_OA == 0,
-      1, 0
+      1,0
     )
-    
   )
 
-# add dist
 OA_classification$dist_citycentre <- dist_citycentre
 
+# ============================================================
+# Restrict to relevant OAs
+# ============================================================
 
-# relevant OAs
 OA_analysis <- OA_classification %>%
-  filter(treated_OA == 1 | buffer_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1)
+  filter(
+    treated_OA_any == 1 |
+      buffer_OA == 1 |
+      control_group1_OA == 1 |
+      control_group2_OA == 1
+  )
 
+
+###checks
 OA_analysis %>%
   mutate(group_count =
-           treated_OA +
+           treated_OA_any +
            buffer_OA +
            control_group1_OA +
            control_group2_OA) %>%
   count(group_count)
 
-
-
 summary(OA_analysis$dist_citycentre)
+##  ?!?!?! 
+
+OA_analysis %>%
+  filter(dist_citycentre > 20000) %>%
+  count(LAD24CD, sort = TRUE)
 
 saveRDS(OA_analysis, here("data", "processed", "OA_level_from_polygons.rds"))
-OA_analysi_old<-read_rds(here("data", "processed", "OA_level_from_polygons.rds"))
+
 
                       

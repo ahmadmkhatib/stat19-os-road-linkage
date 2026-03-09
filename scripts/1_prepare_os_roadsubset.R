@@ -56,20 +56,19 @@ selected_lads <- c(
   control_LADs )
 
 
-
   LADs_sub <- LADs %>%
   filter(LAD24CD %in% selected_lads)
   
   ### remove Wales
-  LADs_sub <- LADs_sub %>% filter(!grepl("^W", LAD24CD))
+  lads_sub <- lads_sub %>% filter(!grepl("^W", LAD24CD))
   
   
   
   ### save the LADs sub 
 
-saveRDS(LADs_sub, here("data", "processed", "LADs_sub.rds"))
+saveRDS(lads_sub, here("data", "processed", "LADs_sub.rds"))
 
-lads_union <- st_union(LADs_sub)
+lads_union <- st_union(lads_sub)
 
 # ----------------------------------------------------------
 # Load OS Open Roads (only for the lads subset)
@@ -86,6 +85,11 @@ roads <- st_read(
   wkt_filter = st_as_text(lads_union),
   quiet = TRUE
 )
+
+summary(roads$length)
+roads %>% filter(length>1000) %>%select(length) %>%  nrow()
+roads %>% filter(length>3000) %>%select(length) %>%  nrow()
+###!!!
 # ----------------------------------------------------------
 # Recode Road Classification
 # ----------------------------------------------------------

@@ -8,6 +8,7 @@ library(here)
 library(arrow)
 library(sf)
 library(zoo)
+library(knitr)
 
 # -----------------------------
 # Load Relevant Data
@@ -30,7 +31,8 @@ injuries <- readRDS(here("data", "processed", "injuries_matched_final.rds"))
 road_summary <- analysis_roads %>%
   summarise(
     n_roads_total = n(),
-    n_treated = sum(treated_group),
+    n_treated_any = sum(treated_group_any),
+    n_treated50 = sum(treated_group_50pct),
     n_control1 = sum(control_group1),
     n_control2 = sum(control_group2)
   )
@@ -38,7 +40,7 @@ road_summary <- analysis_roads %>%
 # -----------------------------
 #  Injury Summaries by Treatment/Control
 inj_summary <- road_panel_model %>%
-  group_by(treated_group, control_group1, control_group2) %>%
+  group_by(treated_group_any,treated_group_50pct, control_group1, control_group2) %>%
   summarise(
     total_KSI = sum(across(starts_with("KSI_adj")), na.rm = TRUE),
     total_Slight = sum(across(starts_with("Slight_adj")), na.rm = TRUE),
@@ -63,7 +65,8 @@ quarterly_summary <- road_panel_model %>%
 OA_summary <- OA_analysis %>%
   summarise(
     n_OAs_total = n(),
-    n_treated = sum(treated_OA),
+    n_treated_any = sum(treated_OA_any),
+    n_treated_50 =sum(treated_OA_50pct),
     n_buffer = sum(buffer_OA),
     n_control1 = sum(control_group1_OA),
     n_control2 = sum(control_group2_OA),
@@ -73,30 +76,10 @@ OA_summary <- OA_analysis %>%
     max_dist_to_centre = max(dist_citycentre)
   )
 
-# -----------------------------
-#### Injuries per OA Group
-# -----------------------------
-OA_injuries_summary <- OA_analysis %>%
-  left_join(
-    injuries %>% st_drop_geometry() %>%
-      group_by(OA_CODE) %>%
-      summarise(
-        total_KSI = sum(KSI_adj, na.rm = TRUE),
-        total_Slight = sum(Slight_adj, na.rm = TRUE),
-        total_inj = sum(KSI_adj + Slight_adj, na.rm = TRUE)
-      ),
-    by = "OA_CODE"
-  ) %>%
-  group_by(treated_OA, buffer_OA, control_group1_OA, control_group2_OA) %>%
-  summarise(
-    total_KSI = sum(total_KSI, na.rm = TRUE),
-    total_Slight = sum(total_Slight, na.rm = TRUE),
-    total_inj = sum(total_inj, na.rm = TRUE),
-    n_OAs = n(),
-    .groups = "drop"
-  )
 
-library(knitr)
+
+
+
 
 road_summary %>% st_drop_geometry() %>%kable(
   caption = "Road-Level Counts by Treatment and Control Groups"
@@ -114,15 +97,6 @@ quarterly_summary %>% st_drop_geometry() %>% kable(
 OA_summary %>% st_drop_geometry() %>%kable(
   caption = "OA-Level Summary Statistics"
 )
-
-
-OA_injuries_summary %>% st_drop_geometry() %>%kable(
-  caption = "Injuries by OA Treatment and Control Group"
-)
-
-
-
-
 
 
 
@@ -158,9 +132,9 @@ print(doc, target = "tables.docx")
 
 glimpse(road_panel_model)
 
-road_panel_model %>% select(treated) %>% table(useNA = "always")
+road_panel_model %>% select(treated_any) %>% table(useNA = "always")
 
-# check the dimensions  in the matrix
+# check the dimensions
 n_distinct(road_panel_model$identifier) * n_distinct(road_panel_model$quarter_year)
 
 
@@ -185,13 +159,17 @@ road_panel_model %>%
 
 ## ever treated roads 
 road_panel_model %>%
-  distinct(identifier, treated_group) %>%
-  count(treated_group
+  distinct(identifier, treated_group_any) %>%
+  count(treated_group_any
         )
+
+
+
+
 
 #ttt timmimg 
 road_panel_model %>%
-  filter(treated_group == 1) %>%
+  filter(treated_group_any == 1) %>%
   distinct(identifier, caz_start_q) %>%
   count(caz_start_q)
 

@@ -1,6 +1,6 @@
 # ============================================================
-#  Assign CAZ Treatment to Road Link × Quarter Panel
-#Road link is treated if it intersects CAZ polygon at any length.
+#  Assign CAZ Treatment/control  to Road Links
+#Road links considered exposed if it intersects CAZ polygon at any length.
 # ============================================================
 
 library(tidyverse)
@@ -9,9 +9,9 @@ library(sf)
 library(here)
 library(zoo)
 
-# ------------------------------------------------------------
-#  Load data 
-# ------------------------------------------------------------
+# -----------
+#  data 
+# ------
 
 caz_polygons <- st_read(
   here("data", "processed", "shp_files", "CAZ_areas.shp"),
@@ -27,28 +27,26 @@ oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
   st_make_valid() 
 
 
-### all raods and thier attributes 
+###  raods subset and thier attributes 
 road_attributes<-readRDS(here("data", "processed", "roads_filtered.rds"))
 ### save it as gpkg for spatial handeling 
-
 st_write(
   road_attributes,
   here("data","processed","road_attributes.gpkg"),
   delete_dsn = TRUE
 )                         
-                         
+
+#read road shp file                         
 road_attributes <- st_read(
   here("data","processed","road_attributes.gpkg"),
   quiet = TRUE
 ) %>%  select(identifier, road_class, length)
 
-
-
 st_crs(road_attributes)
 st_crs(lads_sub)
 st_crs(oa)
 
-
+summary(road_attributes$length)
 # ------------------------------------------------------------
 # prepare CAZ data
 # ------------------------------------------------------------
@@ -65,8 +63,8 @@ caz <- caz_polygons %>%
   )   %>%    st_make_valid()
 
 
-# recode caz  
-
+# recode caz class
+table(caz$Class)
 caz <- caz %>%
   mutate(
     Class = case_when(
@@ -95,6 +93,10 @@ if (st_crs(caz) != st_crs(road_attributes)) {
 # ------------------------------------------------------------
 #   intersection (road link inside CAZ (any dist))
 # ------------------------------------------------------------
+road_attributes <- st_make_valid(road_attributes)
+caz <- st_make_valid(caz)
+
+
 road_caz <- st_intersection(
   road_attributes,
   caz %>% select(start_date)
@@ -110,22 +112,35 @@ road_caz <- st_intersection(
   ) %>%
    mutate(int_length = st_length(st_geometry(.))) %>%
   st_drop_geometry()
-
+ 
+sum(duplicated(road_caz_prop$identifier))
+ 
+ summary(road_caz_prop$length)
+ summary(road_caz_prop$int_length)
+ 
  road_lengths <- road_attributes %>%
    mutate(total_length = st_length(st_geometry(.))) %>%
    st_drop_geometry() %>%
    select(identifier, total_length)
  
- road_caz_prop <- road_caz_prop %>%
-   left_join(road_lengths, by = "identifier")
+ road_caz_prop  <- road_caz_prop %>%
+   left_join(road_lengths, by = "identifier") 
  
- 
- road_caz_prop<- road_caz_prop %>%
-   mutate(prop_inside = int_length / total_length)
+ road_caz_prop <- road_caz_prop%>%
+   mutate(
+     prop_inside = as.numeric(int_length / total_length),  # proportion inside
+     ever_treated_any = 1,                                  # any overlap = treated
+     ever_treated_50pct = if_else(prop_inside >= 0.5, 1, 0) # 50%+ treated
+   )
  
  # prop_inside = proportion of link inside CAZ
 
 summary(road_caz_prop$prop_inside)
+
+table(road_caz_prop$ever_treated_any)
+table(road_caz_prop$ever_treated_50pct)
+## 
+
 table(road_caz_prop$scheme)
 
 # -----------------#-----------------#
@@ -138,16 +153,16 @@ road_caz_prop <- road_caz_prop%>%
   )
 
 
+#all raod links that intersect with CAZ at any length (we may filter more in difineing treatment areas) 
 
 saveRDS(road_caz_prop,  here("data", "processed", "roads_caz_props.rds"))
 
 names(road_attributes)
-attr(road_attributes, "sf_column")
 
-
+## create a subset of OAs
 # Pre-crop OAs to roads extent
 oa_sub <- st_filter(
-  oa_2011 %>% select(OA_CODE),
+  oa %>% select(OA),
   road_attributes,
   .predicate = st_intersects
 )
@@ -162,16 +177,23 @@ roads_lad <- st_join(
 # Intersect with OAs
 roads_oa <- st_intersection(
   roads_lad,
-  oa_2011_sub %>% select(OA_CODE)
-)
+  oa_sub %>% select(OA)
+  ) %>% 
+  mutate(int_length= st_length(geom))
 
 # Keep OA with largest overlap per road
 road_attributes_OA <- roads_oa %>%
   group_by(identifier) %>%
   slice_max(length, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
-  select(identifier, road_class, LAD24CD, LAD24NM, OA_CODE)
+  select(identifier, road_class, LAD24CD, LAD24NM, OA, geom)
 
 
+### save
 
-saveRDS(road_attributes_OA, here("data", "processed", "road_attributes.rds"))
+st_write(
+  road_attributes_OA,
+  dsn = here("data", "processed", "road_attributes.gpkg"),
+  layer = "road_attributes",
+  delete_layer = TRUE
+)
