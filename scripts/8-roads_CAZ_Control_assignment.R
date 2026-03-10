@@ -126,6 +126,9 @@ sum(duplicated(road_caz_prop$identifier))
  road_caz_prop  <- road_caz_prop %>%
    left_join(road_lengths, by = "identifier") 
  
+ ###Some roads intersect minimally with CAZ polygons and also with OA polygons- #
+ # so I created two scenarios, any or 50% intersections and they differ by ~300 road links- 
+
  road_caz_prop <- road_caz_prop%>%
    mutate(
      prop_inside = as.numeric(int_length / total_length),  # proportion inside
