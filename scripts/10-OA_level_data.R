@@ -94,6 +94,7 @@ oa_sub <- st_join(
 )
 
 sum(duplicated(oa_sub$OA_CODE))
+
 oa_sub <-oa_sub %>% filter(!is.na(LAD24CD))    # crop OA that are not in the samepl 
 
 # Treatment OAs (inside CAZ)
@@ -145,14 +146,14 @@ caz_buffer <- st_buffer(caz_boundaries, 1000) %>%
 
 
 buffer_OAs <- oa_sub %>%
-  filter(!OA %in% treated_OAs) %>%  # exclude treated
+  filter(!OA %in% treated_OAs_any) %>%  # exclude treated
   st_join(caz_buffer, join = st_intersects, left = FALSE) %>%
  pull(OA) %>% unique()
 
 # Treated LADs 
 #Treated LADs 
 treated_LADs <- oa_sub %>%
-  filter(OA %in% treated_OAs) %>%
+  filter(OA %in% treated_OAs_any) %>%
   distinct(LAD24CD) %>% pull(LAD24CD)
 
 n_distinct(treated_LADs)
@@ -228,6 +229,7 @@ OA_classification$dist_citycentre <- dist_citycentre
 OA_analysis <- OA_classification %>%
   filter(
     treated_OA_any == 1 |
+      treated_OA_50pct ==1|
       buffer_OA == 1 |
       control_group1_OA == 1 |
       control_group2_OA == 1
@@ -238,6 +240,7 @@ OA_analysis <- OA_classification %>%
 OA_analysis %>%
   mutate(group_count =
            treated_OA_any +
+           treated_OA_50pct +
            buffer_OA +
            control_group1_OA +
            control_group2_OA) %>%
@@ -251,6 +254,6 @@ OA_analysis %>%
   count(LAD24CD, sort = TRUE)
 
 saveRDS(OA_analysis, here("data", "processed", "OA_level_from_polygons.rds"))
-
+st_write(oa_sub, here("data", "processed","shp_files" , "OA_subset.shp"))
 
                       

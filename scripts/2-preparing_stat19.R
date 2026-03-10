@@ -27,6 +27,8 @@ names(collisions)  <- tolower(names(collisions))
 names(vehicles)    <- tolower(names(vehicles))
 names(casualties)  <- tolower(names(casualties))
 
+
+
 # -------------------------------------------------------
 # Filtering
 # --------------------------------------------------------
