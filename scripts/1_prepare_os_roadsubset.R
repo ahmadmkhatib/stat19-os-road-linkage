@@ -84,7 +84,7 @@ roads <- st_read(
   "data/processed/roads.gpkg",
   wkt_filter = st_as_text(lads_union),
   quiet = TRUE
-)
+)    # # #  this filters roads to only those in the LADs subset at any length 
 
 summary(roads$length)
 roads %>% filter(length>1000) %>%select(length) %>%  nrow()
@@ -108,5 +108,10 @@ roads <- roads %>%
     )
   )
 
+
+
+
 saveRDS(roads, here("data", "processed", "roads_filtered.rds"))
+
+
 

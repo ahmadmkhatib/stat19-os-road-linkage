@@ -132,6 +132,16 @@ summary_table <- tibble(
 
 print(summary_table)
 
+table(matched$match_type)
+matched %>%
+  summarise(
+    mean_dist = mean(dist_any),
+    median_dist = median(dist_any),
+    p90 = quantile(dist_any, 0.9),
+    max_dist = max(dist_any)
+  )
+
+
 saveRDS(matched, here("data", "processed", "injuries_matched.rds"))
 
 
