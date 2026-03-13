@@ -13,28 +13,29 @@
 # . Estimate pre-treatment trends in injuries for each OA (slope per quarter).
 # . Combine OA characteristics, road characteristics, baseline injuries, and trends
 #    into a single OA-level matching dataset for synthetic control construction.
+
+## output: OA_matching_dataset.rds
 #=========================================================
-
-
-
 library(tidyverse)
 library(lubridate)
 library(here)
+library(sf)
+
 
 # OA characteristics
 OA_analysis <- readRDS(
-  here("data","processed","OA_level_from_polygons.rds")
+  here("data","processed","OA_level_from_polygons.rds")    ### from script # 8
 )
 
 # road characteristics aggregated to OA
 OA_roads <- readRDS(
-  here("data","processed","OA_roads.rds")
+  here("data","processed","OA_roads.rds")                  ### from script # 9 
 )
 
 # injuries aggregated by OA + quarter
 OA_injuries <- readRDS(
-  here("data","processed","OA_injuries_quarterly.rds")
-)
+  here("data","processed","OA_injuries_quarterly.rds")     ### from script # 10 
+) 
 
 
 
@@ -122,9 +123,7 @@ OA_matching_dataset %>%
 ### some clean up 
 
 OA_matching_dataset <- OA_matching_dataset %>%
-  select(
-    OA,
-    
+  rename(
     LAD24CD = LAD24CD.x,
     LAD24NM = LAD24NM.x,
     
@@ -134,14 +133,9 @@ OA_matching_dataset <- OA_matching_dataset %>%
     control_group2_OA = control_group2_OA.x,
     
     dist_citycentre = dist_citycentre.x,
-    assignment = assignment.x,
-    
-    everything(),
-    
-    -ends_with(".x"),
-    -ends_with(".y")
-  )
-
+    assignment = assignment.x
+  ) %>%
+  select(-ends_with(".x"), -ends_with(".y"))
 
 names(OA_matching_dataset)
 
@@ -177,11 +171,49 @@ saveRDS(
 
 
 
+####### as a shapefile   # # # # 
+
+
+
+# OA shpfile 
+oa_sub <- st_read(
+  here("data","processed","shp_files","OA_subset.shp"),
+  quiet = TRUE
+) %>%
+  st_transform(27700) %>%
+  st_make_valid()
+
+
+
+# Join geometry to matching dataset
+OA_matching_sf <- oa_sub %>%
+  select(OA, geometry) %>%
+  left_join(OA_matching_dataset, by = "OA") %>%
+  st_as_sf()
+
+# Quick check
+print(OA_matching_sf)
+
+
+table(st_is_valid(OA_matching_sf))
+st_geometry_type(OA_matching_sf) %>% table()
+
+
+# Save as GeoPackage
+st_write(
+  OA_matching_sf,
+  here("data","processed","shp_files","OA_matching_dataset.gpkg"),
+  delete_dsn = TRUE
+)
 
 
 
 
-
+OA_matching_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = treated_OA), colour = NA) +
+  theme_minimal()
+  ## check the CAZ shapfile 
 # ============================================================
 # Variable descriptions for OA_matching_dataset
 # ============================================================

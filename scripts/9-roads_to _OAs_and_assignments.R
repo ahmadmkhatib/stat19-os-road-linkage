@@ -6,6 +6,7 @@
 #    based on the largest share of road length.
 # 2. Attach OA treatment assignment
 # 3. Create OA-level road characteristics dataset
+# # # output : OA_roads_dataset.rds
 # ============================================================
 
 library(sf)
@@ -125,7 +126,7 @@ OA_missing_roads %>%
 
 saveRDS(
   OA_roads,
-  here("data","processed","OA_roads_dataset.rds")
+  here("data","processed","OA_roads.rds")
 )
 
 

@@ -4,8 +4,9 @@
 # Purpose:
 # Construct OA dataset defining treatment, buffer, and control
 # areas.
-#
-# Classification uses majority-area (>=50%) spatial rules.
+## Classification uses majority-area (>=50%) spatial rules.
+### output :  OA_level_from_polygons.rds
+###           OA_subset.shp
 #============================================================
 
 library(tidyverse)
