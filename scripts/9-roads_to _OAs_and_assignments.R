@@ -13,15 +13,14 @@ library(sf)
 library(tidyverse)
 library(here)
 
-# ============================================================
-# 1 Load Data
-# ============================================================
 
 # Roads
 roads <- readRDS(
   here("data","processed","roads_filtered.rds")
 ) %>%
   st_make_valid()
+
+glimpse(roads)
 
 # OA shpfile 
 oa_sub <- st_read(
@@ -33,12 +32,9 @@ oa_sub <- st_read(
 
 # OA classification dataset
 OA_analysis <- readRDS(
-  here("data","processed","OA_level_from_polygons.rds")
+  here("data","processed","OA_level_from_polygons.rds")         # from 8
 )
 
-# ============================================================
-# 2 Ensure CRS consistency
-# ============================================================
 
 if (st_crs(roads) != st_crs(oa_sub)) {
   roads <- st_transform(roads, st_crs(oa_sub))
@@ -79,10 +75,11 @@ road_attributes_OA <- roads_oa %>%
     by = "OA"
   )
 
-
+glimpse(OA_analysis)
 # ============================================================
 # 6 Save road-level dataset
 # ============================================================
+road_attributes_OA<-st_read(here("data","processed","road_attributes_OA.gpkg"))
 
 st_write(
   road_attributes_OA,
@@ -98,6 +95,7 @@ OA_roads <- road_attributes_OA %>%
   st_drop_geometry() %>%
   group_by(OA) %>%
   summarise(
+    scheme = first(na.omit(scheme)),   # scheme affecting that OA
     n_roads = n(),
     total_road_length = sum(as.numeric(int_length)),
     n_A = sum(road_class == "A"),
@@ -111,6 +109,10 @@ OA_roads <- road_attributes_OA %>%
 OA_roads <- OA_roads %>%
   left_join(OA_analysis, by = "OA")
 
+
+
+
+glimpse(OA_roads)
 
 OA_missing_roads <- OA_analysis %>%
   filter(!OA %in% OA_roads$OA)
@@ -130,11 +132,6 @@ saveRDS(
 )
 
 
-
-
-
-n_distinct(road_attributes_OA$OA)
-nrow(oa_sub)
 
 
 

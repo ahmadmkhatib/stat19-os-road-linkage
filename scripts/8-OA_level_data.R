@@ -67,8 +67,7 @@ oa_caz_prop <- oa_caz_intersection %>%
 
 treated_OAs <- oa_caz_prop %>%
   filter(prop_caz >= 0.5) %>%
-  pull(OA)
-
+  select(OA, scheme)
 #============================================================
 # 5. Create 1km CAZ buffer
 #============================================================
@@ -100,6 +99,7 @@ treated_LADs <- oa_sub %>%
   distinct(LAD24CD) %>%
   pull(LAD24CD)
 
+View(treated_LADs)
 #============================================================
 # 7. Distance to city centre
 #============================================================
@@ -128,7 +128,7 @@ OA_analysis <- oa_sub %>%
   select(OA, LAD24CD, LAD24NM) %>%
   mutate(
     
-    treated_OA = if_else(OA %in% treated_OAs,1,0),
+    treated_OA = if_else(OA %in% treated_OAs$OA,1,0),
     
     buffer_OA = if_else(
       OA %in% buffer_OAs &
@@ -155,7 +155,10 @@ OA_analysis$dist_citycentre <- dist_citycentre
 
 
 OA_analysis %>%  select(dist_citycentre) %>%   summary()
+table(OA_analysis$treated_OA)
+
 OA_analysis  %>% filter(treated_OA==1)%>% select(dist_citycentre) %>%   summary()
+
 ## # is this resonable 10K 
 
 
@@ -172,6 +175,13 @@ OA_analysis <- OA_analysis %>%
   )
 
 
+OA_analysis <- OA_analysis %>%
+  left_join(
+    treated_OAs,
+    by = "OA"
+  )
+
+
 OA_analysis %>%
   group_by(assignment) %>%
   summarise(
@@ -181,7 +191,7 @@ OA_analysis %>%
 
 table(OA_analysis$assignment)
 
-#distributions 
+#distri
 OA_analysis %>%
   count(assignment) %>%
   mutate(pct = n / sum(n))
@@ -190,6 +200,7 @@ OA_analysis %>%
 #============================================================
 # 10. Save outputs
 #============================================================
+View(OA_analysis)
 
 saveRDS(
   OA_analysis,
@@ -204,5 +215,5 @@ st_write(
 
 
 
-
+oa_sub<-st_read (here("data","processed","shp_files","OA_subset.shp"))
 
