@@ -20,16 +20,6 @@
 # ------------------------------------------------------------
 # Roads located within 1 km outside the CAZ boundary.
 #
-# These roads may experience behavioural spillovers due to:
-#
-#   • traffic displacement
-#   • rerouting around CAZ areas
-#   • avoidance behaviour
-#
-# Estimating effects in this zone allows testing for
-# potential spatial spillover effects.
-#
-#
 # Control Group 1: Same-City Controls
 # ------------------------------------------------------------
 # Roads located in the same CAZ cities but outside
@@ -214,23 +204,37 @@ names(road_panel_complete)
 
 road_panel_model <- road_panel_complete %>%
   st_drop_geometry() %>%
+  mutate(
+    # total across all modes — needed as primary outcome
+    total_inj_adj_All   = rowSums(across(starts_with("total_inj_adj_")),   na.rm = TRUE),
+    total_inj_unadj_All = rowSums(across(starts_with("total_inj_unadj_")), na.rm = TRUE),
+    KSI_adj_All         = rowSums(across(starts_with("KSI_adj_")),         na.rm = TRUE),
+    Slight_adj_All      = rowSums(across(starts_with("Slight_adj_")),      na.rm = TRUE)
+  ) %>%
   select(
     identifier, quarter_year,
     treated_any, treated_50pct,
     treated_group_any, treated_group_50pct,
     scheme,
+    caz_start_q,                          # ADD THIS
     control_group1, control_group2, control_group3_mixed,
     starts_with("KSI"), starts_with("Slight"), starts_with("total_inj")
   ) %>%
-  rename_with(~make.names(.x))
+  rename_with(~ make.names(.x))
 
-# Save as Parquet
-write_dataset(
-  road_panel_model,
-  path = here("data","processed","road_panel_dataset"),
-  format = "parquet"
-)
 
+road_panel_model <- arrow::open_dataset(
+  here("data", "processed", "road_panel_dataset")
+) %>% collect()
+
+#1#1#1#1#1#1#1#1#1#1#1#1#11#
+# These three outputs are what I need to see tomorrow
+class(road_panel_model$quarter_year)
+head(road_panel_model$quarter_year, 5)
+road_panel_model %>%
+  filter(treated_group_50pct == 1) %>%
+  distinct(scheme, caz_start_q) %>%
+  arrange(caz_start_q)
 # -----------------------------
 # Arrow Dataset
 # -----------------------------
@@ -264,5 +268,57 @@ sum(!injuries$identifier %in% road_panel_model$identifier)
 
 
 # road_panel_model<-arrow::open_dataset(here("data","processed","road_panel_dataset")) %>% collect()
+
+
+
+
+road_panel_model <- arrow::open_dataset(
+  here("data", "processed", "road_panel_dataset")
+) %>% collect()
+
+# 1. Basic dimensions
+cat("Roads:   ", n_distinct(road_panel_model$identifier), "\n")
+cat("Quarters:", n_distinct(road_panel_model$quarter_year), "\n")
+cat("Rows:    ", nrow(road_panel_model), "\n")
+
+# 2. Variable names
+names(road_panel_model)
+
+# 3. Treatment group counts
+road_panel_model %>%
+  distinct(identifier, treated_group_any, treated_group_50pct,
+           control_group1, control_group2, scheme) %>%
+  count(treated_group_50pct, control_group1, control_group2) %>%
+  print()
+
+# 4. Treatment timing — what does caz_start_q look like?
+road_panel_model %>%
+  filter(treated_group_50pct == 1) %>%
+  distinct(scheme, caz_start_q) %>%
+  arrange(caz_start_q) %>%
+  print()
+
+# 5. How is quarter_year formatted?
+class(road_panel_model$quarter_year)
+head(road_panel_model$quarter_year, 5)
+
+# 6. Outcome variable check
+road_panel_model %>%
+  summarise(
+    mean_KSI   = mean(KSI_adj_All, na.rm = TRUE),
+    mean_slight = mean(Slight_adj_All, na.rm = TRUE),
+    mean_total  = mean(total_inj_adj_All, na.rm = TRUE),
+    pct_zero    = mean(total_inj_adj_All == 0) * 100
+  ) %>%
+  print()
+
+# 7. Does the panel link back to OAs?
+"OA" %in% names(road_panel_model)
+
+
+
+
+
+
 
  
