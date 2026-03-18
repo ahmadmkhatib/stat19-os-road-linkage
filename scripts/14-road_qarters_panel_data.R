@@ -57,7 +57,7 @@
 #   • KSI_adj       (Killed or Seriously Injured)
 #   • Slight_adj    (Slight injuries)
 #
-# Additional disaggregation is available by casualty type.
+# and by casualty type.
 #
 ## ------------------------------------------------------------
 # FINAL DATASET STRUCTURE

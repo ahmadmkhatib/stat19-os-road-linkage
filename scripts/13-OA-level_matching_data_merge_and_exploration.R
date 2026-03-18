@@ -37,8 +37,6 @@ OA_matching_dataset <- readRDS(
   here("data", "processed", "OA_matching_dataset.rds")
 )
 
-
-
 # ── Pre-merge checks ──────────────────────────────────────────────────────────
 
 cat("OA_matching_dataset rows:", nrow(OA_matching_dataset), "\n")
@@ -49,10 +47,6 @@ cat("OA_char_percent rows:    ", nrow(OA_char_percent), "\n")
 cat("OA_char_raw dups:    ", OA_char_raw     %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
 cat("OA_char_percent dups:", OA_char_percent %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
 
-# OA code format check
-cat("Matching dataset OA sample:", head(OA_matching_dataset$OA, 3), "\n")
-cat("Census raw OA sample:      ", head(OA_char_raw$OA, 3), "\n")
-cat("Census percent OA sample:  ", head(OA_char_percent$OA, 3), "\n")
 
 # How many matching dataset OAs are in each census file?
 cat("OAs in matching + raw:    ",
@@ -77,7 +71,7 @@ cat("OAs missing from percent:", nrow(missing_from_pct), "\n")
 
 # ── Rename census columns before merging ─────────────────────────────────────
 # Raw counts get _n suffix, percentages get _pct suffix
-# OA, country, Total, IMD are kept without suffix (same in both or non-numeric)
+# OA, country, Total, IMD are kept without suffix (same in both)
 
 vars_to_rename <- setdiff(
   names(OA_char_raw),
@@ -89,7 +83,7 @@ OA_char_raw_renamed <- OA_char_raw %>%
 
 OA_char_pct_renamed <- OA_char_percent %>%
   rename_with(~ paste0(.x, "_pct"), all_of(vars_to_rename)) %>%
-  select(-country, -Total, -IMD)   # already in raw, don't duplicate
+  select(-country, -Total, -IMD)   # already in raw
 
 # ── Merge census files together ───────────────────────────────────────────────
 # Join raw and percent census into one wide census table first,
@@ -109,15 +103,17 @@ OA_matching_census <- OA_matching_dataset %>%
 cat("OA_matching_census rows:", nrow(OA_matching_census), "\n")
 cat("Duplicate OAs:          ", OA_matching_census %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
 
-# ── Post-merge checks ─────────────────────────────────────────────────────────
+######################################################################
+# ──  checks ─────────────────────────────────────────────────────────#
+######################################################################
 
-# 1. Row count unchanged
+# Row count unchanged
 stopifnot(nrow(OA_matching_census) == nrow(OA_matching_dataset))
 
-# 2. No new duplicate OAs introduced
+# No new duplicate OAs introduced
 stopifnot(OA_matching_census %>% count(OA) %>% filter(n > 1) %>% nrow() == 0)
 
-# 3. NA rates in census variables for treated OAs
+# NA rates in census variables for treated OAs
 OA_matching_census %>%
   filter(treated_OA == 1) %>%
   summarise(across(
@@ -129,7 +125,7 @@ OA_matching_census %>%
   arrange(desc(n_NA)) %>%
   print()
 
-# 4. Sense check key census variables for treated vs control
+# Sense check key census variables for treated vs control
 OA_matching_census %>%
   filter(treated_OA == 1 | control_group2_OA == 1) %>%
   mutate(group = if_else(treated_OA == 1, "Treated", "Control")) %>%
@@ -145,9 +141,6 @@ OA_matching_census %>%
     .groups = "drop"
   ) %>%
   print()
-
-
-
 
 # ── Save ──────────────────────────────────────────────────────────────────────
 
