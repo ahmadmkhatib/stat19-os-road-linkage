@@ -9,13 +9,13 @@ library(arrow)
 library(units)
 library(ggtext)   # for rich text labels
 library(scales)   # for nicer axis formatting
-
+library(patchwork)
 # ── ────────────────────────────────────────────────────────────────
 road_panel_model <- arrow::open_dataset(here("data", "processed", "road_panel_dataset")) %>%
   collect()
 
 
-
+names(road_panel_model)
 summary(road_panel_model$quarter_year)
 
 # roads inside the CAZs  == the treatment @ road level 
@@ -477,15 +477,247 @@ ggsave(
   plot = p1, width = 14, height = 9, dpi = 300, bg = "white"
 )
 
+######################################
+#########################################################################################################################
+###########################    MAP 
+library(sf)
+library(ggplot2)
+library(patchwork)
+library(here)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# ── 1. Load & reproject ──────────────────────────────────────────────────────
+target_crs <- 27700
+
+caz_raw <- st_read(here("data","processed","shp_files","CAZ_areas.shp")) %>%
+  st_make_valid() %>%
+  st_transform(target_crs)
+
+oa_sub <- st_read(here("data","processed","shp_files","OA_subset.shp")) %>%
+  st_transform(target_crs)
+
+# England & Scotland only — drop Wales, NI, Ireland
+# 
+eng_scot <- ne_countries(
+  country     = "United Kingdom",
+  scale       = "medium",        # ← j
+  returnclass = "sf"
+) %>%
+  st_transform(target_crs)
 
 
 
+# ── 2. Dissolve CAZ polygons per scheme ──────────────────────────────────────
+# names(caz_raw)   ← run to find your name column
+name_col <- "scheme"   # ← CHANGE to your actual column
 
+caz <- caz_raw %>%
+  rename(zone_name = all_of(name_col)) %>%
+  group_by(zone_name) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_make_valid()
 
-# ============================================================
-# Exploratory & Descriptive Summaries
-# Road-Level Panel + OA-Level Data
-# ============================================================
+# ── 3. Centroids ordered north → south ───────────────────────────────────────
+caz_centroids <- caz %>%
+  st_centroid() %>%
+  mutate(
+    cx = st_coordinates(.)[,1],
+    cy = st_coordinates(.)[,2]
+  ) %>%
+  st_drop_geometry() %>%
+  arrange(desc(cy))
+
+n_zones <- nrow(caz_centroids)
+
+# ── 4. Left-margin label positions ───────────────────────────────────────────
+map_bbox  <- st_bbox(eng_scot)
+data_bbox <- st_bbox(oa_sub)
+
+label_x      <- as.numeric(map_bbox["xmin"]) - 80000
+line_start_x <- label_x + 55000
+
+label_y <- seq(
+  from       = as.numeric(data_bbox["ymax"]) - 10000,
+  to         = as.numeric(data_bbox["ymin"]) + 10000,
+  length.out = n_zones
+)
+
+caz_labels <- caz_centroids %>%
+  mutate(
+    label_x  = label_x,
+    label_y  = label_y,
+    label_no = row_number()
+  )
+
+# ── 5. Pick 4 zones to zoom: northernmost, southernmost, 2 middle ────────────
+n         <- nrow(caz_centroids)
+mid1_idx  <- floor(n / 3)        # upper-middle
+mid2_idx  <- floor(2 * n / 3)    # lower-middle
+
+zoom_indices <- c(1, mid1_idx, mid2_idx, n)   # N, mid-N, mid-S, S
+zoom_labels  <- c("top-left", "top-right", "bottom-left", "bottom-right")
+
+make_zoom_bbox <- function(zone_sf, pad = 3000) {
+  bb <- st_bbox(zone_sf)
+  list(
+    xmin = bb["xmin"] - pad, xmax = bb["xmax"] + pad,
+    ymin = bb["ymin"] - pad, ymax = bb["ymax"] + pad,
+    name = zone_sf$zone_name
+  )
+}
+
+zoom_zones <- lapply(zoom_indices, function(i) {
+  zone_name_i <- caz_centroids$zone_name[i]
+  zone_sf     <- caz %>% filter(zone_name == zone_name_i)
+  make_zoom_bbox(zone_sf, pad = 3000)
+})
+
+# ── 6. Helper: build one zoom inset ──────────────────────────────────────────
+make_inset <- function(zb) {
+  ggplot() +
+    geom_sf(data = oa_sub,
+            fill      = "grey90",
+            colour    = "grey55",
+            linewidth = 0.12) +
+    geom_sf(data = caz,
+            fill      = "#E63946",
+            colour    = "#9B1D20",
+            linewidth = 0.45) +
+    coord_sf(
+      crs    = target_crs,
+      xlim   = c(zb$xmin, zb$xmax),
+      ylim   = c(zb$ymin, zb$ymax),
+      expand = FALSE
+    ) +
+    theme_void(base_size = 8) +
+    theme(
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 1.1),
+      plot.title   = element_text(size = 7, hjust = 0.5, face = "bold",
+                                  margin = margin(t = 3, b = 2))
+    ) +
+    labs(title = zb$name)
+}
+
+insets <- lapply(zoom_zones, make_inset)
+
+# ── 7. Main map ───────────────────────────────────────────────────────────────
+# Dashed boxes on main map for the 4 zoomed zones
+rect_data <- do.call(rbind, lapply(zoom_zones, function(zb) {
+  data.frame(xmin = zb$xmin, xmax = zb$xmax,
+             ymin = zb$ymin, ymax = zb$ymax)
+}))
+
+main_map <- ggplot() +
+  
+  geom_sf(data = eng_scot,
+          fill      = "grey97",
+          colour    = "grey30",
+          linewidth = 0.5) +
+  
+  geom_sf(data = oa_sub,
+          fill   = "#d4e6f1",
+          colour = NA,
+          alpha  = 0.5) +
+  
+  geom_sf(data = caz,
+          fill      = "#E63946",
+          colour    = "#9B1D20",
+          linewidth = 0.5,
+          alpha     = 0.9) +
+  
+  # 4 dashed zoom boxes
+  geom_rect(
+    data = rect_data,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    fill      = NA,
+    colour    = "black",
+    linewidth = 0.7,
+    linetype  = "dashed",
+    inherit.aes = FALSE
+  ) +
+  
+  # Leader lines to centroids
+  geom_segment(
+    data      = caz_labels,
+    aes(x = line_start_x, y = label_y, xend = cx, yend = cy),
+    colour    = "grey40",
+    linewidth = 0.3
+  ) +
+  
+  # Centroid dots
+  geom_point(
+    data  = caz_labels,
+    aes(x = cx, y = cy),
+    shape  = 21,
+    fill   = "#E63946",
+    colour = "#9B1D20",
+    size   = 1.8
+  ) +
+  
+  # Numbered scheme labels
+  geom_text(
+    data  = caz_labels,
+    aes(x = label_x, y = label_y,
+        label = paste0(label_no, ". ", zone_name)),
+    hjust      = 0,
+    size       = 2.5,
+    colour     = "grey10",
+    lineheight = 0.85
+  ) +
+  
+  coord_sf(
+    crs    = target_crs,
+    xlim   = c(label_x - 5000,                      as.numeric(map_bbox["xmax"]) + 20000),
+    ylim   = c(as.numeric(map_bbox["ymin"]) - 10000, as.numeric(map_bbox["ymax"]) + 10000),
+    expand = FALSE
+  ) +
+  
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid       = element_line(colour = "grey92", linewidth = 0.3),
+    plot.title       = element_text(face = "bold", size = 12, hjust = 0.5),
+    plot.subtitle    = element_text(size = 9, hjust = 0.5, colour = "grey40"),
+    axis.text        = element_text(size = 8, colour = "grey50"),
+    plot.background  = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "#eaf4fb", colour = NA)
+  ) +
+  labs(
+    title    = "Clean Air Zones (CAZ) and Low Emission Zones (LEZ)",
+    subtitle = "England and Scotland",
+    x = NULL, y = NULL
+  )
+
+# ── 8. Compose: 4 insets in corners around the main map ──────────────────────
+# Positions: top-left, top-right, bottom-left, bottom-right
+# Values are fractions of the main panel; > 1 or < 0 = outside
+
+final_map <- main_map +
+  
+  # Top-left inset (northernmost zone)
+  inset_element(insets[[1]],
+                left = -0.42, bottom = 0.72,
+                right = -0.02, top = 0.99) +
+  
+  # Top-right inset (upper-middle zone)
+  inset_element(insets[[2]],
+                left = 1.02, bottom = 0.72,
+                right = 1.42, top = 0.99) +
+  
+  # Bottom-left inset (lower-middle zone)
+  inset_element(insets[[3]],
+                left = -0.42, bottom = 0.01,
+                right = -0.02, top = 0.28) +
+  
+  # Bottom-right inset (southernmost zone)
+  inset_element(insets[[4]],
+                left = 1.02, bottom = 0.01,
+                right = 1.42, top = 0.28)
+
+final_map
+
+ ggsave(here("outputs","CAZ_LEZ_map_4insets.png"),
+        final_map, width = 16, height = 13, dpi = 300, bg = "white")
 
 library(tidyverse)
 library(here)
