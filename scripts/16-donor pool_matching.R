@@ -1,150 +1,422 @@
 # =============================================================================
-# CAZ/LEZ Staggered DiD: OA-Level Matching for Road-Link Donor Pool Restriction
-# Callaway & Sant'Anna (2021) — Doubly Robust Estimator
-# =============================================================================
-# STRATEGY OVERVIEW:
-#   Match at OA level (one row per OA) to define a comparable donor pool.
-#   All road links within matched control OAs then enter C&S estimation.
-#   Matching is performed SEPARATELY per treatment cohort (timing group).
+# CAZ/LEZ Staggered DiD: OA-Level Matching — Abadie et al. (2010) 
+# Data-Driven Optimal Weight Matrix V
 # =============================================================================
 
 library(MatchIt)
 library(cobalt)
-library(dplyr)
 library(ggplot2)
-library(WeightIt)   # ADD: for entropy balancing as robustness check
+library(WeightIt)
+library(quadprog)   # ADD: needed for V matrix optimisation
+library(here)
+library(MASS)        # for ginv() — generalised matrix inverse
+library(tidyverse)
+
+OA_matching_dataset<- readRDS(here("data","processed","OA_matching_census.rds"))
+names(OA_matching_dataset)
+
+# =============================================================================
+# CAZ/LEZ Staggered DiD: OA-Level Matching for Road-Link Donor Pool Restriction
+# Callaway & Sant'Anna (2021) — Doubly Robust Estimator
+# Abadie, Diamond & Hainmueller (2010) — Data-Driven Weight Matrix V
+# =============================================================================
+# VARIABLE NAMES: mapped to actual dataset columns
+# STRATEGY:
+#   1. Match at OA level to define a comparable donor pool
+#   2. All road links within matched control OAs enter C&S estimation
+#   3. Matching performed SEPARATELY per treatment cohort
+#   4. Weight matrix V estimated data-driven to prioritise parallel trends
+#   5. Country derived from LAD24CD — exact matching enforced within loop
+# =============================================================================
+
+library(tidyverse)   # includes dplyr, ggplot2, tidyr, magrittr (%>%)
+library(MatchIt)
+library(cobalt)
+library(WeightIt)
+library(MASS)        # for ginv() — generalised matrix inverse
 
 # -----------------------------------------------------------------------------
-# STEP 0 — PRE-MATCHING EXCLUSIONS (apply before any matching)
+# STEP 0 — DERIVE COUNTRY + PRE-MATCHING EXCLUSIONS
 # -----------------------------------------------------------------------------
-# These are non-negotiable. Run this on your full OA dataset first.
+# Country is derived from the LAD24CD prefix:
+#   "E" = England  (e.g. E08000001)
+#   "S" = Scotland (e.g. S12000033)
+#
+# WHY THIS MATTERS:
+#   England and Scotland use different road casualty recording systems.
+#   STATS19 (England/Wales) and STATS19-Scotland differ in injury thresholds,
+#   classification protocols, and reporting obligations.
+#   Cross-country matches would introduce systematic measurement incomparability
+#   into the control group — exact matching on country prevents this entirely.
+#
+# NOTE: We do NOT split the code or run two separate pipelines.
+#   Country is enforced as an exact matching constraint within the cohort loop.
+#   This keeps the pipeline unified, avoids code duplication, and ensures
+#   balance diagnostics are reported consistently across all schemes.
 
-oa_data_clean <- oa_data_full |>
+oa_data_clean <- OA_matching_dataset %>%
+  
+  # --- Derive country from LAD24CD prefix ---
+  mutate(
+    country = case_when(
+      substr(LAD24CD, 1, 1) == "E" ~ "England",
+      substr(LAD24CD, 1, 1) == "S" ~ "Scotland",
+      TRUE                         ~ "Unknown"   # flag unexpected prefixes
+    )
+  ) %>%
+  
+  # --- Verify no unknown country codes ---
+  # If you see warnings here, check LAD24CD values for unexpected prefixes
+  { . ->> oa_data_with_country } %>%   # save pre-filter for diagnostics
+  filter(country != "Unknown") %>%
+  
   filter(
-    # 1. Remove OAs straddling zone boundaries (mixed treatment exposure)
-    straddle_oa == FALSE,
+    # 1. Keep only treated OAs or clean control OAs
+    #    treated_OA == 1: inside CAZ/LEZ zone
+    #    control_group1_OA or control_group2_OA == 1: eligible controls
+    (treated_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1),
     
     # 2. Remove buffer OAs (spillover / displacement contamination)
-    # Adjust buffer distance to your zone sizes — 500m is a starting point
-    buffer_500m == FALSE,
+    buffer_OA == 0,
     
-    # 3. Remove OAs in structurally incomparable contexts
-    # IMPORTANT: run England and Scotland SEPARATELY — different STATS19
-    # systems, different policy regimes. Filter to one country at a time.
-    urban_rural_class != "Rural hamlet and isolated",  # adjust to your classification
-    urban_rural_class != "Rural village"               # if all CAZs are urban
+    # 3. Remove zero-injury OAs — uninformative for outcome matching
+    #    and can distort trend estimates
+    zero_injury_OA == 0
   )
 
-# -----------------------------------------------------------------------------
-# STEP 1 — COHORT-STRATIFIED MATCHING LOOP
-# -----------------------------------------------------------------------------
-# Match SEPARATELY per cohort. A 2018-treated OA should match to 2018-comparable
-# controls, not to 2022 controls that may differ systematically.
-# Never-treated OAs are eligible as controls for ALL cohorts.
+# --- Country composition check ---
+cat("=== COUNTRY COMPOSITION ===\n")
+cat("Unknown LAD24CD prefixes flagged:",
+    sum(oa_data_with_country$country == "Unknown"), "\n")
 
-cohorts <- oa_data_clean |>
-  filter(treated == 1) |>
-  pull(cohort_g) |>
-  unique() |>
+country_tab <- oa_data_clean %>%
+  count(country, treated_OA) %>%
+  tidyr::pivot_wider(names_from = treated_OA,
+                     values_from = n,
+                     names_prefix = "treated_") %>%
+  rename(n_control = treated_0, n_treated = treated_1)
+
+cat("\nOAs by country and treatment status:\n")
+print(country_tab)
+
+cat("\nOAs after exclusions:", nrow(oa_data_clean), "\n")
+cat("  Treated:", sum(oa_data_clean$treated_OA), "\n")
+cat("  Controls:", sum(oa_data_clean$treated_OA == 0), "\n")
+
+# -----------------------------------------------------------------------------
+# STEP 0b — DEFINE MATCHING VARIABLES BY TIER
+# -----------------------------------------------------------------------------
+# Tier 1: Pre-treatment injury outcomes — highest priority for parallel trends
+# Tier 2: Road network + structural exposure — proximal confounders
+# Note: traffic exposure (AADF/VKT) not in dataset — road_length_km used instead
+
+tier1_vars <- c(
+  # --- Injury LEVELS (mean pre-treatment counts per road-km) ---
+  "mean_car_KSI_pkm",
+  "mean_car_slight_pkm",
+  "mean_cyc_KSI_pkm",
+  "mean_cyc_slight_pkm",
+  "mean_ped_KSI_pkm",
+  "mean_ped_slight_pkm",
+  "mean_total_pkm",
+  
+  # --- Injury TRENDS (slope of log-rate change per quarter per road-km) ---
+  "trend_car_KSI_pkm",
+  "trend_car_slight_pkm",
+  "trend_cyc_KSI_pkm",
+  "trend_cyc_slight_pkm",
+  "trend_ped_KSI_pkm",
+  "trend_ped_slight_pkm",
+  "trend_total_pkm"
+)
+
+tier2_vars <- c(
+  # --- Road network characteristics ---
+  "road_density_m_km2",   # road density
+  "road_length_km",        # total road length — exposure denominator
+  "pct_A_road",            # % A-road
+  "pct_B_road",            # % B-road
+  "pct_minor_road",        # % minor road
+  "n_roads",               # total number of road segments
+  "dist_citycentre"        # distance to city centre — urban gradient proxy
+)
+
+# Note: sociodemographic vars (IMD, census) not in current dataset
+# Add them here if/when merged: imd_score, pct_car_ownership, etc.
+
+all_match_vars <- c(tier1_vars, tier2_vars)
+
+cat("\nMatching variables:\n")
+cat("  Tier 1 (outcome levels + trends):", length(tier1_vars), "\n")
+cat("  Tier 2 (road network):", length(tier2_vars), "\n")
+cat("  Total:", length(all_match_vars), "\n")
+
+# -----------------------------------------------------------------------------
+# STEP 0c — ESTIMATE OPTIMAL WEIGHT MATRIX V (Abadie et al. 2010)
+# -----------------------------------------------------------------------------
+# V is estimated by minimising mean squared prediction error of pre-treatment
+# OUTCOME variables (tier 1 only) using all matching variables as predictors.
+# This is the Abadie et al. data-driven approach — weights are not manually set.
+#
+# Implementation:
+#   For each outcome variable in tier 1, regress on all predictors.
+#   V weight for each predictor = average squared coefficient across outcomes.
+#   This reflects how much each predictor contributes to predicting outcomes.
+#   Higher V weight = more influence on distance = closer matching required.
+# -----------------------------------------------------------------------------
+
+estimate_V_matrix <- function(data, outcome_vars, predictor_vars) {
+  
+  # Check all variables exist
+  missing_vars <- setdiff(c(outcome_vars, predictor_vars), names(data))
+  if (length(missing_vars) > 0) {
+    warning("Missing variables: ", paste(missing_vars, collapse = ", "))
+    outcome_vars   <- intersect(outcome_vars, names(data))
+    predictor_vars <- intersect(predictor_vars, names(data))
+  }
+  
+  # Standardise all variables (mean 0, SD 1)
+  data_std <- data %>%
+    mutate(across(all_of(c(outcome_vars, predictor_vars)),
+                  ~ as.numeric(scale(.))))
+  
+  X <- as.matrix(data_std[, predictor_vars])
+  Y <- as.matrix(data_std[, outcome_vars])
+  
+  n_pred    <- ncol(X)
+  v_weights <- numeric(n_pred)
+  names(v_weights) <- predictor_vars
+  
+  n_outcomes_used <- 0
+  
+  for (y_var in colnames(Y)) {
+    y     <- Y[, y_var]
+    valid <- complete.cases(cbind(y, X))
+    
+    if (sum(valid) < 20) {
+      cat("    Skipping outcome", y_var, "— too few complete cases\n")
+      next
+    }
+    
+    fit   <- lm(y ~ X[valid, ] - 1)  # no intercept — standardised vars
+    coefs <- coef(fit)
+    coefs[is.na(coefs)] <- 0          # handle multicollinearity
+    
+    # Weight = squared coefficient normalised by number of outcomes
+    v_weights <- v_weights + coefs^2
+    n_outcomes_used <- n_outcomes_used + 1
+  }
+  
+  if (n_outcomes_used == 0) stop("No valid outcomes for V estimation")
+  
+  v_weights <- v_weights / n_outcomes_used
+  
+  # Normalise so weights sum to number of predictors (preserves scale)
+  v_weights <- v_weights / sum(v_weights) * n_pred
+  
+  # Build diagonal weight matrix
+  V <- diag(v_weights)
+  dimnames(V) <- list(predictor_vars, predictor_vars)
+  
+  return(list(V = V, v_weights = v_weights, n_outcomes = n_outcomes_used))
+}
+
+# -----------------------------------------------------------------------------
+# STEP 0d — BUILD WEIGHTED MAHALANOBIS DISTANCE MATRIX USING V
+# -----------------------------------------------------------------------------
+# Weighted Mahalanobis distance = (x-y)' (V^{1/2} S^{-1} V^{1/2}) (x-y)
+# where S = covariance matrix of predictors, V = diagonal weight matrix
+# Variables with higher V weight contribute more to the distance metric.
+
+build_weighted_mahal_vcov <- function(data, match_vars, v_weights) {
+  
+  X     <- as.matrix(data[, match_vars])
+  X_std <- scale(X)
+  
+  # Pooled covariance matrix
+  S <- cov(X_std, use = "pairwise.complete.obs")
+  
+  # Regularise if nearly singular (add small ridge)
+  S <- S + diag(1e-6, nrow(S))
+  
+  # Inverse — use generalised inverse for safety
+  S_inv <- tryCatch(solve(S), error = function(e) {
+    cat("    Warning: singular covariance matrix — using generalised inverse\n")
+    MASS::ginv(S)
+  })
+  
+  # Scale by V: variables with higher weight get smaller effective distance
+  v  <- v_weights[match_vars]
+  v[is.na(v)] <- min(v, na.rm = TRUE)  # safety fallback
+  
+  V_sqrt    <- diag(sqrt(v))
+  S_inv_V   <- V_sqrt %*% S_inv %*% V_sqrt
+  
+  return(S_inv_V)
+}
+
+# -----------------------------------------------------------------------------
+# STEP 1 — COHORT-STRATIFIED MATCHING LOOP WITH DATA-DRIVEN V
+# -----------------------------------------------------------------------------
+# Cohort defined by 'scheme' variable — each CAZ/LEZ scheme is a cohort.
+# Never-treated OAs (treated_OA == 0) are eligible controls for all cohorts.
+
+schemes <- oa_data_clean %>%
+  filter(treated_OA == 1) %>%
+  pull(scheme) %>%
+  unique() %>%
   sort()
+
+cat("\nSchemes to match:", paste(schemes, collapse = ", "), "\n")
 
 matched_oa_list <- list()
 
-for (g in cohorts) {
+for (g in schemes) {
   
-  cat("\n--- Matching cohort:", g, "---\n")
+  cat("\n--- Matching scheme:", g, "---\n")
   
-  # Cohort dataset: treated OAs in cohort g + all never-treated OAs
-  # "Not yet treated" OAs can also be controls if you prefer — see note below
-  oa_cohort <- oa_data_clean |>
+  # Cohort dataset: treated OAs for this scheme + all never-treated OAs
+  oa_cohort <- oa_data_clean %>%
     filter(
-      (treated == 1 & cohort_g == g) |   # treated: this cohort only
-        (treated == 0)                       # controls: never treated
-      # To include not-yet-treated: | (treated == 1 & cohort_g > g)
-    ) |>
-    mutate(treat_indicator = as.integer(treated == 1 & cohort_g == g))
+      (treated_OA == 1 & scheme == g) |   # treated: this scheme only
+        (treated_OA == 0)                   # controls: never treated
+    ) %>%
+    mutate(treat_indicator = as.integer(treated_OA == 1 & scheme == g))
+  
+  # --- Check country composition within this cohort ---
+  cat("  Country composition:\n")
+  print(table(oa_cohort$country, oa_cohort$treat_indicator,
+              dnn = c("Country", "Treated")))
+  
+  # IMPORTANT: if a scheme is Scotland-only (e.g. Glasgow LEZ),
+  # all treated OAs will be Scottish. Control OAs from England will be
+  # excluded by the exact = ~ country constraint automatically.
+  # Check that enough Scottish controls exist:
+  n_scot_controls <- sum(oa_cohort$treat_indicator == 0 &
+                           oa_cohort$country == "Scotland")
+  n_eng_controls  <- sum(oa_cohort$treat_indicator == 0 &
+                           oa_cohort$country == "England")
+  cat("  Scottish controls available:", n_scot_controls, "\n")
+  cat("  English controls available:", n_eng_controls, "\n")
   
   n_treated  <- sum(oa_cohort$treat_indicator)
   n_controls <- sum(oa_cohort$treat_indicator == 0)
-  cat("  Treated:", n_treated, " | Controls available:", n_controls, "\n")
+  cat("  Treated:", n_treated, "| Controls available:", n_controls, "\n")
   
-  # Skip cohort if too few treated units for meaningful matching
   if (n_treated < 5) {
-    cat("  Skipping — too few treated OAs\n")
+    cat("  Skipping — too few treated OAs (n =", n_treated, ")\n")
     next
   }
   
+  # Check all matching variables exist in this cohort
+  missing <- setdiff(all_match_vars, names(oa_cohort))
+  if (length(missing) > 0) {
+    cat("  WARNING — missing variables:", paste(missing, collapse = ", "), "\n")
+    match_vars_g <- intersect(all_match_vars, names(oa_cohort))
+  } else {
+    match_vars_g <- all_match_vars
+  }
+  
   # ---------------------------------------------------------------------------
-  # MATCHING SPECIFICATION
+  # ESTIMATE V ON CONTROL OAs ONLY
+  # Using controls only avoids treatment contamination in V estimation
   # ---------------------------------------------------------------------------
-  # KEY IMPROVEMENTS over original code:
-  #   1. Added Slight_adj pre-trends (you have both KSI and Slight outcomes)
-  #   2. Added mode-specific pre-trends for pedestrian, cyclist (ksi_ped, ksi_cyc 
-  #      already present — add slight equivalents)
-  #   3. Added seasonality measure (Q4_share) — RTIs peak in autumn/winter
-  #   4. Added pct_active_travel from census (key for pedestrian/cyclist outcomes)
-  #   5. Added network_length_km (total road length in OA — exposure denominator)
-  #   6. Added region to exact matching alongside urban_rural_class
-  #      (England vs Scotland MUST be exact if pooling — better to run separately)
-  #   7. ratio = 4 instead of 3 — more controls improve C&S precision at low cost
-  #   8. replace = FALSE explicitly stated (default but important to be explicit)
-  #   9. Added mahvars to separate distance vars from exact vars cleanly
+  control_data <- oa_cohort %>%
+    filter(treat_indicator == 0) %>%
+    dplyr::select(all_of(match_vars_g)) %>%
+    filter(complete.cases(pick(everything())))
+  
+  cat("  Estimating V matrix on", nrow(control_data), "control OAs...\n")
+  
+  V_result <- tryCatch(
+    estimate_V_matrix(
+      data           = control_data,
+      outcome_vars   = intersect(tier1_vars, match_vars_g),
+      predictor_vars = match_vars_g
+    ),
+    error = function(e) {
+      cat("  V estimation failed:", conditionMessage(e),
+          "— falling back to standard MDM\n")
+      NULL
+    }
+  )
+  
+  # Top 5 variables by V weight (for reporting)
+  if (!is.null(V_result)) {
+    cat("  Top 5 variables by V weight:\n")
+    top5 <- sort(V_result$v_weights, decreasing = TRUE)[1:5]
+    print(round(top5, 4))
+  }
+  
   # ---------------------------------------------------------------------------
+  # RUN MATCHING
+  # ---------------------------------------------------------------------------
+  # If V estimation succeeded: use weighted Mahalanobis distance
+  # If V estimation failed: fall back to standard Mahalanobis (still valid)
+  # ---------------------------------------------------------------------------
+  # RUN MATCHING
+  # ---------------------------------------------------------------------------
+  # If V estimation succeeded: use weighted Mahalanobis distance
+  # If V estimation failed: fall back to standard Mahalanobis (still valid)
+  
+  match_formula <- reformulate(match_vars_g, response = "treat_indicator")
   
   m_out <- tryCatch({
-    matchit(
-      treat_indicator ~
+    
+    if (!is.null(V_result)) {
+      # --- Option A: Weighted Mahalanobis using estimated V ---
+      # Build distance matrix manually and pass to MatchIt
+      oa_complete <- oa_cohort %>%
+        dplyr::select(treat_indicator, all_of(match_vars_g)) %>%
+        filter(complete.cases(pick(everything())))
+      
+      S_inv_V <- build_weighted_mahal_vcov(
+        data       = oa_complete,
+        match_vars = match_vars_g,
+        v_weights  = V_result$v_weights
+      )
+      
+      # MatchIt API note:
+      # When distance = "mahalanobis", the formula variables define the
+      # Mahalanobis space. mahvars is NOT valid here — instead we pass our
+      # custom weighted inverse covariance matrix via the vcov argument.
+      # This is the correct way to implement Abadie et al. weighted MDM.
+      matchit(
+        match_formula,
+        data        = oa_cohort,
+        method      = "nearest",
+        distance    = "mahalanobis",
+        vcov        = S_inv_V,       # custom V-weighted inverse covariance matrix
+        caliper     = 0.25,
+        std.caliper = TRUE,
+        ratio       = 4,
+        replace     = FALSE,
         
-        # --- TIER 1: Pre-treatment outcome trends (MOST important) ---
-        # KSI outcomes
-        ksi_trend_slope +          # slope of KSI over pre-period (linear)
-        ksi_mean_pre +             # mean KSI level pre-treatment
-        ksi_trend_slope_sq +       # FIX: add quadratic trend — captures non-linear pre-trends
-        # Slight outcomes — ADD: you have both outcomes, match on both
-        slight_trend_slope +
-        slight_mean_pre +
-        # Mode-specific pre-trends — match on all casualty types you'll analyse
-        ksi_ped_pre +
-        ksi_car_pre +
-        ksi_cyc_pre +
-        slight_ped_pre +           # ADD: slight injuries by mode
-        slight_car_pre +
-        slight_cyc_pre +
-        # Seasonality — RTIs have strong seasonal pattern; must match on it
-        q4_inj_share +             # ADD: share of annual injuries in Q4 (Oct-Dec)
-        
-        # --- TIER 2: Structural / exposure variables ---
-        road_density +
-        network_length_km +        # ADD: total road length — controls for exposure
-        pct_a_road +
-        mean_speed_limit +
-        junction_density +
-        pct_hgv +                  # ADD: heavy goods vehicles if available
-        pop_density +
-        imd_score +
-        imd_transport +
-        pct_car_ownership +
-        pct_active_travel +        # ADD: % active travel to work (census) — key for ped/cyc
-        
-        # --- TIER 3: handled via exact= argument below ---
-        urban_rural_class,
+        # EXACT MATCHING ON COUNTRY — non-negotiable
+        # England (STATS19) and Scotland (STATS19-Scotland) differ in injury
+        # classification thresholds and recording protocols. Cross-country
+        # matches would introduce systematic measurement incomparability.
+        # This constraint forbids them outright.
+        exact = ~ country
+        # NOTE: if you later add urban_rural_class, extend to:
+        # exact = ~ country + urban_rural_class
+      )
       
-      data     = oa_cohort,
-      method   = "nearest",
-      distance = "mahalanobis",
-      
-      # CALIPER: 0.25 SD is standard. If you get poor balance or many unmatched
-      # treated units, loosen to 0.35. If balance is good, tighten to 0.15.
-      caliper  = 0.25,
-      std.caliper = TRUE,         # caliper in SD units (recommended)
-      
-      ratio    = 4,               # CHANGE: 1:4 — more controls, better precision
-      replace  = FALSE,           # no replacement — each control used once
-      
-      # EXACT MATCHING: force identical cells on categorical variables
-      # ADD region: never match an OA in Yorkshire to one in Greater Glasgow
-      exact    = ~ urban_rural_class + country  # use 'region' if not running separately
-    )
+    } else {
+      # --- Option B: Standard Mahalanobis fallback (country exact still enforced) ---
+      matchit(
+        match_formula,
+        data        = oa_cohort,
+        method      = "nearest",
+        distance    = "mahalanobis",
+        caliper     = 0.25,
+        std.caliper = TRUE,
+        ratio       = 4,
+        replace     = FALSE,
+        exact       = ~ country   # always enforce — even in fallback
+      )
+    }
+    
   }, error = function(e) {
     cat("  Matching failed:", conditionMessage(e), "\n")
     NULL
@@ -152,138 +424,183 @@ for (g in cohorts) {
   
   if (is.null(m_out)) next
   
-  # Store result with cohort label
+  # Store result with V weights for appendix reporting
   matched_oa_list[[as.character(g)]] <- list(
     matchit_obj = m_out,
-    cohort      = g
+    scheme      = g,
+    V_weights   = if (!is.null(V_result)) V_result$v_weights else NULL,
+    n_treated   = n_treated,
+    n_controls  = n_controls
   )
   
-  # ---------------------------------------------------------------------------
-  # BALANCE DIAGNOSTICS — non-negotiable for every cohort
-  # ---------------------------------------------------------------------------
-  cat("\n  Balance summary for cohort", g, ":\n")
-  print(bal.tab(m_out, thresholds = c(m = 0.1, v = 2)))
-  # m = 0.1: SMD threshold; v = 2: variance ratio threshold
+  # --- Verify no cross-country matches slipped through ---
+  matched_data <- match.data(m_out)
+  cross_country <- matched_data %>%
+    group_by(subclass) %>%
+    summarise(n_countries = n_distinct(country), .groups = "drop") %>%
+    filter(n_countries > 1)
   
-  # Save love plot per cohort
+  if (nrow(cross_country) > 0) {
+    cat("  WARNING:", nrow(cross_country),
+        "matched pairs contain cross-country matches — investigate!\n")
+  } else {
+    cat("  Country check passed — no cross-country matches\n")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # BALANCE DIAGNOSTICS — non-negotiable for every scheme
+  # ---------------------------------------------------------------------------
+  cat("\n  Balance summary for scheme", g, ":\n")
+  print(bal.tab(m_out, thresholds = c(m = 0.1, v = 2)))
+  
   lp <- love.plot(
     m_out,
-    threshold   = 0.1,
-    abs         = TRUE,
-    var.order   = "unadjusted",
-    title       = paste0("Covariate Balance — Cohort ", g),
-    shapes      = c("circle filled", "triangle filled"),
-    colors      = c("#E74C3C", "#2ECC71"),
+    threshold    = 0.1,
+    abs          = TRUE,
+    var.order    = "unadjusted",
+    title        = paste0("Covariate Balance — Scheme: ", g),
+    shapes       = c("circle filled", "triangle filled"),
+    colors       = c("#E74C3C", "#2ECC71"),
     sample.names = c("Before matching", "After matching")
   )
   ggsave(
-    filename = paste0("balance_cohort_", g, ".png"),
+    filename = paste0("balance_scheme_", gsub(" ", "_", g), ".png"),
     plot     = lp,
     width    = 10, height = 8
   )
 }
 
 # -----------------------------------------------------------------------------
-# STEP 2 — EXTRACT MATCHED CONTROL OA IDs (ACROSS ALL COHORTS)
+# STEP 2 — EXTRACT MATCHED CONTROL OA IDs (ACROSS ALL SCHEMES)
 # -----------------------------------------------------------------------------
 
 matched_control_oas <- lapply(names(matched_oa_list), function(g_chr) {
   m <- matched_oa_list[[g_chr]]$matchit_obj
   
-  # Extract matched data: controls only
-  md <- match.data(m) |>
-    filter(treat_indicator == 0) |>
-    mutate(matched_for_cohort = as.integer(g_chr))
-  
-  md[, c("oa_id", "matched_for_cohort", "weights", "subclass")]
-}) |>
-  bind_rows() |>
-  # An OA may be matched as control for multiple cohorts — keep unique
-  distinct(oa_id, .keep_all = TRUE)
+  match.data(m) %>%
+    filter(treat_indicator == 0) %>%
+    mutate(matched_for_scheme = g_chr) %>%
+    dplyr::select(OA, matched_for_scheme, weights, subclass)
+}) %>%
+  bind_rows() %>%
+  # OA may be matched as control for multiple schemes — keep unique
+  distinct(OA, .keep_all = TRUE)
 
-# Also extract treated OA IDs (for completeness)
 matched_treated_oas <- lapply(names(matched_oa_list), function(g_chr) {
   m <- matched_oa_list[[g_chr]]$matchit_obj
-  match.data(m) |>
-    filter(treat_indicator == 1) |>
-    mutate(matched_for_cohort = as.integer(g_chr)) |>
-    select(oa_id, matched_for_cohort, weights, subclass)
-}) |>
+  
+  match.data(m) %>%
+    filter(treat_indicator == 1) %>%
+    mutate(matched_for_scheme = g_chr) %>%
+    dplyr::select(OA, matched_for_scheme, weights, subclass)
+}) %>%
   bind_rows()
 
-cat("\nMatched control OAs:", nrow(matched_control_oas))
-cat("\nMatched treated OAs:", nrow(matched_treated_oas), "\n")
+cat("\n=== MATCHING SUMMARY ===\n")
+cat("Matched control OAs:", nrow(matched_control_oas), "\n")
+cat("Matched treated OAs:", nrow(matched_treated_oas), "\n")
+
+# -----------------------------------------------------------------------------
+# STEP 2b — REPORT V WEIGHTS ACROSS SCHEMES (for Appendix Table S1.3)
+# -----------------------------------------------------------------------------
+# Average V weights across schemes — shows which variables drove matching
+# Replace manual 4x/3x/2x/1x weights in Table S1.3 with these estimates
+
+V_weights_summary <- lapply(names(matched_oa_list), function(g_chr) {
+  vw <- matched_oa_list[[g_chr]]$V_weights
+  if (is.null(vw)) return(NULL)
+  as.data.frame(t(vw)) %>% mutate(scheme = g_chr)
+}) %>%
+  bind_rows()
+
+if (nrow(V_weights_summary) > 0) {
+  V_weights_avg <- V_weights_summary %>%
+    dplyr::select(-scheme) %>%
+    summarise(across(everything(), ~ mean(., na.rm = TRUE))) %>%
+    tidyr::pivot_longer(
+      everything(),
+      names_to  = "variable",
+      values_to = "mean_V_weight"
+    ) %>%
+    arrange(desc(mean_V_weight))
+  
+  cat("\n=== AVERAGE V WEIGHTS ACROSS SCHEMES (Table S1.3) ===\n")
+  print(V_weights_avg, n = 30)
+  
+  # Tag each variable with its tier for table
+  V_weights_avg <- V_weights_avg %>%
+    mutate(tier = case_when(
+      variable %in% tier1_vars ~ "Tier 1: Injury outcomes",
+      variable %in% tier2_vars ~ "Tier 2: Road network",
+      TRUE                     ~ "Other"
+    ))
+  
+  write.csv(V_weights_avg,
+            "V_weights_table_S1_3.csv",
+            row.names = FALSE)
+  cat("V weights saved to V_weights_table_S1_3.csv\n")
+}
 
 # -----------------------------------------------------------------------------
 # STEP 3 — BUILD RESTRICTED ROAD-LINK PANEL
 # -----------------------------------------------------------------------------
-# Carry road-link panel observations whose OA is in the matched donor pool.
-# Also merge OA-level covariates onto road links for use in C&S xformla.
 
-road_link_panel_restricted <- road_link_panel |>
+road_link_panel_restricted <- road_link_panel %>%
   filter(
     # Keep all treated road links
     treated_link == 1 |
-      # Keep control road links ONLY if in matched donor pool
+      # Keep control road links ONLY if OA is in matched donor pool
       (treated_link == 0 &
-         oa_id %in% matched_control_oas$oa_id &
-         buffer_500m == FALSE &
-         straddle_oa == FALSE)
-  ) |>
-  # Merge OA-level covariates for use in C&S covariate adjustment
+         OA %in% matched_control_oas$OA &
+         buffer_OA == FALSE)
+  ) %>%
+  # Merge OA-level covariates for C&S covariate adjustment (xformla)
   left_join(
-    oa_data_clean |> select(
-      oa_id, road_density, pct_a_road, mean_speed_limit,
-      junction_density, pop_density, imd_score, urban_rural_class,
-      pct_active_travel, network_length_km
+    oa_data_clean %>% dplyr::select(
+      OA, road_density_m_km2, pct_A_road, pct_B_road, pct_minor_road,
+      road_length_km, dist_citycentre, n_roads
     ),
-    by = "oa_id"
+    by = "OA"
   )
 
+cat("\n=== ROAD LINK PANEL ===\n")
 cat("Road links in restricted panel:", nrow(road_link_panel_restricted), "\n")
-cat("Unique OAs in panel:",
-    n_distinct(road_link_panel_restricted$oa_id), "\n")
+cat("Unique OAs in panel:", n_distinct(road_link_panel_restricted$OA), "\n")
 
 # -----------------------------------------------------------------------------
-# STEP 4 — CALLAWAY & SANT'ANNA ESTIMATION (on restricted panel)
+# STEP 4 — CALLAWAY & SANT'ANNA ESTIMATION
 # -----------------------------------------------------------------------------
 
 library(did)
 
-# Define outcomes × casualty type combinations
 outcomes <- c("KSI_adj", "Slight_adj")
 modes    <- c("All", "Pedestrian", "Car.Van", "Cyclist", "Other")
 
-# Function to run C&S for one outcome-mode combination
 run_cs <- function(yvar, data) {
   att_gt(
     yname         = yvar,
-    tname         = "quarter_num",       # numeric quarter index
+    tname         = "quarter_num",
     idname        = "road_link_id",
     gname         = "cohort_g",          # first treated quarter; 0 = never treated
     
-    xformla       = ~ road_type_class + mean_speed_limit + junction_flag +
-      log1p(network_length_km) + imd_score + pct_active_travel,
+    xformla       = ~ road_density_m_km2 + pct_A_road + pct_minor_road +
+      road_length_km + dist_citycentre,
     
-    est_method    = "dr",                # doubly robust — keep
-    control_group = "nevertreated",      # primary spec
+    est_method    = "dr",                # doubly robust
+    control_group = "nevertreated",
     
-    # CLUSTER at OA level — road links within OA are not independent
-    # If most CAZs cover whole LAs, consider clustervars = "la_id" instead
-    clustervars   = "oa_id",
+    clustervars   = "OA",                # cluster at OA level
     
-    panel         = TRUE,
-    allow_unbalanced_panel = TRUE,       # ADD: handles missing road-quarter obs
-    data          = data
+    panel                  = TRUE,
+    allow_unbalanced_panel = TRUE,
+    data                   = data
   )
 }
 
-# Run all combinations
 cs_results <- list()
 
 for (outcome in outcomes) {
   for (mode in modes) {
-    
     col_name <- if (mode == "All") outcome else paste0(outcome, "_", mode)
     cat("Estimating:", col_name, "\n")
     
@@ -296,13 +613,13 @@ for (outcome in outcomes) {
   }
 }
 
-# Aggregate results
+# Aggregate
 cs_agg <- lapply(cs_results, function(res) {
   if (is.null(res)) return(NULL)
   list(
-    simple  = aggte(res, type = "simple"),    # overall ATT
-    dynamic = aggte(res, type = "dynamic"),   # event study
-    group   = aggte(res, type = "group")      # by cohort
+    simple  = aggte(res, type = "simple"),
+    dynamic = aggte(res, type = "dynamic"),
+    group   = aggte(res, type = "group")
   )
 })
 
@@ -310,42 +627,45 @@ cs_agg <- lapply(cs_results, function(res) {
 # STEP 5 — SENSITIVITY / ROBUSTNESS CHECKS
 # -----------------------------------------------------------------------------
 
-# 5a. Alternative calipers — test sensitivity of donor pool to caliper width
+# 5a. Alternative calipers
 # Re-run matching loop with caliper = 0.15 (tighter) and 0.35 (looser)
-# Compare ATT estimates across donor pools
 
-# 5b. Alternative ratio — try 1:1 and 1:6
-# Tighter ratio = better per-match quality; wider ratio = more power
+# 5b. Alternative ratio
+# Try ratio = 1 (1:1) and ratio = 6 (1:6) — test precision vs quality tradeoff
 
 # 5c. Control group: re-run C&S with control_group = "notyettreated"
-cs_results_nyt <- lapply(names(cs_results), function(nm) {
-  # re-run with notyettreated for comparison
-})
+# (use control_group2_OA as not-yet-treated pool)
 
 # 5d. HonestDiD — pre-trend sensitivity (Rambachan & Roth 2023)
-# install.packages("HonestDiD")
 library(HonestDiD)
-# Apply to each dynamic aggregation — see HonestDiD vignette for full workflow
-# Key: test how large pre-trend violations would need to be to overturn results
+# Apply to each dynamic aggregation — see HonestDiD vignette
 
-# 5e. Synthetic DiD as parallel estimator (Arkhangelsky et al. 2021)
-# install.packages("synthdid")
-# Run on restricted panel as robustness check against C&S estimates
+# 5e. Manual weights as robustness check
+# Re-run matching with fixed weights (Tier1=4x, Tier2=3x) instead of V matrix
+# If results are stable, this strengthens the data-driven V choice
 
 # -----------------------------------------------------------------------------
 # STEP 6 — BALANCE REPORTING (PUBLICATION-READY)
 # -----------------------------------------------------------------------------
 
-# Combined love plot across all cohorts
-all_balance <- lapply(names(matched_oa_list), function(g_chr) {
-  bal.tab(matched_oa_list[[g_chr]]$matchit_obj,
-          thresholds = c(m = 0.1),
-          un = TRUE)
-})
+balance_summary <- sapply(names(matched_oa_list), function(g_chr) {
+  bt <- bal.tab(
+    matched_oa_list[[g_chr]]$matchit_obj,
+    thresholds = c(m = 0.1),
+    un = TRUE
+  )
+  smd_after <- abs(bt$Balance$Diff.Adj)
+  c(
+    scheme          = g_chr,
+    n_treated       = matched_oa_list[[g_chr]]$n_treated,
+    pct_balanced    = round(mean(smd_after < 0.1, na.rm = TRUE) * 100, 1),
+    max_smd         = round(max(smd_after, na.rm = TRUE), 3),
+    mean_smd        = round(mean(smd_after, na.rm = TRUE), 3)
+  )
+}, simplify = FALSE) %>%
+  bind_rows()
 
-# Summary table: % variables with SMD < 0.1 before and after matching
-balance_summary <- sapply(all_balance, function(b) {
-  smd <- b$Balance$Diff.Adj
-  c(pct_balanced = mean(abs(smd) < 0.1, na.rm = TRUE) * 100)
-})
+cat("\n=== BALANCE SUMMARY ACROSS SCHEMES ===\n")
 print(balance_summary)
+
+write.csv(balance_summary, "balance_summary_all_schemes.csv", row.names = FALSE)
