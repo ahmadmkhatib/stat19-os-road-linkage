@@ -14,7 +14,7 @@ library(here)
 # ----------------------------------------------------------
 injuries <- readRDS(here("data", "processed", "injuries_final.rds"))
 roads    <- readRDS( here("data", "processed", "roads_filtered.rds"))
-
+names(roads)
 
 # ----------------------------------------------------------
 # Split Roads by Class

@@ -1,7 +1,7 @@
 # =============================================================================
-# CAZ/LEZ Staggered DiD: OA-Level Matching — Two-Stage MDM Design
-# Stage 1: MDM (wide caliper) on structural + sociodemographic variables
-# Stage 2: MDM (tight caliper) on pre-treatment injury trends + levels
+#  OA-Level Matching — Two-Stage MDM Design
+#  Stage 1: MDM (wide caliper) on structural + sociodemographic variables
+#  Stage 2: MDM (tight caliper) on pre-treatment injury trends + levels
 # =============================================================================
 #
 # DESIGN RATIONALE:
@@ -48,6 +48,13 @@
 #   A pooled donor pool after Stage 1 is an advantage: more structurally
 #   comparable OAs available for Stage 2 MDM.
 #
+# FIXES APPLIED vs PREVIOUS VERSION:
+#   1. Stage 1 replace=TRUE output deduplicated before feeding Stage 2
+#   2. Zero-road OA filter added to pre-matching exclusions
+#   3. Stage 2 winsorisation based on treated distribution only
+#   4. road_link_panel load added at top of script
+#   5. cohort_g and road_link_id construction documented before C&S step
+#   6. Pre-trend diagnostic plot uses _pkm scale consistent with Stage 2 vars
 # =============================================================================
 
 library(MatchIt)
@@ -56,15 +63,53 @@ library(ggplot2)
 library(here)
 library(MASS)
 library(tidyverse)
+library(did)
+library(sf)
+
+# =============================================================================
+#
+# =============================================================================
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
+# Road-link panel for C&S estimation — must contain:
+#   road_link_id, OA, quarter_num, cohort_g, treated_link, buffer_OA,
+#   outcome columns (KSI_adj, Slight_adj etc.)
+road_link_panel <- readRDS(here("data", "processed", "road_link_panel.rds"))
+
+oa_sub <- st_read(
+  here("data", "processed", "shp_files", "OA_subset.shp"),
+  quiet = TRUE
+) %>%
+  st_transform(27700) %>%
+  st_make_valid()
+
 # =============================================================================
-# STEP 0 — DERIVE COUNTRY + PRE-MATCHING EXCLUSIONS
+#   CHECKS  
 # =============================================================================
 
-oa_data_clean <- OA_matching_dataset %>%
-  
+table(OA_matching_dataset$assignment)
+table(OA_matching_dataset$zero_injury_OA)
+
+OA_matching_dataset %>%
+  summarise(
+    total_OAs  = n_distinct(OA),
+    zero_roads = sum(n_roads == 0 | is.na(n_roads)),
+    pct_zero   = 100 * zero_roads / total_OAs
+  ) %>%
+  print()
+
+# OAs with no roads but recorded injuries — boundary artefacts
+weirdOAs <- OA_matching_dataset %>%
+  filter((n_roads == 0 | is.na(n_roads)) & mean_total > 0)
+cat("Zero-road OAs with injuries:", nrow(weirdOAs), "\n")
+cat("  Of which treated:", sum(weirdOAs$treated_OA == 1), "\n")
+
+# =============================================================================
+# STEP 1 — DERIVE COUNTRY + PRE-MATCHING EXCLUSIONS
+# =============================================================================
+
+oa_data_final <- OA_matching_dataset %>%
   mutate(
     country = case_when(
       substr(LAD24CD, 1, 1) == "E" ~ "England",
@@ -72,82 +117,68 @@ oa_data_clean <- OA_matching_dataset %>%
       TRUE                         ~ "Unknown"
     )
   ) %>%
-  
-  { . ->> oa_data_with_country } %>%
-  filter(country != "Unknown") %>%
-  
   filter(
     (treated_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1),
     buffer_OA      == 0,
-    zero_injury_OA == 0    # sensitivity check: re-run with this removed
+    zero_injury_OA == 0,
+    n_roads        >  0    # exclude zero-road OAs: _pkm = 0 distorts Stage 2 distance
   ) %>%
-  
-  mutate(treat_indicator = as.integer(treated_OA == 1))
+  mutate(
+    treat_indicator = as.integer(treated_OA == 1)
+  )
 
-# --- Composition check ---
-cat("=== SAMPLE AFTER EXCLUSIONS ===\n")
-cat("Unknown LAD24CD prefixes:", sum(oa_data_with_country$country == "Unknown"), "\n")
-cat("Total OAs:", nrow(oa_data_clean), "\n")
-cat("  Treated:", sum(oa_data_clean$treat_indicator), "\n")
-cat("  Controls:", sum(oa_data_clean$treat_indicator == 0), "\n\n")
+cat("\n=== SAMPLE AFTER EXCLUSIONS ===\n")
+cat("Total OAs:",    nrow(oa_data_final), "\n")
+cat("  Treated:",    sum(oa_data_final$treat_indicator == 1), "\n")
+cat("  Controls:",   sum(oa_data_final$treat_indicator == 0), "\n\n")
 
-country_tab <- oa_data_clean %>%
+country_tab <- oa_data_final %>%
   count(country, treat_indicator) %>%
   pivot_wider(names_from = treat_indicator, values_from = n,
               names_prefix = "treated_") %>%
   rename(n_control = treated_0, n_treated = treated_1)
 print(country_tab)
 
+# Note: Scotland is ~25% of treated but ~9% of controls — the country exact
+# constraint is therefore load-bearing for Scottish CAZ schemes.
+
 # =============================================================================
-# STEP 1 — DEFINE STAGE 1 AND STAGE 2 VARIABLES
+# STEP 2 — DEFINE STAGE 1 AND STAGE 2 VARIABLES
 # =============================================================================
-# Variable names mapped directly to OA_matching_census columns.
-# Stage 1: structural + sociodemographic — defines comparability of environment
-# Stage 2: injury trends + levels — defines parallel trends directly
-#
 # SEPARATION PRINCIPLE:
-#   No variable appears in both stages. This ensures that in Stage 2,
-#   the Mahalanobis distance is determined entirely by injury dynamics.
-#   A good census match cannot compensate for a poor trajectory match.
-# =============================================================================
+#   No variable appears in both stages. In Stage 2, Mahalanobis distance
+#   is determined entirely by injury dynamics. A good census match cannot
+#   compensate for a poor trajectory match.
 
 # --- STAGE 1: Structural + sociodemographic (MDM, wide caliper) ---
-# Road network
 stage1_road <- c(
-  "road_density_m_km2",  # road density — urban intensity proxy
-  "road_length_km",      # total road length — exposure scale
-  "pct_A_road",          # % A-road segments
-  "pct_B_road",          # % B-road segments
-  "pct_minor_road"       # % minor road segments
-  # speed limit distribution: add when variable available
-  # n_roads available but collinear with road_length_km — excluded
+  "road_density_m_km2",
+  "road_length_km",
+  "pct_A_road",
+  "pct_B_road",
+  "pct_minor_road"
 )
 
-# Urban form
 stage1_urban <- c(
-  "dist_citycentre",     # distance to city centre — urban gradient
-  "pop_density"          # population density
-  # retail density: add when variable available
+  "dist_citycentre",
+  "pop_density"
 )
 
-# Sociodemographic — these are confounders of both treatment and injury trends
-# They belong in Stage 1 so they cannot compensate for trend mismatches in Stage 2
 stage1_socdem <- c(
-  "IMD",                 # Index of Multiple Deprivation
-  "cars_none_pct",       # % households with no car — active travel proxy
-  "Drive_Car_pct",       # % driving to work
-  "Walk_pct",            # % walking to work
-  "Bicycle_pct",         # % cycling to work
-  "X65plus_pct",         # % aged 65+ — high-risk pedestrian group
-  "X5to19_pct",          # % aged 5-19 — high-risk pedestrian group
-  "X20to24_pct"          # % aged 20-24 — high-risk road user group
-  # ethnicity pcts available — add if theory suggests they predict injury trends
+  "IMD",
+  "cars_none_pct",
+  "Drive_Car_pct",
+  "Walk_pct",
+  "Bicycle_pct",
+  "X65plus_pct",
+  "X5to19_pct",
+  "X20to24_pct"
 )
 
 stage1_vars <- c(stage1_road, stage1_urban, stage1_socdem)
 
 # --- STAGE 2: Pre-treatment injury dynamics (MDM, tight caliper) ---
-# Trends: quasi-Poisson GLM slope (log-rate change per quarter per road-km)
+# Per-km rates used throughout — consistent scale across OAs of different sizes.
 stage2_trends <- c(
   "trend_car_KSI_pkm",
   "trend_car_slight_pkm",
@@ -158,10 +189,6 @@ stage2_trends <- c(
   "trend_total_pkm"
 )
 
-# Levels: mean quarterly casualties per road-km over pre-treatment period
-# Included alongside trends to anchor on absolute scale as well as trajectory.
-# Two OAs with the same trend but very different absolute levels may still
-# diverge post-treatment in ways that matter for the counterfactual.
 stage2_levels <- c(
   "mean_car_KSI_pkm",
   "mean_car_slight_pkm",
@@ -175,32 +202,32 @@ stage2_levels <- c(
 stage2_vars <- c(stage2_trends, stage2_levels)
 
 cat("Stage 1 variables:", length(stage1_vars), "\n")
-cat("  Road network:", length(stage1_road), "\n")
-cat("  Urban form:", length(stage1_urban), "\n")
+cat("  Road network:",     length(stage1_road),   "\n")
+cat("  Urban form:",       length(stage1_urban),  "\n")
 cat("  Sociodemographic:", length(stage1_socdem), "\n")
 cat("Stage 2 variables:", length(stage2_vars), "\n")
-cat("  Injury trends:", length(stage2_trends), "\n")
-cat("  Injury levels:", length(stage2_levels), "\n")
+cat("  Injury trends:",   length(stage2_trends), "\n")
+cat("  Injury levels:",   length(stage2_levels), "\n")
 
 # =============================================================================
-# STEP 2 — PRE-PROCESSING
+# STEP 3 — PRE-PROCESSING: WINSORISE ON FULL DATASET (STAGE 1 VARS ONLY)
 # =============================================================================
-# Winsorise all matching variables at 1st/99th percentile.
-# Prevents outlier OAs from distorting the covariance matrix at both stages.
-# Applied once to the full dataset before either matching stage.
+# Stage 1 variables winsorised at 1st/99th percentile of full pre-matching
+# sample. Stage 2 variables are winsorised separately within the Stage 1 pool
+# and based on the treated distribution only (see Step 5).
 
 all_match_vars <- c(stage1_vars, stage2_vars)
 
-oa_data_clean <- oa_data_clean %>%
+oa_data_clean <- oa_data_final %>%
   mutate(across(
-    all_of(intersect(all_match_vars, names(.))),
+    all_of(intersect(stage1_vars, names(.))),
     ~ {
       q <- quantile(., probs = c(0.01, 0.99), na.rm = TRUE)
       pmin(pmax(., q[1]), q[2])
     }
   ))
 
-# Check all variables exist
+# Check all variables exist — warn and drop missing
 missing_s1 <- setdiff(stage1_vars, names(oa_data_clean))
 missing_s2 <- setdiff(stage2_vars, names(oa_data_clean))
 
@@ -208,6 +235,7 @@ if (length(missing_s1) > 0) {
   cat("WARNING — Stage 1 variables missing:", paste(missing_s1, collapse = ", "), "\n")
   stage1_vars <- intersect(stage1_vars, names(oa_data_clean))
 }
+names(oa_data_clean)
 if (length(missing_s2) > 0) {
   cat("WARNING — Stage 2 variables missing:", paste(missing_s2, collapse = ", "), "\n")
   stage2_vars <- intersect(stage2_vars, names(oa_data_clean))
@@ -228,17 +256,27 @@ stage1_vars <- drop_low_var(oa_data_clean, stage1_vars)
 stage2_vars <- drop_low_var(oa_data_clean, stage2_vars)
 
 # =============================================================================
-# STEP 3 — STAGE 1: MDM WITH WIDE CALIPER ON STRUCTURAL VARIABLES
+# STEP 4 — STAGE 1: MDM W ON STRUCTURAL VARIABLES
 # =============================================================================
 # Purpose: remove OAs too structurally dissimilar to be valid comparators.
-# Wide caliper (1.0 SD) — cuts the incomparable tail, not tight matching.
-# Country enforced as exact constraint — hard non-negotiable.
+## Country enforced as hard exact constraint.
+# replace = TRUE with ratio = 10 maximises the pool passed to Stage 2.
 #
-# Output: oa_stage1_pool — the restricted donor pool for Stage 2.
+# IMPORTANT: match.data() with replace=TRUE returns duplicate control rows.
+# These are deduplicated before being passed to Stage 2 — see Step 5.
+
+###standardisation 
+
 
 s1_formula <- reformulate(stage1_vars, response = "treat_indicator")
 
-cat("\n=== STAGE 1: MDM (wide caliper = 1.0 SD) ===\n")
+c
+# structural variables (road + urban form only)
+stage1_structural <- c(stage1_road, stage1_urban)
+
+# apply 1.0 SD caliper ONLY to structural vars
+caliper_list <- rep(1.0, length(stage1_structural))
+names(caliper_list) <- stage1_structural
 
 mdm_s1 <- tryCatch(
   matchit(
@@ -246,176 +284,275 @@ mdm_s1 <- tryCatch(
     data        = oa_data_clean,
     method      = "nearest",
     distance    = "mahalanobis",
-    caliper     = 1.0,          # wide — remove incomparable tail only
+    caliper     = caliper_list,   
     std.caliper = TRUE,
-    ratio       = 10,           # generous ratio — retain large pool for Stage 2
-    replace     = TRUE,         # with replacement — maximises pool size
-    exact       = ~ country     # hard constraint — no cross-country matches
+    ratio       = 10,
+    replace     = TRUE,
+    exact       = ~ country
   ),
   error = function(e) {
     cat("Stage 1 MDM failed:", conditionMessage(e), "\n"); NULL
   }
 )
 
-if (is.null(mdm_s1)) stop("Stage 1 failed — cannot proceed.")
+# --- Extract Stage 1 results ---
+s1_matched_raw <- match.data(mdm_s1)
 
-# Extract Stage 1 pool (all OAs in matched set)
-s1_data    <- match.data(mdm_s1)
-s1_treated <- sum(s1_data$treat_indicator == 1)
-s1_control <- sum(s1_data$treat_indicator == 0)
+s1_treated <- sum(s1_matched_raw$treat_indicator == 1)
+s1_control <- n_distinct(
+  s1_matched_raw$OA[s1_matched_raw$treat_indicator == 0]   # unique controls
+)
 s1_dropped <- sum(oa_data_clean$treat_indicator == 1) - s1_treated
 
 cat("\nStage 1 results:\n")
-cat("  Treated OAs retained:", s1_treated, "\n")
-cat("  Control OAs in pool:", s1_control, "\n")
-cat("  Treated OAs dropped (caliper):", s1_dropped,
+cat("  Treated OAs retained:          ", s1_treated, "\n")
+cat("  Unique control OAs in pool:    ", s1_control, "\n")
+cat("  Treated OAs dropped (caliper): ", s1_dropped,
     sprintf("(%.1f%%)\n", 100 * s1_dropped / sum(oa_data_clean$treat_indicator)))
 
 cat("\nCountry distribution after Stage 1:\n")
-print(table(s1_data$country, s1_data$treat_indicator,
+print(table(s1_matched_raw$country, s1_matched_raw$treat_indicator,
             dnn = c("Country", "Treated")))
 
-# Stage 1 balance — structural variables should be well balanced
+# Stage 1 balance
 cat("\nStage 1 balance (structural variables):\n")
 print(bal.tab(mdm_s1, thresholds = c(m = 0.1), un = TRUE))
 
-# Sensitivity: also run Stage 1 at caliper = 0.75 and 1.25
-mdm_s1_075 <- tryCatch(
-  matchit(s1_formula, data = oa_data_clean, method = "nearest",
-          distance = "mahalanobis", caliper = 0.75, std.caliper = TRUE,
-          ratio = 10, replace = TRUE, exact = ~ country),
-  error = function(e) NULL
-)
-mdm_s1_125 <- tryCatch(
-  matchit(s1_formula, data = oa_data_clean, method = "nearest",
-          distance = "mahalanobis", caliper = 1.25, std.caliper = TRUE,
-          ratio = 10, replace = TRUE, exact = ~ country),
-  error = function(e) NULL
+
+
+dropped_treated <- oa_data_clean %>%
+  filter(treat_indicator == 1 & !(OA %in% s1_matched_raw$OA))
+
+nrow(dropped_treated)
+dropped_treated$OA
+
+
+oa_data_clean$drop_status <- ifelse(oa_data_clean$OA %in% dropped_treated$OA,
+                                    "Dropped", "Retained")
+
+pca_s1 <- prcomp(oa_data_clean[, stage1_vars], scale. = TRUE)
+scores <- as.data.frame(pca_s1$x)
+
+scores$drop_status <- ifelse(
+  oa_data_clean$OA %in% dropped_treated$OA,
+  "Dropped", "Retained"
 )
 
-cat("\nStage 1 caliper sensitivity — treated OAs retained:\n")
-for (obj in list(
-  list(label = "0.75 SD", m = mdm_s1_075),
-  list(label = "1.00 SD (primary)", m = mdm_s1),
-  list(label = "1.25 SD", m = mdm_s1_125)
-)) {
-  if (!is.null(obj$m)) {
-    n <- sum(match.data(obj$m)$treat_indicator == 1)
-    cat(sprintf("  Caliper %-22s: %d treated OAs\n", obj$label, n))
-  }
-}
+df_plot <- data.frame(
+  OA = oa_data_clean$OA,
+  treat_indicator = oa_data_clean$treat_indicator,
+  drop_status = case_when(
+    oa_data_clean$treat_indicator == 1 & oa_data_clean$OA %in% dropped_treated$OA ~ "Treated: Dropped",
+    oa_data_clean$treat_indicator == 1                                             ~ "Treated: Retained",
+    TRUE                                                                           ~ "Control"
+  )
+)
+
+
+scores <- as.data.frame(pca_s1$x)
+scores <- cbind(scores, df_plot)   # safe merge
+
+ggplot(scores, aes(PC1, PC2, colour = drop_status)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c(
+    "Treated: Dropped"  = "red",
+    "Treated: Retained" = "blue",
+    "Control"           = "grey70"
+  )) +
+  theme_minimal() +
+  labs(title = "PCA of Structural Variables (Stage 1)",
+       colour = "OA Type")
+
+
 
 # =============================================================================
-# STEP 4 — STAGE 2: MDM WITH TIGHT CALIPER ON INJURY DYNAMICS
+# STEP 5 — PREPARE STAGE 2 INPUT: DEDUP + WINSORISE
 # =============================================================================
-# Purpose: within the Stage 1 pool, find the closest match on pre-treatment
-# injury trajectories — the direct empirical content of parallel trends.
-#
-# Run at multiple ratios (1:1, 1:2, 1:4) — choose based on diagnostics:
-#   - Pre-trend overlay plot (primary criterion)
-#   - SMD balance on Stage 2 variables
-#   - Number of treated OAs retained after caliper
-#
-# Higher ratio = larger donor pool for C&S = more power, but weaker
-# average match quality on injury trends. The diagnostics tell you
-# where the quality-power tradeoff is acceptable.
+# 
 
-# Winsorise Stage 2 variables within Stage 1 pool
-s2_vars_present <- intersect(stage2_vars, names(s1_data))
+# Deduplicate: one row per OA
+s1_data_s2_raw <- bind_rows(
+  s1_matched_raw %>% filter(treat_indicator == 1),
+  s1_matched_raw %>% filter(treat_indicator == 0) %>%
+    distinct(OA, .keep_all = TRUE)   # remove duplicates from replace=TRUE
+)
 
-s1_data_s2 <- s1_data %>%
+cat("\n=== STAGE 2 INPUT AFTER DEDUP ===\n")
+cat("Treated OAs:", sum(s1_data_s2_raw$treat_indicator == 1), "\n")
+cat("Control OAs:", sum(s1_data_s2_raw$treat_indicator == 0), "\n")
+
+# Winsorise Stage 2 variables based on TREATED distribution only
+s2_vars_present <- intersect(stage2_vars, names(s1_data_s2_raw))
+
+treated_ref <- s1_data_s2_raw %>% filter(treat_indicator == 1)
+
+s1_data_s2 <- s1_data_s2_raw %>%
   mutate(across(
     all_of(s2_vars_present),
     ~ {
-      q <- quantile(., probs = c(0.01, 0.99), na.rm = TRUE)
+      q <- quantile(treated_ref[[cur_column()]], probs = c(0.01, 0.99), na.rm = TRUE)
       pmin(pmax(., q[1]), q[2])
     }
   ))
+
+# =============================================================================
+# STEP 6 — STAGE 2: MDM WITH TIGHT CALIPER ON INJURY DYNAMICS
+# =============================================================================
+# FIX: replace=FALSE throughout — each control OA used at most once per
+# specification to avoid double-counting in C&S estimation.
+# Country exact constraint maintained.
 
 s2_formula <- reformulate(s2_vars_present, response = "treat_indicator")
 
 cat("\n=== STAGE 2: MDM (tight caliper, multiple ratios) ===\n")
 cat("Matching on", length(s2_vars_present), "injury variables\n")
 
-# Helper: run Stage 2 MDM for a given ratio and caliper
-run_s2_mdm <- function(data, formula, ratio, caliper) {
-  tryCatch(
-    matchit(
-      formula,
-      data        = data,
-      method      = "nearest",
-      distance    = "mahalanobis",
-      caliper     = caliper,
-      std.caliper = TRUE,
-      ratio       = ratio,
-      replace     = FALSE,       # without replacement in Stage 2
-      exact       = ~ country    # country constraint maintained
-    ),
-    error = function(e) {
-      cat(sprintf("  MDM ratio=%d caliper=%.2f failed: %s\n",
-                  ratio, caliper, conditionMessage(e)))
-      NULL
-    }
+
+run_s2_mdm_nocal <- function(data, formula, ratio) {
+  matchit(
+    formula,
+    data        = data,
+    method      = "nearest",
+    distance    = "mahalanobis",
+    ratio       = ratio,
+    replace     = FALSE,
+    exact       = ~ country,
+    model       = T
   )
 }
 
-# --- Primary caliper = 0.25 SD, ratios 1:1, 1:2, 1:4 ---
+
+# 
 s2_results <- list(
-  r1_c025 = run_s2_mdm(s1_data_s2, s2_formula, ratio = 1, caliper = 0.25),
-  r2_c025 = run_s2_mdm(s1_data_s2, s2_formula, ratio = 2, caliper = 0.25),
-  r4_c025 = run_s2_mdm(s1_data_s2, s2_formula, ratio = 4, caliper = 0.25),
-  
-  # --- Caliper sensitivity at ratio = 1 ---
-  r1_c020 = run_s2_mdm(s1_data_s2, s2_formula, ratio = 1, caliper = 0.20),
-  r1_c030 = run_s2_mdm(s1_data_s2, s2_formula, ratio = 1, caliper = 0.30)
+  r1 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 1),
+  r2 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 2),
+  r4 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 4)
 )
 
-# --- Ratio/caliper comparison table ---
+summary(s2_results$r1)
+
+##### matching qualtity index 
+
+compute_mdist <- function(m, data, vars) {
+  
+    md <- match.data(m, data = data, weights = "match_weight")
+  
+  # split into treated + each matched control
+  treat <- md %>% filter(treat_indicator == 1)
+  ctrl  <- md %>% filter(treat_indicator == 0)
+  
+  # covariance matrix of variables (treated group)
+  S <- cov(treat[, vars], use = "pairwise.complete.obs")
+  
+  # compute Mahalanobis for each treated-control pair
+  dist_list <- purrr::map_df(unique(treat$subclass), function(sc) {
+    trow  <- treat %>% filter(subclass == sc)
+    crows <- ctrl  %>% filter(subclass == sc)
+    
+    purrr::map_df(1:nrow(crows), function(i) {
+      d <- mahalanobis(
+        x      = as.numeric(crows[i, vars]),
+        center = as.numeric(trow[vars]),
+        cov    = S
+      )
+      tibble(
+        subclass    = sc,
+        treated_OA  = trow$OA,
+        control_OA  = crows$OA[i],
+        mdist       = d
+      )
+    })
+  })
+  
+  return(dist_list)
+}
+
+
+mdist_r1 <- compute_mdist(s2_results$r1, s1_data_s2, s2_vars_present)
+mdist_r2 <- compute_mdist(s2_results$r2, s1_data_s2, s2_vars_present)
+mdist_r4 <- compute_mdist(s2_results$r4, s1_data_s2, s2_vars_present)
+
+
+
+summarise_quality <- function(df) {
+  df %>% summarise(
+    mean_mdist = mean(mdist),
+    median_mdist = median(mdist),
+    p90_mdist = quantile(mdist, 0.90),
+    max_mdist = max(mdist)
+  )
+}
+
+summarise_quality(mdist_r1)
+summarise_quality(mdist_r2)
+summarise_quality(mdist_r4)
+
+### winner: 1:1 matching 
+
+
+
+ggplot(mdist_r1, aes(x = mdist)) +
+  geom_histogram(bins = 40, fill = "steelblue", alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Stage 2 Match Quality (1:1) — Mahalanobis Distances",
+       x = "Mahalanobis distance", y = "Count")
+
+
 cat("\nStage 2 results summary:\n")
-cat(sprintf("  %-25s  %8s  %8s  %8s\n",
-            "Specification", "Treated", "Controls", "Dropped"))
+cat(sprintf("  %-25s  %8s  %8s  %8s\n", "Specification", "Treated", "Controls", "Dropped"))
 cat(strrep("-", 60), "\n")
 
 for (nm in names(s2_results)) {
   m <- s2_results[[nm]]
-  if (!is.null(m)) {
-    md    <- match.data(m)
-    nt    <- sum(md$treat_indicator == 1)
-    nc    <- sum(md$treat_indicator == 0)
-    ndrop <- s1_treated - nt
-    cat(sprintf("  %-25s  %8d  %8d  %8d (%.1f%%)\n",
-                nm, nt, nc, ndrop, 100 * ndrop / s1_treated))
+  
+  if (!inherits(m, "matchit")) {
+    cat(sprintf("%-20s FAILED (not a matchit object)\n", nm))
+    next
   }
+  
+  # ALWAYS reconstruct matched data using match.data
+  md <- tryCatch(
+    match.data(m, data = s1_data_s2, weights = "match_weight"),
+    error = function(e) NULL
+  )
+  
+  if (is.null(md)) {
+    cat(sprintf("%-20s FAILED (match.data could not reconstruct)\n", nm))
+    next
+  }
+  
+  nt <- sum(md$treat_indicator == 1)
+  nc <- sum(md$treat_indicator == 0)
+  ndrop <- s1_treated - nt
+  
+  cat(sprintf("%-20s %8d %8d %8d (%.1f%%)\n",
+              nm, nt, nc, ndrop, 100 * ndrop / s1_treated))
 }
 
+###   1 to 1 is the best option 
 # =============================================================================
-# STEP 5 — BALANCE DIAGNOSTICS AND RATIO SELECTION
+# STEP 7 — BALANCE DIAGNOSTICS AND RATIO SELECTION
 # =============================================================================
-# The right ratio is chosen after examining:
-#   1. Pre-trend overlay plot — do treated and control trajectories track?
-#   2. SMD on Stage 2 injury variables — are trends and levels balanced?
-#   3. Exclusion rate — is the caliper dropping too many treated OAs?
-#
-# Rule: choose the highest ratio at which:
+# Selection rule: choose the highest ratio at which:
 #   - All Stage 2 SMDs remain below 0.10
-#   - Pre-trend trajectories visually overlay
+#   - Pre-trend trajectories visually overlay (on _pkm scale — see plot below)
 #   - Exclusion rate does not exceed ~25% of Stage 1 sample
 
-run_diagnostics <- function(m_obj, label, s1_data, stage2_vars) {
+run_diagnostics <- function(m_obj, label, stage2_vars) {
   if (is.null(m_obj)) return(invisible(NULL))
   
   cat("\n--- Diagnostics:", label, "---\n")
-  md <- match.data(m_obj)
+  md <- match.data(m_obj, data = s1_data_s2, weights = "match_weight")
   
   # SMD balance
-  bt <- bal.tab(m_obj, thresholds = c(m = 0.1, v = 2), un = TRUE)
+  bt        <- bal.tab(m_obj, thresholds = c(m = 0.1, v = 2), un = TRUE)
   smd_after <- abs(bt$Balance$Diff.Adj)
-  cat("  Variables with |SMD| < 0.10:",
-      sum(smd_after < 0.1, na.rm = TRUE), "/", length(smd_after), "\n")
-  cat("  Max |SMD|:", round(max(smd_after, na.rm = TRUE), 3), "\n")
+  cat("  Variables with |SMD| < 0.10:", sum(smd_after < 0.1, na.rm = TRUE),
+      "/", length(smd_after), "\n")
+  cat("  Max |SMD|:",  round(max(smd_after,  na.rm = TRUE), 3), "\n")
   cat("  Mean |SMD|:", round(mean(smd_after, na.rm = TRUE), 3), "\n")
   
-  # Cross-country check
+  # Cross-country check — must be zero
   cross <- md %>%
     group_by(subclass) %>%
     summarise(n_countries = n_distinct(country), .groups = "drop") %>%
@@ -437,26 +574,85 @@ run_diagnostics <- function(m_obj, label, s1_data, stage2_vars) {
     colors       = c("#E74C3C", "#2ECC71"),
     sample.names = c("Before matching", "After matching")
   )
-  fname <- paste0("balance_", gsub("[^a-zA-Z0-9]", "_", label), ".png")
+  fname <- here("output", paste0("balance_", gsub("[^a-zA-Z0-9]", "_", label), ".png"))
   ggsave(fname, lp, width = 10, height = 8)
   cat("  Love plot saved:", fname, "\n")
   
   invisible(bt)
 }
 
-# Run diagnostics for each Stage 2 specification
 for (nm in names(s2_results)) {
-  run_diagnostics(s2_results[[nm]], nm, s1_data_s2, s2_vars_present)
+  run_diagnostics(s2_results[[nm]], nm, s2_vars_present)
 }
 
-# =============================================================================
-# STEP 6 — SELECT PRIMARY SPECIFICATION AND EXTRACT MATCHED OAs
-# =============================================================================
-# Set primary_spec to whichever ratio/caliper performed best in Step 5.
-# Default: ratio = 1, caliper = 0.25 (most conservative starting point).
-# Change after inspecting diagnostics.
+# --- Pre-trend overlay plot (on _pkm scale — consistent with Stage 2 vars) ---
+# FIX: previous version plotted raw counts per OA; now plots per road-km rates
+# to match the scale on which Stage 2 matching was done.
 
-primary_spec <- "r1_c025"   # <-- UPDATE after reviewing Step 5 diagnostics
+plot_pretrend <- function(m_obj, label, inj_pre, road_lengths) {
+  if (is.null(m_obj)) return(invisible(NULL))
+  
+  md        <- match.data(m_obj)
+  oas_in    <- md$OA
+  
+  trend_pkm <- inj_pre %>%
+    filter(OA %in% oas_in) %>%
+    left_join(road_lengths %>% select(OA, road_length_km), by = "OA") %>%
+    mutate(
+      total_pkm = if_else(
+        !is.na(road_length_km) & road_length_km > 0,
+        total_injuries / road_length_km,
+        NA_real_
+      ),
+      group = case_when(
+        treated_OA        == 1 ~ "Treated",
+        control_group2_OA == 1 ~ "Control",
+        TRUE                   ~ NA_character_
+      )
+    ) %>%
+    filter(!is.na(group), !is.na(total_pkm)) %>%
+    group_by(group, quarter_year) %>%
+    summarise(mean_pkm = mean(total_pkm, na.rm = TRUE), .groups = "drop")
+  
+  p <- ggplot(trend_pkm, aes(x = quarter_year, y = mean_pkm, colour = group)) +
+    geom_line() +
+    geom_point(size = 1) +
+    labs(
+      title    = paste("Pre-treatment parallel trends —", label),
+      subtitle = "Mean total casualties per road-km (matched OAs only)",
+      x        = "Quarter",
+      y        = "Mean casualties per road-km",
+      colour   = NULL
+    ) +
+    theme_minimal()
+  
+  fname <- here("output", paste0("pretrend_", gsub("[^a-zA-Z0-9]", "_", label), ".png"))
+  ggsave(fname, p, width = 10, height = 6)
+  cat("  Pre-trend plot saved:", fname, "\n")
+  invisible(p)
+}
+
+# Run pre-trend plots for each specification
+# Requires inj_pre and road_lengths objects from the matching dataset script
+# inj_pre       <- readRDS(here("data", "processed", "inj_pre.rds"))
+# road_lengths  <- readRDS(here("data", "processed", "road_lengths.rds"))
+# Uncomment above and run plots once those objects are available:
+# for (nm in names(s2_results)) {
+#   plot_pretrend(s2_results[[nm]], nm, inj_pre, road_lengths)
+# }
+
+
+
+
+
+
+# =============================================================================
+# STEP 8 — SELECT PRIMARY SPECIFICATION AND EXTRACT MATCHED OAs
+# =============================================================================
+# Update primary_spec after reviewing Step 7 diagnostics.
+# Default: r1_c025 (most conservative).
+
+primary_spec <- "r1_c025"   # <-- UPDATE after reviewing Step 7 diagnostics
 
 mdm_primary <- s2_results[[primary_spec]]
 
@@ -465,23 +661,44 @@ if (is.null(mdm_primary)) stop("Primary specification failed — choose alternat
 cat("\n=== PRIMARY SPECIFICATION:", primary_spec, "===\n")
 primary_data <- match.data(mdm_primary)
 
-matched_control_oas <- primary_data %>%
-  filter(treat_indicator == 0) %>%
-  dplyr::select(OA, weights, subclass)
-
 matched_treated_oas <- primary_data %>%
   filter(treat_indicator == 1) %>%
+  dplyr::select(OA, weights, subclass)
+
+matched_control_oas <- primary_data %>%
+  filter(treat_indicator == 0) %>%
   dplyr::select(OA, weights, subclass)
 
 cat("Matched treated OAs:", nrow(matched_treated_oas), "\n")
 cat("Matched control OAs:", nrow(matched_control_oas), "\n")
 
+# Cross-country final check — must be zero
+final_cross <- primary_data %>%
+  group_by(subclass) %>%
+  summarise(n_countries = n_distinct(country), .groups = "drop") %>%
+  filter(n_countries > 1)
+cat("Cross-country pairs in primary specification:", nrow(final_cross),
+    if (nrow(final_cross) == 0) "✓" else "WARNING", "\n")
+
+
+
+
+
 saveRDS(matched_control_oas, here("data", "processed", "OA_matched_donors.rds"))
 saveRDS(matched_treated_oas, here("data", "processed", "OA_matched_treated.rds"))
 
 # =============================================================================
-# STEP 7 — BUILD RESTRICTED ROAD-LINK PANEL
+# STEP 9 — BUILD RESTRICTED ROAD-LINK PANEL
 # =============================================================================
+# FIX: road_link_panel now loaded at top of script.
+# Verify required columns exist before filtering.
+
+required_cols <- c("road_link_id", "OA", "quarter_num", "cohort_g",
+                   "treated_link", "buffer_OA")
+missing_cols  <- setdiff(required_cols, names(road_link_panel))
+if (length(missing_cols) > 0) {
+  stop("road_link_panel missing required columns: ", paste(missing_cols, collapse = ", "))
+}
 
 road_link_panel_restricted <- road_link_panel %>%
   filter(
@@ -500,16 +717,22 @@ road_link_panel_restricted <- road_link_panel %>%
   )
 
 cat("\nRoad links in restricted panel:", nrow(road_link_panel_restricted), "\n")
-cat("Unique OAs in panel:", n_distinct(road_link_panel_restricted$OA), "\n")
+cat("Unique OAs in panel:",            n_distinct(road_link_panel_restricted$OA), "\n")
+
+# Verify cohort_g and road_link_id are present — required for C&S
+# cohort_g     = first treated quarter for each road_link (0 = never treated)
+# road_link_id = unique integer ID per road link
+# If not present, construct here:
+# road_link_panel_restricted <- road_link_panel_restricted %>%
+#   mutate(road_link_id = as.integer(factor(road_link_identifier)))
+# cohort lookup: join from a treatment timing table if not already in panel
+
+stopifnot("cohort_g" %in% names(road_link_panel_restricted))
+stopifnot("road_link_id" %in% names(road_link_panel_restricted))
 
 # =============================================================================
-# STEP 8 — CALLAWAY & SANT'ANNA ESTIMATION
+# STEP 10 — CALLAWAY & SANT'ANNA ESTIMATION
 # =============================================================================
-# Scheme-specific ATTs come from the group aggregation here —
-# not from the matching step. The pooled donor pool does not
-# preclude individual CAZ effect estimates.
-
-library(did)
 
 outcomes <- c("KSI_adj", "Slight_adj")
 modes    <- c("All", "Pedestrian", "Car.Van", "Cyclist", "Other")
@@ -520,10 +743,8 @@ run_cs <- function(yvar, data) {
     tname         = "quarter_num",
     idname        = "road_link_id",
     gname         = "cohort_g",
-    
     xformla       = ~ road_density_m_km2 + pct_A_road + pct_minor_road +
       road_length_km + dist_citycentre + IMD + cars_none_pct,
-    
     est_method    = "dr",
     control_group = "notyettreated",
     clustervars   = "OA",
@@ -555,34 +776,25 @@ cs_agg <- lapply(cs_results, function(res) {
   )
 })
 
+saveRDS(cs_results, here("data", "processed", "cs_results.rds"))
+saveRDS(cs_agg,     here("data", "processed", "cs_aggregations.rds"))
+
 # =============================================================================
-# STEP 9 — SENSITIVITY CHECKS
+# STEP 11 — SENSITIVITY CHECKS
 # =============================================================================
 
-# 9a. Stage 2 ratio sensitivity
-#   Already run in Step 4 — compare diagnostics across r1/r2/r4
-
-# 9b. Stage 1 caliper sensitivity
-#   Already run in Step 3 — compare sample sizes at 0.75/1.00/1.25 SD
-
-# 9c. Stage 2 tight caliper sensitivity
-#   Already run in Step 4 — compare 0.20/0.25/0.30 SD at ratio = 1
-
-# 9d. Zero-injury OA sensitivity
-#   Re-run full pipeline without zero_injury_OA == 0 filter in Step 0
-
-# 9e. Control group sensitivity
-#   Re-run C&S with control_group = "nevertreated"
-
-# 9f. Treatment definition sensitivity
-#   Primary: treated_50pct; sensitivity: treated_any
-
-# 9g. HonestDiD pre-trend sensitivity (Rambachan & Roth 2023)
+# 11a. Stage 2 ratio sensitivity — compare r1/r2/r4 diagnostics (Step 7)
+# 11b. Stage 1 caliper sensitivity — 0.75/1.00/1.25 SD (Step 4)
+# 11c. Stage 2 caliper sensitivity — 0.20/0.25/0.30 SD (Step 6)
+# 11d. Zero-injury OA sensitivity — re-run without zero_injury_OA == 0 filter
+# 11e. Control group: re-run C&S with control_group = "nevertreated"
+# 11f. Treatment definition: sensitivity using treated_any instead of treated_50pct
+# 11g. HonestDiD pre-trend sensitivity (Rambachan & Roth 2023)
 # library(HonestDiD)
-# Apply to each dynamic aggregation
+# Apply to each dynamic aggregation from cs_agg
 
 # =============================================================================
-# STEP 10 — PUBLICATION-READY BALANCE REPORT
+# STEP 12 — PUBLICATION-READY BALANCE REPORT
 # =============================================================================
 
 if (!is.null(mdm_primary)) {

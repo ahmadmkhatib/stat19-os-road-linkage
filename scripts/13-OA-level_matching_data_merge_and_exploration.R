@@ -10,9 +10,27 @@ library(sf)
 # ------------------------------------------------------------
 # Load data
 # ------------------------------------------------------------
-
+### census OA data 
 OA_char_raw <- read.csv(here("data","processed","outputArea_raw.csv"))
 OA_char_percent <- read.csv(here("data","processed","outputArea_percent.csv"))
+
+
+### business  OA data 
+OA__EW_businesses <- read.csv(here("data","processed","OA_EW_businesses.csv"))
+OA__scot_businesses<- read.csv(here("data","processed","OA_Sco_businesses.csv"))
+
+
+OA_EW_businesses_clean <- OA__EW_businesses %>%
+  rename(OA = OA21CD)
+OA_Sco_businesses_clean <- OA__scot_businesses %>%
+  rename(OA = OA22) 
+
+# Combine datasets
+OA_businesses <- bind_rows(
+  OA_EW_businesses_clean,
+  OA_Sco_businesses_clean
+)
+
 
 OA_matching_dataset <- readRDS(
   here("data","processed","OA_matching_dataset.rds")
@@ -46,6 +64,35 @@ cat("OA_char_raw dups:",
 
 cat("OA_char_percent dups:",
     OA_char_percent %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
+cat("OA__EW_businesses dups:",
+    OA__EW_businesses %>% count(OA21CD) %>% filter(n > 1) %>% nrow(), "\n")
+
+OA_businesses %>% count(OA) %>% filter(n > 1)%>% nrow()
+
+
+OA_businesses %>% 
+  count(OA, sort = TRUE)
+
+OA_businesses %>% 
+  filter(OA %in% (OA_businesses %>% count(OA) %>% filter(n > 1) %>% pull(OA))) %>%
+  head(20)
+
+OA_businesses <- OA_businesses %>% distinct()
+
+OA_businesses %>% 
+  count(OA) %>% 
+  filter(n > 1)
+
+### still 4 duplicates 
+OA_businesses <- OA_businesses %>%
+  group_by(OA) %>%
+  summarise(
+    business_retail_per_km2 = sum(business_retail_per_km2, na.rm = TRUE),
+    business_accommodation_food_per_km2 = sum(business_accommodation_food_per_km2, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
 
 # ------------------------------------------------------------
 # Rename census variables
@@ -77,6 +124,13 @@ OA_census <- OA_char_raw_renamed %>%
 
 OA_matching_census <- OA_matching_dataset %>%
   left_join(OA_census, by="OA")
+
+
+#'### ------- add busnesses 
+OA_matching_census <- OA_matching_dataset %>%
+left_join(OA_census, by = "OA") %>%
+  left_join(OA_businesses, by = "OA")
+
 
 # ------------------------------------------------------------
 # Add OA area + population density
@@ -136,13 +190,4 @@ st_write(
   delete_dsn = TRUE
 )
 
-cat("Saved: OA_matching_census.rds and OA_matching_census.gpkg\n")
 
-# ------------------------------------------------------------
-# Quick visual check
-# ------------------------------------------------------------
-
-OA_matching_census_sf %>%
-  ggplot() +
-  geom_sf(aes(fill = treated_OA), colour = NA) +
-  theme_minimal()

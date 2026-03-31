@@ -30,33 +30,40 @@ caz <- st_read(
   st_transform(st_crs(oa)) %>%
   st_make_valid()
 
+st_crs(caz)
 #============================================================
 # 2. Keep OAs within study LADs
 #============================================================
 
+##  keeping the LAD with the largest overlap
 oa_sub <- st_join(
   oa,
-  lads_sub %>% select(LAD24CD, LAD24NM),
-  join = st_within
+  lads_sub %>% dplyr::select(LAD24CD, LAD24NM),
+  join = st_intersects,
+  largest = TRUE          # keeps only the LAD with greatest overlap area
 ) %>%
   filter(!is.na(LAD24CD))
 
+
+
+st_crs(oa_sub)$epsg
+st_crs(caz)$epsg
 #============================================================
-# 3. Calculate OA area
+# Calculate OA area
 #============================================================
 
 oa_area <- oa_sub %>%
   mutate(total_area = st_area(geometry)) %>%
   st_drop_geometry() %>%
-  select(OA, total_area)
+  dplyr:: select(OA, total_area)
 
 #============================================================
-# 4. OA proportion inside CAZ
+#  OA proportion inside CAZ
 #============================================================
-
+stopifnot(st_crs(oa_sub) == st_crs(caz))
 oa_caz_intersection <- st_intersection(
-  oa_sub %>% select(OA),
-  caz %>% select(scheme)
+  oa_sub %>% dplyr:: select(OA),
+  caz %>% dplyr::select(scheme)
 ) %>%
   mutate(int_area = st_area(geometry)) %>%
   st_drop_geometry()
@@ -67,16 +74,15 @@ oa_caz_prop <- oa_caz_intersection %>%
 
 treated_OAs <- oa_caz_prop %>%
   filter(prop_caz >= 0.5) %>%
-  select(OA, scheme)
+dplyr::  select(OA, scheme)
 #============================================================
-# 5. Create 1km CAZ buffer
+# Create 1km CAZ buffer
 #============================================================
-
 caz_buffer <- st_buffer(caz,1000) %>%
   st_difference(caz)
 
 oa_buffer_intersection <- st_intersection(
-  oa_sub %>% select(OA),
+  oa_sub %>%dplyr::  select(OA),
   caz_buffer
 ) %>%
   mutate(int_area = st_area(geometry)) %>%
@@ -91,7 +97,7 @@ buffer_OAs <- oa_buffer_prop %>%
   pull(OA)
 
 #============================================================
-# 6. Identify CAZ LADs
+# Identify CAZ LADs
 #============================================================
 
 treated_LADs <- oa_sub %>%
@@ -101,7 +107,7 @@ treated_LADs <- oa_sub %>%
 
 View(treated_LADs)
 #============================================================
-# 7. Distance to city centre
+# Distance to city centre
 #============================================================
 
 city_centroids <- oa_sub %>%
@@ -120,15 +126,26 @@ dist_citycentre <- st_distance(
   as.numeric()
 
 #============================================================
-# 8. OA classification
+# OA classification
 #============================================================
+#dups
+oa_sub %>% st_drop_geometry() %>% count(OA) %>% filter(n > 1) %>% nrow()
+
+
+OA_analysis %>% count(OA) %>% filter(n > 1) %>% nrow()
+
+# Are all oa_sub OAs actually in OA_analysis?
+anti_join(
+  oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),
+  OA_analysis, by = "OA"
+) %>% nrow()
+
 
 OA_analysis <- oa_sub %>%
   st_drop_geometry() %>%
-  select(OA, LAD24CD, LAD24NM) %>%
+  dplyr::select(OA, LAD24CD, LAD24NM) %>%
   mutate(
-    
-    treated_OA = if_else(OA %in% treated_OAs$OA,1,0),
+        treated_OA = if_else(OA %in% treated_OAs$OA,1,0),
     
     buffer_OA = if_else(
       OA %in% buffer_OAs &
@@ -154,13 +171,12 @@ OA_analysis <- oa_sub %>%
 OA_analysis$dist_citycentre <- dist_citycentre
 
 
-OA_analysis %>%  select(dist_citycentre) %>%   summary()
+OA_analysis %>%  dplyr:: select(dist_citycentre) %>%   summary()
 table(OA_analysis$treated_OA)
 
-OA_analysis  %>% filter(treated_OA==1)%>% select(dist_citycentre) %>%   summary()
+OA_analysis  %>% filter(treated_OA==1)%>% dplyr::select(dist_citycentre) %>%   summary()
 
 ## # is this resonable 10K 
-
 
 
 OA_analysis <- OA_analysis %>%
@@ -198,10 +214,8 @@ OA_analysis %>%
 
 
 #============================================================
-# 10. Save outputs
+#save
 #============================================================
-View(OA_analysis)
-
 saveRDS(
   OA_analysis,
   here("data","processed","OA_level_from_polygons.rds")
@@ -215,5 +229,5 @@ st_write(
 
 
 
-oa_sub<-st_read (here("data","processed","shp_files","OA_subset.shp"))
+#### oa_sub<-st_read (here("data","processed","shp_files","OA_subset.shp"))
 

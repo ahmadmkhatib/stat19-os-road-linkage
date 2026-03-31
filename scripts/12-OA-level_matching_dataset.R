@@ -1,5 +1,5 @@
 # ============================================================
-# Create OA-Level Matching Dataset for Synthetic Control Analysis
+# Create OA-Level Matching Dataset for Controls pool for the DiD Analysis
 # ============================================================
 # This script prepares a dataset of Output Areas (OAs) for use in
 # constructing synthetic control units in the CAZ evaluation.
@@ -52,7 +52,7 @@ library(sf)
 # ── Load data ─────────────────────────────────────────────────────────────────
 
 OA_analysis <- readRDS(
-  here("data", "processed", "OA_level_from_polygons.rds")
+  here("data", "processed", "OA_level_from_polygons.rds")             # from 8 
 )
 
 # Deduplicate OA_analysis — keep first row per OA (alphabetical scheme order)
@@ -68,6 +68,8 @@ OA_roads <- readRDS(
   here("data", "processed", "OA_roads.rds")
 )
 glimpse(OA_roads)
+
+
 
 OA_injuries <- readRDS(
   here("data", "processed", "OA_injuries_quarterly.rds")
@@ -97,22 +99,109 @@ caz_dates <- caz %>%
   )
 print(caz_dates)
 
-# ── Clean OA_roads — keep only road-specific columns to avoid join collisions ─
+# ── Clean OA_roads — keep only road-specific columns 
+
+OA_roads %>% count(OA) %>% filter(n > 1) %>% nrow()
+# and
+OA_roads %>% count(OA) %>% summarise(max(n), median(n))
+
+
+# OA_roads has 69,318 — only OAs that have at least one road
+# OA_roads_clean right_joins to oa_sub to recover the 1,752 road-free OAs
 
 OA_roads_clean <- OA_roads %>%
-  select(OA, n_roads, total_road_length, n_A, n_B, n_motorway, n_minor)
+  group_by(OA) %>%
+  summarise(
+    n_roads           = sum(n_roads, na.rm = TRUE),
+    total_road_length = sum(total_road_length, na.rm = TRUE),
+    n_A               = sum(n_A, na.rm = TRUE),
+    n_B               = sum(n_B, na.rm = TRUE),
+    n_motorway        = sum(n_motorway, na.rm = TRUE),
+    n_minor           = sum(n_minor, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  right_join(
+    oa_sub %>% st_drop_geometry() %>% select(OA),
+    by = "OA"
+  ) %>%
+  mutate(across(
+    c(n_roads, total_road_length, n_A, n_B, n_motorway, n_minor),
+    ~ replace_na(.x, 0)
+  ))
 
+
+nrow(OA_roads_clean)                                          # must be 71,070
+OA_roads_clean %>% count(OA) %>% filter(n > 1) %>% nrow()    # must be 0
+n_distinct(OA_roads_clean %>% filter(n_roads == 0) %>% pull(OA))  # should be 1,752
+
+anti_join(
+  oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),
+  OA_roads_clean,
+  by = "OA"
+) %>% nrow()
+
+
+no_road_oas <- OA_roads %>%
+  filter(n_roads == 0) %>%
+  pull(OA)
+nrow(no_road_oas)
+n_distinct(no_road_oas)  # 
+
+has_injuries_no_roads <- OA_injuries %>%
+  filter(OA %in% no_road_oas) %>%
+  distinct(OA)
+nrow(has_injuries_no_roads)
+ 
+## are these genuinly no roads OAs ??
+ OA_roads_clean %>%
+   filter(n_roads == 0) %>%
+   summarise(
+     min_len = min(total_road_length),
+     max_len = max(total_road_length),
+     mean_len = mean(total_road_length)
+   )
+ 
 # ── Build scheme/treatment lookup ─────────────────────────────────────────────
 
-oa_scheme_lookup <- OA_analysis %>%
-  select(OA, scheme, treated_OA, control_group2_OA) %>%
-  left_join(caz_dates, by = "scheme")
+ oa_scheme_lookup <- OA_analysis %>%
+   arrange(OA, scheme) %>%
+   distinct(OA, .keep_all = TRUE) %>%   # 
+   dplyr::select(OA, scheme, treated_OA, control_group2_OA) %>%
+   left_join(caz_dates, by = "scheme")
+ 
+ # V
+ oa_scheme_lookup %>% count(OA) %>% filter(n > 1) %>% nrow()
+ 
+ 
+ 
+
+# How many injuries do these 95 OAs actually have?
+OA_injuries %>%
+  filter(OA %in% no_road_oas) %>%
+  summarise(
+    n_OAs        = n_distinct(OA),
+    total_inj    = sum(total_injuries, na.rm = TRUE),
+    mean_inj     = mean(total_injuries, na.rm = TRUE)
+  )
+
+# Are they concentrated in treated/buffer areas?
+OA_roads_clean %>%
+  filter(n_roads == 0) %>%
+  left_join(OA_analysis %>% select(OA, assignment), by = "OA") %>%
+  count(assignment)
+
+
+nrow(oa_sub)           
+nrow(OA_roads_clean)   
+
+
 
 # ── Attach treatment info to injury panel ────────────────────────────────────
 # Note: OA_injuries only has rows where injuries > 0 at this stage
 
 OA_injuries <- OA_injuries %>%
   left_join(oa_scheme_lookup, by = "OA")
+
 
 # ── Build balanced panel — fill zero-injury OA-quarters explicitly ────────────
 # OA_injuries contains only quarters with at least one injury.
@@ -121,7 +210,7 @@ OA_injuries <- OA_injuries %>%
 #   (b) trend slopes are estimated over actual calendar time, not just
 #       quarters where something happened
 
-all_oas      <- oa_scheme_lookup %>% select(OA)   # all OAs, not just injured
+all_oas      <- oa_scheme_lookup %>%dplyr:: select(OA)   # all OAs, not just injured
 all_quarters <- OA_injuries %>% distinct(quarter_year)
 
 OA_injuries_balanced <- all_oas %>%
@@ -134,7 +223,7 @@ OA_injuries_balanced <- all_oas %>%
     ~ replace_na(.x, 0)
   )) %>%
   # scheme/treatment info dropped by cross_join — re-attach
-  select(-any_of(c("scheme", "treated_OA", "control_group2_OA", "caz_start_date"))) %>%
+dplyr::   select(-any_of(c("scheme", "treated_OA", "control_group2_OA", "caz_start_date"))) %>%
   left_join(oa_scheme_lookup, by = "OA")
 
 # Verify balance
@@ -174,7 +263,7 @@ inj_pre <- OA_injuries_balanced %>%
 # ── Road lengths lookup ───────────────────────────────────────────────────────
 
 road_lengths <- OA_roads_clean %>%
-  select(OA, total_road_length) %>%
+ dplyr:: select(OA, total_road_length) %>%
   mutate(
     road_length_km = if_else(
       is.na(total_road_length) | total_road_length == 0,
@@ -268,7 +357,7 @@ inj_per_km <- inj_baseline %>%
     mean_ped_slight_pkm = mean_ped_slight / road_length_km,
     mean_total_pkm      = mean_total      / road_length_km
   ) %>%
-  select(OA, ends_with("_pkm"))
+dplyr::  select(OA, ends_with("_pkm"))
 
 # ── Per-km trend slopes — quasi-Poisson GLM with offset ──────────────────────
 
@@ -320,7 +409,7 @@ road_composition <- OA_roads_clean %>%
       !is.na(area_km2) & area_km2 > 0,
       total_road_length / area_km2, NA_real_)
   ) %>%
-  select(OA, pct_A_road, pct_B_road, pct_minor_road, road_density_m_km2)
+dplyr::  select(OA, pct_A_road, pct_B_road, pct_minor_road, road_density_m_km2)
 
 # ── Assemble OA matching dataset ─────────────────────────────────────────────
 # OA_analysis is the base — all other tables are one-row-per-OA so no
@@ -328,6 +417,8 @@ road_composition <- OA_roads_clean %>%
 # already in OA_analysis to prevent .x/.y suffix collisions.
 
 OA_matching_dataset <- OA_analysis %>%
+  arrange(OA, scheme) %>%
+  distinct(OA, .keep_all = TRUE) %>%   # ← add this
   left_join(OA_roads_clean,   by = "OA") %>%
   left_join(inj_baseline,     by = "OA") %>%
   left_join(inj_trends,       by = "OA") %>%
@@ -453,6 +544,13 @@ missing_oas <- anti_join(
   OA_injuries %>% select(OA),
   by = "OA"
 )
+nrow(missing_oas)
+## flag no injuries OAs
+OA_matching_dataset <- OA_matching_dataset %>%
+  mutate(zero_injury_OA = if_else(
+    OA %in% (missing_oas %>% pull(OA)), 1L, 0L
+  ))
+
 cat("OAs never in OA_injuries:", nrow(missing_oas), "\n")
 missing_oas %>%
   left_join(oa_scheme_lookup, by = "OA") %>%

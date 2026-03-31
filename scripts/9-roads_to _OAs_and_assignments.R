@@ -41,12 +41,12 @@ if (st_crs(roads) != st_crs(oa_sub)) {
 }
 
 # ============================================================
-# 3 Intersect Roads with OAs
+#  Intersect Roads with OAs
 # ============================================================
 
 roads_oa <- st_intersection(
   roads,
-  oa_sub %>% select(OA)
+  oa_sub %>%dplyr::  select(OA)
 )
 
 # length of road segment inside OA
@@ -56,7 +56,7 @@ roads_oa <- roads_oa %>%
   )
 
 # ============================================================
-# 4 Assign each road to ONE OA (largest overlap)
+#  Assign each road to ONE OA (largest overlap)
 # ============================================================
 
 roads_oa <- roads_oa %>%
@@ -65,21 +65,28 @@ roads_oa <- roads_oa %>%
   ungroup()
 
 # ============================================================
-# 5 Attach OA treatment classification
+#Attach OA treatment classification
 # ============================================================
 
 road_attributes_OA <- roads_oa %>%
   left_join(
     OA_analysis %>%
-      select(OA, assignment),
+    dplyr::  select(OA, assignment,scheme),
     by = "OA"
   )
 
-glimpse(OA_analysis)
+
+n_distinct(roads$identifier)
+n_distinct(road_attributes_OA$identifier)
+
+missing_roads <- roads %>%
+  filter(!identifier %in% road_attributes_OA$identifier)
+
+nrow(missing_roads)
+
 # ============================================================
-# 6 Save road-level dataset
+# road-level dataset
 # ============================================================
-road_attributes_OA<-st_read(here("data","processed","road_attributes_OA.gpkg"))
 
 st_write(
   road_attributes_OA,
@@ -88,31 +95,52 @@ st_write(
 )
 
 # ============================================================
-# 7 Aggregate road characteristics to OA
+# Aggregate road characteristics to OA
 # ============================================================
+# ── Keep full intersection (one row per road-OA pair) ─────────────────────
+## Each OA gets credit for every road that touches it
 
-OA_roads <- road_attributes_OA %>%
+OA_roads <- roads_oa %>%          # 
   st_drop_geometry() %>%
   group_by(OA) %>%
   summarise(
-    scheme = first(na.omit(scheme)),   # scheme affecting that OA
-    n_roads = n(),
-    total_road_length = sum(as.numeric(int_length)),
-    n_A = sum(road_class == "A"),
-    n_B = sum(road_class == "B"),
-    n_motorway = sum(road_class == "Motorway"),
-    n_minor = sum(road_class == "minor"),
+    n_roads           = n_distinct(identifier),
+    total_road_length = sum(as.numeric(int_length), na.rm = TRUE),
+    n_A               = sum(road_class == "A",        na.rm = TRUE),
+    n_B               = sum(road_class == "B",        na.rm = TRUE),
+    n_motorway        = sum(road_class == "Motorway", na.rm = TRUE),
+    n_minor           = sum(road_class == "minor",    na.rm = TRUE),
     .groups = "drop"
+  )
+
+# ── One-OA-per-road assignment (largest overlap) ──────────────────────────
+# Use this only where you need a single OA label per road
+# e.g. road-level analysis, attribution of crashes to OA
+
+road_attributes_OA <- roads_oa %>%
+  group_by(identifier) %>%
+  slice_max(int_length, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  left_join(
+    OA_analysis %>%
+      arrange(OA, scheme) %>%
+      distinct(OA, .keep_all = TRUE) %>%   # deduplicate here
+      select(OA, assignment, scheme),
+    by = "OA"
   )
 
 # attach OA classification
 OA_roads <- OA_roads %>%
-  left_join(OA_analysis, by = "OA")
-
-
-
+  left_join(
+    OA_analysis %>%
+      arrange(OA, scheme) %>%
+      distinct(OA, .keep_all = TRUE),  # one row per OA
+    by = "OA"
+  )
 
 glimpse(OA_roads)
+OA_roads %>% count(OA) %>% filter(n > 1) %>% nrow()  # must be 0
+nrow(OA_roads)  # should be <= nrow(oa_sub) = 71,070
 
 OA_missing_roads <- OA_analysis %>%
   filter(!OA %in% OA_roads$OA)
