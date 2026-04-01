@@ -55,7 +55,9 @@ OA_analysis <- readRDS(
   here("data", "processed", "OA_level_from_polygons.rds")             # from 8 
 )
 
-# Deduplicate OA_analysis — keep first row per OA (alphabetical scheme order)
+table(OA_analysis$assignment)
+
+# Deduplicate OA_analysis — keep first row per OA 
 OA_analysis <- OA_analysis %>%
   arrange(OA, scheme) %>%
   distinct(OA, .keep_all = TRUE)

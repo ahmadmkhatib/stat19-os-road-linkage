@@ -6,7 +6,7 @@
 #
 # DESIGN RATIONALE:
 #
-#   Stage 1 — Structural restriction (MDM, wide caliper)
+#   Stage 1 — Structural restriction (MDM)
 #     Removes OAs that are too structurally dissimilar to be plausible
 #     comparators, before any injury outcome data are examined.
 #     Uses road network, urban form, and sociodemographic variables.
@@ -15,14 +15,8 @@
 #     distribution of treated OAs is not a valid comparator regardless
 #     of its injury trends.
 #
-#     WHY MDM NOT CEM AT STAGE 1:
-#     CEM with 20 variables produces 3^20 possible cells — almost every
-#     treated OA ends up alone in its cell and is dropped. MDM with a
-#     wide caliper achieves the same structural filtering without the
-#     cell-sparsity problem. The caliper still enforces a hard exclusion:
-#     any control OA beyond 1.0 SD is dropped entirely, not penalised.
-#
-#   Stage 2 — Outcome matching (MDM, tight caliper)
+#     
+#   Stage 2 — Outcome matching (MDM)
 #     Within the Stage 1 restricted pool, finds the closest match on
 #     pre-treatment injury dynamics — trends and levels by mode and severity.
 #     These variables are the direct empirical content of the parallel
@@ -48,13 +42,7 @@
 #   A pooled donor pool after Stage 1 is an advantage: more structurally
 #   comparable OAs available for Stage 2 MDM.
 #
-# FIXES APPLIED vs PREVIOUS VERSION:
-#   1. Stage 1 replace=TRUE output deduplicated before feeding Stage 2
-#   2. Zero-road OA filter added to pre-matching exclusions
-#   3. Stage 2 winsorisation based on treated distribution only
-#   4. road_link_panel load added at top of script
-#   5. cohort_g and road_link_id construction documented before C&S step
-#   6. Pre-trend diagnostic plot uses _pkm scale consistent with Stage 2 vars
+# 
 # =============================================================================
 
 library(MatchIt)
@@ -63,7 +51,6 @@ library(ggplot2)
 library(here)
 library(MASS)
 library(tidyverse)
-library(did)
 library(sf)
 
 # =============================================================================
@@ -75,14 +62,6 @@ OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds
 # Road-link panel for C&S estimation — must contain:
 #   road_link_id, OA, quarter_num, cohort_g, treated_link, buffer_OA,
 #   outcome columns (KSI_adj, Slight_adj etc.)
-road_link_panel <- readRDS(here("data", "processed", "road_link_panel.rds"))
-
-oa_sub <- st_read(
-  here("data", "processed", "shp_files", "OA_subset.shp"),
-  quiet = TRUE
-) %>%
-  st_transform(27700) %>%
-  st_make_valid()
 
 # =============================================================================
 #   CHECKS  
@@ -262,15 +241,14 @@ stage2_vars <- drop_low_var(oa_data_clean, stage2_vars)
 ## Country enforced as hard exact constraint.
 # replace = TRUE with ratio = 10 maximises the pool passed to Stage 2.
 #
-# IMPORTANT: match.data() with replace=TRUE returns duplicate control rows.
-# These are deduplicated before being passed to Stage 2 — see Step 5.
+
 
 ###standardisation 
 
 
 s1_formula <- reformulate(stage1_vars, response = "treat_indicator")
 
-c
+
 # structural variables (road + urban form only)
 stage1_structural <- c(stage1_road, stage1_urban)
 
@@ -371,11 +349,14 @@ ggplot(scores, aes(PC1, PC2, colour = drop_status)) +
 # 
 
 # Deduplicate: one row per OA
+# Step 5 — after dedup, before winsorising
 s1_data_s2_raw <- bind_rows(
   s1_matched_raw %>% filter(treat_indicator == 1),
   s1_matched_raw %>% filter(treat_indicator == 0) %>%
-    distinct(OA, .keep_all = TRUE)   # remove duplicates from replace=TRUE
-)
+    distinct(OA, .keep_all = TRUE)
+) %>%
+  select(-any_of(c("weights", "subclass", "distance")))  # drop Stage 1 matchit columns
+
 
 cat("\n=== STAGE 2 INPUT AFTER DEDUP ===\n")
 cat("Treated OAs:", sum(s1_data_s2_raw$treat_indicator == 1), "\n")
@@ -422,12 +403,16 @@ run_s2_mdm_nocal <- function(data, formula, ratio) {
 }
 
 
-# 
+# Re-run Stage 2 matching on the clean data
 s2_results <- list(
   r1 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 1),
   r2 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 2),
   r4 = run_s2_mdm_nocal(s1_data_s2, s2_formula, 4)
 )
+
+# extract primary
+mdm_primary <- s2_results[["r1"]]
+primary_data <- match.data(mdm_primary, data = s1_data_s2)
 
 summary(s2_results$r1)
 
@@ -435,31 +420,28 @@ summary(s2_results$r1)
 
 compute_mdist <- function(m, data, vars) {
   
-    md <- match.data(m, data = data, weights = "match_weight")
+  md <- match.data(m, data = data, weights = "match_wt")   
   
-  # split into treated + each matched control
   treat <- md %>% filter(treat_indicator == 1)
   ctrl  <- md %>% filter(treat_indicator == 0)
   
-  # covariance matrix of variables (treated group)
   S <- cov(treat[, vars], use = "pairwise.complete.obs")
   
-  # compute Mahalanobis for each treated-control pair
   dist_list <- purrr::map_df(unique(treat$subclass), function(sc) {
     trow  <- treat %>% filter(subclass == sc)
     crows <- ctrl  %>% filter(subclass == sc)
     
-    purrr::map_df(1:nrow(crows), function(i) {
+    purrr::map_df(seq_len(nrow(crows)), function(i) {
       d <- mahalanobis(
         x      = as.numeric(crows[i, vars]),
         center = as.numeric(trow[vars]),
         cov    = S
       )
       tibble(
-        subclass    = sc,
-        treated_OA  = trow$OA,
-        control_OA  = crows$OA[i],
-        mdist       = d
+        subclass   = sc,
+        treated_OA = trow$OA,
+        control_OA = crows$OA[i],
+        mdist      = d
       )
     })
   })
@@ -487,7 +469,7 @@ summarise_quality(mdist_r1)
 summarise_quality(mdist_r2)
 summarise_quality(mdist_r4)
 
-### winner: 1:1 matching 
+### winner: 1:1 matching ?
 
 
 
@@ -502,6 +484,17 @@ cat("\nStage 2 results summary:\n")
 cat(sprintf("  %-25s  %8s  %8s  %8s\n", "Specification", "Treated", "Controls", "Dropped"))
 cat(strrep("-", 60), "\n")
 
+### there are some extreme distances --- ie bad matches 
+# see the distribution
+quantile(mdist_r1$mdist, probs = c(0.90, 0.95, 0.99))
+
+# trim at 95th percentile
+keep_pairs <- mdist_r1 %>% filter(mdist <= quantile(mdist, 0.95))
+
+primary_data_trimmed <- primary_data %>%
+  filter(subclass %in% keep_pairs$subclass)
+# This removed 40 of the worst matches keeping 750+ clean ones.
+
 for (nm in names(s2_results)) {
   m <- s2_results[[nm]]
   
@@ -510,7 +503,7 @@ for (nm in names(s2_results)) {
     next
   }
   
-  # ALWAYS reconstruct matched data using match.data
+  #  reconstruct matched data using match.data
   md <- tryCatch(
     match.data(m, data = s1_data_s2, weights = "match_weight"),
     error = function(e) NULL
@@ -568,14 +561,24 @@ run_diagnostics <- function(m_obj, label, stage2_vars) {
     m_obj,
     threshold    = 0.1,
     abs          = TRUE,
+    stars        = "std",
     var.order    = "unadjusted",
-    title        = paste("Balance —", label),
+    title        = paste("Covariate balance —", label),
     shapes       = c("circle filled", "triangle filled"),
     colors       = c("#E74C3C", "#2ECC71"),
     sample.names = c("Before matching", "After matching")
-  )
+  ) +
+    theme(
+      axis.text.y   = element_text(size = 9),
+      axis.title.x  = element_text(size = 10),
+      plot.title    = element_text(size = 11),
+      legend.position = "bottom",
+      legend.text   = element_text(size = 9),
+      plot.margin   = margin(t = 10, r = 30, b = 10, l = 180)
+    )
+  
   fname <- here("output", paste0("balance_", gsub("[^a-zA-Z0-9]", "_", label), ".png"))
-  ggsave(fname, lp, width = 10, height = 8)
+  ggsave(fname, lp, width = 13, height =9, dpi = 300)
   cat("  Love plot saved:", fname, "\n")
   
   invisible(bt)
@@ -592,7 +595,7 @@ for (nm in names(s2_results)) {
 plot_pretrend <- function(m_obj, label, inj_pre, road_lengths) {
   if (is.null(m_obj)) return(invisible(NULL))
   
-  md        <- match.data(m_obj)
+  md        <- match.data(m_obj, data = s1_data_s2)
   oas_in    <- md$OA
   
   trend_pkm <- inj_pre %>%
@@ -652,20 +655,20 @@ plot_pretrend <- function(m_obj, label, inj_pre, road_lengths) {
 # Update primary_spec after reviewing Step 7 diagnostics.
 # Default: r1_c025 (most conservative).
 
-primary_spec <- "r1_c025"   # <-- UPDATE after reviewing Step 7 diagnostics
+primary_spec <- "r1"   # <-- UPDATE after reviewing Step 7 diagnostics
 
 mdm_primary <- s2_results[[primary_spec]]
 
 if (is.null(mdm_primary)) stop("Primary specification failed — choose alternative.")
 
 cat("\n=== PRIMARY SPECIFICATION:", primary_spec, "===\n")
-primary_data <- match.data(mdm_primary)
+primary_data <- match.data(mdm_primary, data = s1_data_s2)
 
-matched_treated_oas <- primary_data %>%
+matched_treated_oas <- primary_data_trimmed %>%
   filter(treat_indicator == 1) %>%
   dplyr::select(OA, weights, subclass)
 
-matched_control_oas <- primary_data %>%
+matched_control_oas <- primary_data_trimmed %>%
   filter(treat_indicator == 0) %>%
   dplyr::select(OA, weights, subclass)
 
@@ -687,147 +690,3 @@ cat("Cross-country pairs in primary specification:", nrow(final_cross),
 saveRDS(matched_control_oas, here("data", "processed", "OA_matched_donors.rds"))
 saveRDS(matched_treated_oas, here("data", "processed", "OA_matched_treated.rds"))
 
-# =============================================================================
-# STEP 9 — BUILD RESTRICTED ROAD-LINK PANEL
-# =============================================================================
-# FIX: road_link_panel now loaded at top of script.
-# Verify required columns exist before filtering.
-
-required_cols <- c("road_link_id", "OA", "quarter_num", "cohort_g",
-                   "treated_link", "buffer_OA")
-missing_cols  <- setdiff(required_cols, names(road_link_panel))
-if (length(missing_cols) > 0) {
-  stop("road_link_panel missing required columns: ", paste(missing_cols, collapse = ", "))
-}
-
-road_link_panel_restricted <- road_link_panel %>%
-  filter(
-    treated_link == 1 |
-      (treated_link == 0 &
-         OA %in% matched_control_oas$OA &
-         buffer_OA == FALSE)
-  ) %>%
-  left_join(
-    oa_data_clean %>% dplyr::select(
-      OA, road_density_m_km2, pct_A_road, pct_B_road,
-      pct_minor_road, road_length_km, dist_citycentre,
-      IMD, cars_none_pct, pop_density
-    ),
-    by = "OA"
-  )
-
-cat("\nRoad links in restricted panel:", nrow(road_link_panel_restricted), "\n")
-cat("Unique OAs in panel:",            n_distinct(road_link_panel_restricted$OA), "\n")
-
-# Verify cohort_g and road_link_id are present — required for C&S
-# cohort_g     = first treated quarter for each road_link (0 = never treated)
-# road_link_id = unique integer ID per road link
-# If not present, construct here:
-# road_link_panel_restricted <- road_link_panel_restricted %>%
-#   mutate(road_link_id = as.integer(factor(road_link_identifier)))
-# cohort lookup: join from a treatment timing table if not already in panel
-
-stopifnot("cohort_g" %in% names(road_link_panel_restricted))
-stopifnot("road_link_id" %in% names(road_link_panel_restricted))
-
-# =============================================================================
-# STEP 10 — CALLAWAY & SANT'ANNA ESTIMATION
-# =============================================================================
-
-outcomes <- c("KSI_adj", "Slight_adj")
-modes    <- c("All", "Pedestrian", "Car.Van", "Cyclist", "Other")
-
-run_cs <- function(yvar, data) {
-  att_gt(
-    yname         = yvar,
-    tname         = "quarter_num",
-    idname        = "road_link_id",
-    gname         = "cohort_g",
-    xformla       = ~ road_density_m_km2 + pct_A_road + pct_minor_road +
-      road_length_km + dist_citycentre + IMD + cars_none_pct,
-    est_method    = "dr",
-    control_group = "notyettreated",
-    clustervars   = "OA",
-    panel                  = TRUE,
-    allow_unbalanced_panel = TRUE,
-    data                   = data
-  )
-}
-
-cs_results <- list()
-for (outcome in outcomes) {
-  for (mode in modes) {
-    col_name <- if (mode == "All") outcome else paste0(outcome, "_", mode)
-    cat("Estimating:", col_name, "\n")
-    cs_results[[col_name]] <- tryCatch(
-      run_cs(col_name, road_link_panel_restricted),
-      error = function(e) { cat("  Failed:", conditionMessage(e), "\n"); NULL }
-    )
-  }
-}
-
-# Aggregations
-cs_agg <- lapply(cs_results, function(res) {
-  if (is.null(res)) return(NULL)
-  list(
-    simple  = aggte(res, type = "simple"),   # overall ATT
-    dynamic = aggte(res, type = "dynamic"),  # event-study
-    group   = aggte(res, type = "group")     # by-scheme individual CAZ ATTs
-  )
-})
-
-saveRDS(cs_results, here("data", "processed", "cs_results.rds"))
-saveRDS(cs_agg,     here("data", "processed", "cs_aggregations.rds"))
-
-# =============================================================================
-# STEP 11 — SENSITIVITY CHECKS
-# =============================================================================
-
-# 11a. Stage 2 ratio sensitivity — compare r1/r2/r4 diagnostics (Step 7)
-# 11b. Stage 1 caliper sensitivity — 0.75/1.00/1.25 SD (Step 4)
-# 11c. Stage 2 caliper sensitivity — 0.20/0.25/0.30 SD (Step 6)
-# 11d. Zero-injury OA sensitivity — re-run without zero_injury_OA == 0 filter
-# 11e. Control group: re-run C&S with control_group = "nevertreated"
-# 11f. Treatment definition: sensitivity using treated_any instead of treated_50pct
-# 11g. HonestDiD pre-trend sensitivity (Rambachan & Roth 2023)
-# library(HonestDiD)
-# Apply to each dynamic aggregation from cs_agg
-
-# =============================================================================
-# STEP 12 — PUBLICATION-READY BALANCE REPORT
-# =============================================================================
-
-if (!is.null(mdm_primary)) {
-  
-  bt_final <- bal.tab(mdm_primary, thresholds = c(m = 0.1), un = TRUE)
-  
-  balance_report <- data.frame(
-    variable   = rownames(bt_final$Balance),
-    smd_before = round(abs(bt_final$Balance$Diff.Un),  3),
-    smd_after  = round(abs(bt_final$Balance$Diff.Adj), 3)
-  ) %>%
-    mutate(
-      balanced = smd_after < 0.1,
-      stage    = case_when(
-        variable %in% stage1_vars ~ "Stage 1 — structural",
-        variable %in% stage2_vars ~ "Stage 2 — injury dynamics",
-        TRUE                      ~ "Other"
-      )
-    ) %>%
-    arrange(stage, desc(smd_after))
-  
-  cat("\n=== FINAL BALANCE REPORT (", primary_spec, ") ===\n", sep = "")
-  cat("Stage 2 variables with |SMD| < 0.10:",
-      sum(balance_report$balanced[balance_report$stage == "Stage 2 — injury dynamics"],
-          na.rm = TRUE), "/",
-      sum(balance_report$stage == "Stage 2 — injury dynamics"), "\n")
-  cat("Max |SMD| (Stage 2):",
-      round(max(balance_report$smd_after[
-        balance_report$stage == "Stage 2 — injury dynamics"], na.rm = TRUE), 3), "\n")
-  
-  print(balance_report)
-  
-  write.csv(balance_report,
-            here("output", "balance_report_twostage.csv"),
-            row.names = FALSE)
-}
