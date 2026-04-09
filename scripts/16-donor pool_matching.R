@@ -239,8 +239,7 @@ stage2_vars <- drop_low_var(oa_data_clean, stage2_vars)
 # =============================================================================
 # Purpose: remove OAs too structurally dissimilar to be valid comparators.
 ## Country enforced as hard exact constraint.
-# replace = TRUE with ratio = 10 maximises the pool passed to Stage 2.
-#
+# 
 
 
 ###standardisation 
@@ -377,15 +376,12 @@ s1_data_s2 <- s1_data_s2_raw %>%
   ))
 
 # =============================================================================
-# STEP 6 — STAGE 2: MDM WITH TIGHT CALIPER ON INJURY DYNAMICS
+# STEP 6 — STAGE 2: MDM on trends and counts
 # =============================================================================
-# FIX: replace=FALSE throughout — each control OA used at most once per
 # specification to avoid double-counting in C&S estimation.
 # Country exact constraint maintained.
 
 s2_formula <- reformulate(s2_vars_present, response = "treat_indicator")
-
-cat("\n=== STAGE 2: MDM (tight caliper, multiple ratios) ===\n")
 cat("Matching on", length(s2_vars_present), "injury variables\n")
 
 
@@ -450,9 +446,9 @@ compute_mdist <- function(m, data, vars) {
 }
 
 
-mdist_r1 <- compute_mdist(s2_results$r1, s1_data_s2, s2_vars_present)
-mdist_r2 <- compute_mdist(s2_results$r2, s1_data_s2, s2_vars_present)
-mdist_r4 <- compute_mdist(s2_results$r4, s1_data_s2, s2_vars_present)
+mdist_r1_exc <- compute_mdist(s2_results$r1, s1_data_s2, s2_vars_present)
+mdist_r2_exc <- compute_mdist(s2_results$r2, s1_data_s2, s2_vars_present)
+mdist_r4_exc <- compute_mdist(s2_results$r4, s1_data_s2, s2_vars_present)
 
 
 
@@ -465,15 +461,15 @@ summarise_quality <- function(df) {
   )
 }
 
-summarise_quality(mdist_r1)
-summarise_quality(mdist_r2)
-summarise_quality(mdist_r4)
+summarise_quality(mdist_r1_exc)
+summarise_quality(mdist_r2_exc)
+summarise_quality(mdist_r4_exc)
 
 ### winner: 1:1 matching ?
 
 
 
-ggplot(mdist_r1, aes(x = mdist)) +
+ggplot(mdist_r1_exc, aes(x = mdist)) +
   geom_histogram(bins = 40, fill = "steelblue", alpha = 0.7) +
   theme_minimal() +
   labs(title = "Stage 2 Match Quality (1:1) — Mahalanobis Distances",
