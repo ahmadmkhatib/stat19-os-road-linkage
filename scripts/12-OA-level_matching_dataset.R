@@ -54,7 +54,7 @@ library(sf)
 OA_analysis <- readRDS(
   here("data", "processed", "OA_level_from_polygons.rds")             # from 8 
 )
-
+names(OA_analysis)
 table(OA_analysis$assignment)
 
 # Deduplicate OA_analysis — keep first row per OA 
@@ -610,12 +610,29 @@ OA_matching_dataset %>%
   count(treated_OA, control_group2_OA, buffer_OA)
 
 
+
+miss_var_summary(OA_matching_dataset)
+
+
+# replace the no roads OA with zeros in the 1752 NAs
+
+OA_matching_dataset <- OA_matching_dataset    %>%   
+  mutate(across(
+    c(pct_A_road, pct_B_road, pct_minor_road, road_density_m_km2),
+    ~ replace_na(.x, 0)
+  ))
+
+
+
 # ── Save ──────────────────────────────────────────────────────────────────────
 
 saveRDS(
   OA_matching_dataset,
   here("data", "processed", "OA_matching_dataset.rds")
 )
+OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_dataset.rds"))
+
+
 
 ######################################################################################
 #######################################################################################

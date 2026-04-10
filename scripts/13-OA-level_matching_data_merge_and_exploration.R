@@ -6,6 +6,7 @@ library(tidyverse)
 library(lubridate)
 library(here)
 library(sf)
+library(naniar)
 
 # ------------------------------------------------------------
 # Load data
@@ -14,6 +15,11 @@ library(sf)
 OA_char_raw <- read.csv(here("data","processed","outputArea_raw.csv"))
 OA_char_percent <- read.csv(here("data","processed","outputArea_percent.csv"))
 
+miss_var_summary(OA_char_raw)
+miss_var_summary(OA_char_percent)
+
+
+OA_char_percent <-  OA_char_percent %>% filter(!is.na(Bicycle))
 
 ### business  OA data 
 OA__EW_businesses <- read.csv(here("data","processed","OA_EW_businesses.csv"))
@@ -148,6 +154,9 @@ OA_matching_census <- OA_matching_census %>%
     log_pop_density = log1p(pop_density)
   )
 
+
+
+table(OA_matching_census$pop_density)
 # ------------------------------------------------------------
 # Checks
 # ------------------------------------------------------------
@@ -161,8 +170,20 @@ stopifnot(
     nrow() == 0
 )
 
+
+
+naniar::miss_var_summary(OA_matching_census)
+
+#### remoive the OA with nas 
+OA_matching_census <- OA_matching_census %>%
+  drop_na(
+    White_pct, Mixed_pct, Asian_pct, Black_pct, Other_ethnicity_pct,
+    X4under_pct, X5to9_pct, X10to14_pct, X15to19_pct
+     )
+
+OA_matching_census <- OA_matching_census %>%
+  mutate(scheme = replace_na(scheme, "Control"))
 # ------------------------------------------------------------
-# Save non-spatial dataset
 # ------------------------------------------------------------
 
 saveRDS(
@@ -170,7 +191,10 @@ saveRDS(
   here("data","processed","OA_matching_census.rds")
 )
 
+# OA_matching_census<- readRDS(here("data","processed","OA_matching_census.rds"))
 names(OA_matching_census)
+
+
 # ------------------------------------------------------------
 # Create spatial version
 # ------------------------------------------------------------

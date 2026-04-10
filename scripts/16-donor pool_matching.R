@@ -59,21 +59,17 @@ library(sf)
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
-# Road-link panel for C&S estimation — must contain:
-#   road_link_id, OA, quarter_num, cohort_g, treated_link, buffer_OA,
-#   outcome columns (KSI_adj, Slight_adj etc.)
-
-# =============================================================================
-#   CHECKS  
-# =============================================================================
+# 
 
 table(OA_matching_dataset$assignment)
 table(OA_matching_dataset$zero_injury_OA)
 
+
+
 OA_matching_dataset %>%
   summarise(
     total_OAs  = n_distinct(OA),
-    zero_roads = sum(n_roads == 0 | is.na(n_roads)),
+    zero_roads = sum(n_roads == 0),
     pct_zero   = 100 * zero_roads / total_OAs
   ) %>%
   print()
@@ -392,7 +388,7 @@ run_s2_mdm_nocal <- function(data, formula, ratio) {
     method      = "nearest",
     distance    = "mahalanobis",
     ratio       = ratio,
-    replace     = FALSE,
+    replace     = T,
     exact       = ~ country,
     model       = T
   )
@@ -646,7 +642,7 @@ plot_pretrend <- function(m_obj, label, inj_pre, road_lengths) {
 
 
 # =============================================================================
-# STEP 8 — SELECT PRIMARY SPECIFICATION AND EXTRACT MATCHED OAs
+#— SELECT PRIMARY SPECIFICATION AND EXTRACT MATCHED OAs
 # =============================================================================
 # Update primary_spec after reviewing Step 7 diagnostics.
 # Default: r1_c025 (most conservative).
@@ -660,11 +656,11 @@ if (is.null(mdm_primary)) stop("Primary specification failed — choose alternat
 cat("\n=== PRIMARY SPECIFICATION:", primary_spec, "===\n")
 primary_data <- match.data(mdm_primary, data = s1_data_s2)
 
-matched_treated_oas <- primary_data_trimmed %>%
+matched_treated_oas <- primary_data %>%
   filter(treat_indicator == 1) %>%
   dplyr::select(OA, weights, subclass)
 
-matched_control_oas <- primary_data_trimmed %>%
+matched_control_oas <- primary_data %>%
   filter(treat_indicator == 0) %>%
   dplyr::select(OA, weights, subclass)
 
