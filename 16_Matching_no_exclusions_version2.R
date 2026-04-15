@@ -5,6 +5,9 @@
 #  Stage 2: MDM on pre-treatment injury trends + levels, no caliper,
 #           
 ### 
+## there is 2 analysis 
+# Analysis A  without 0 injury OAs: population is a subset of all treated areas.
+# Analysis B  effect across all treated areas, the estimate is broader in scope but less credible in execution.
 # =============================================================================
 #
 # DESIGN RATIONALE
@@ -435,33 +438,83 @@ s2_data_B <- prepare_s2_data(s1_B, s2_vars_B)
 
 #SECTION 6: STAGE 2 MATCHING
 
-run_stage2 <- function(data,s2_vars,ratio,label){
+run_stage2 <- function(data, s2_vars, ratio, label) {
   
-  cat("\n--- Stage 2:",label,"ratio",ratio,"---\n")
+  cat("\n--- Stage 2:", label, "ratio", ratio, "---\n")
   
-  formula <- reformulate(s2_vars,response="treat_indicator")
+  formula <- reformulate(s2_vars, response = "treat_indicator")
   
   m <- matchit(
     formula,
-    data=data,
-    method="nearest",
-    distance="mahalanobis",
-    ratio=ratio,
-    replace=TRUE
+    data     = data,
+    method   = "nearest",
+    distance = "mahalanobis",
+    ratio    = ratio,
+    replace  = TRUE
   )
   
-  matched_data <- match.data(m)
+  mm <- m$match.matrix
   
-  cat("Treated matched:",
-      sum(matched_data$treat_indicator==1),"\n")
+  # Compute Mahalanobis distances from the  matrix
+  S_s2 <- cov(data[as.integer(rownames(mm)), s2_vars],
+              use = "pairwise.complete.obs")
   
-  cat("Controls matched:",
-      sum(matched_data$treat_indicator==0),"\n")
+  dist_s2 <- map_df(seq_len(nrow(mm)), function(i) {
+    
+    t_idx      <- as.integer(rownames(mm)[i])
+    trow       <- data[t_idx, , drop = FALSE]
+    treated_id <- trow[["OA"]]
+    
+    c_indices  <- mm[i, ]
+    c_indices  <- c_indices[!is.na(c_indices)]
+    if (length(c_indices) == 0) return(tibble())
+    
+    dists <- map_dbl(seq_along(c_indices), function(j) {
+      crow <- data[as.integer(c_indices[j]), , drop = FALSE]
+      mahalanobis(
+        x      = as.numeric(crow[s2_vars]),
+        center = as.numeric(trow[s2_vars]),
+        cov    = S_s2
+      )
+    })
+    
+    tibble(
+      OA             = treated_id,         # treated OA gets mean dist to its controls
+      control_OA     = data[as.integer(c_indices), "OA", drop = FALSE] %>% pull(OA),
+      mdist_control  = dists,
+      mdist_treated  = mean(dists)         # summarise treated OA by mean dist to its matches
+    )
+  })
   
-  m
+  # Treated OA distances = mean distance across their matched controls
+  treated_dists <- dist_s2 %>%
+    distinct(OA, mdist_treated) %>%
+    rename(mdist = mdist_treated)
   
+  # Control OA distances = mean distance across all treated OAs they were matched to
+  control_dists <- dist_s2 %>%
+    group_by(OA = control_OA) %>%
+    summarise(mdist = mean(mdist_control), .groups = "drop")
+  
+  all_dists <- bind_rows(treated_dists, control_dists) %>%
+    group_by(OA) %>%
+    summarise(mdist = mean(mdist), .groups = "drop")
+  
+  matched_data <- match.data(m) %>%
+    left_join(all_dists, by = "OA")
+  
+  cat("Treated matched:  ", sum(matched_data$treat_indicator == 1), "\n")
+  cat("Controls matched: ", sum(matched_data$treat_indicator == 0), "\n")
+  cat("NAs in mdist:     ", sum(is.na(matched_data$mdist)), "\n")
+  cat("Distance summary (treated only):\n")
+  print(summary(matched_data$mdist[matched_data$treat_indicator == 1]))
+  
+  list(
+    matchit_obj   = m,
+    primary_ratio = ratio,
+    primary_data  = matched_data
+  )
 }
-
 s2_A_r1 <- run_stage2(s2_data_A,s2_vars_A,1,"A")
 s2_A_r2 <- run_stage2(s2_data_A,s2_vars_A,2,"A")
 s2_A_r5 <- run_stage2(s2_data_A,s2_vars_A,5,"A")
@@ -470,14 +523,21 @@ s2_B_r1 <- run_stage2(s2_data_B,s2_vars_B,1,"B")
 s2_B_r2 <- run_stage2(s2_data_B,s2_vars_B,2,"B")
 s2_B_r5 <- run_stage2(s2_data_B,s2_vars_B,5,"B")
 
+
+
+
+# r5 is the best option 
+#### r5 has the best trend SMDs of all four specifications (0.034) — the strongest empirical support for parallel trends
+# Level balance is better at R5, meaning less work for the doubly-robust correction
+#efficiency gained  from r5 is real and doesnt comes at the cost of worse balance and more covariates needed in the outcome model
+
+
+
 #
 # =============================================================================
-# SECTION 7 — BALANCE DIAGNOSTICS
+# — BALANCE DIAGNOSTICS
 # =============================================================================
 
-cat("\n====================================================\n")
-cat("SECTION 7: BALANCE DIAGNOSTICS\n")
-cat("====================================================\n\n")
 
 run_balance <- function(s2_result, label) {
   
@@ -526,32 +586,20 @@ run_balance <- function(s2_result, label) {
 }
 
 
+
+s2_A <- s2_A_r5   
+s2_B <- s2_B_r5
+
 run_balance(s2_A, "A_excl_zero")
 run_balance(s2_B, "B_incl_zero")
 
-
-
-####### compre R1 and R5 
-
-# Temporary r5 result objects for balance inspection
-s2_A_r5 <- s2_A
-s2_A_r5$matchit_obj <- s2_A$all_fits[["r5"]]
-s2_A_r5$primary_ratio <- "r5"
-
-s2_B_r5 <- s2_B
-s2_B_r5$matchit_obj <- s2_B$all_fits[["r5"]]
-s2_B_r5$primary_ratio <- "r5"
-
-run_balance(s2_A_r5, "A_excl_zero_r5")
-run_balance(s2_B_r5, "B_incl_zero_r5")
-
-###    and the winner is B  R5 on every dimension that matters
-####B r5 has the best trend SMDs of all four specifications (0.034) — the strongest empirical support for parallel trends
-# Level balance is better at R5, meaning less work for the doubly-robust correction
-# The efficiency gain from r5 is real and does not  comes at the cost of worse level balance and more covariates needed in the outcome model
+## not that different in the balance ..... we should run both and compare the ATT estimates. 
+# If they're similar, the zero-injury OAs aren't driving results and can report A as primary with B as a robustness check. 
+# If they diverge, that's a meaningful finding about whether the scheme affected previously-uninjured roads differently,
+#which is worth discussing substantively rather than resolving by choosing one specification.
 
 # =============================================================================
-# SECTION 8 — COMPARE ANALYSES A AND B
+# — COMPARE ANALYSES A AND B
 # =============================================================================
 
 cat("\n====================================================\n")
@@ -575,7 +623,7 @@ cat("  Only in A (trimmed from B):", length(only_in_A), "\n\n")
 if (length(only_in_B) > 0) {
   
   cat("--- Structural characteristics of zero-injury OAs added in B ---\n")
-  compare_grp <- s2_B$primary_data_trimmed %>%
+  compare_grp <- s2_B$primary_data %>%
     filter(treat_indicator == 1) %>%
     mutate(grp = if_else(OA %in% only_in_B, "Zero-injury (B only)", "Injury-exposed (both)"))
   
@@ -594,50 +642,81 @@ if (length(only_in_B) > 0) {
         n = Inf)
   
   cat("\n  Country distribution of zero-injury OAs in B:\n")
-  print(table(s2_B$primary_data_trimmed %>% filter(OA %in% only_in_B) %>% pull(country)))
+  print(table(s2_B$primary_data %>% filter(OA %in% only_in_B) %>% pull(country)))
   
-  zero_dists <- s2_B$mdist %>% filter(treated_OA %in% only_in_B)
+  zero_dists <- s2_B$primary_data %>%
+    filter(OA %in% only_in_B)
+  
   cat("\n  Stage 2 distances for zero-injury pairs (expect near-zero):\n")
   print(summary(zero_dists$mdist))
 }
 
 # Distance comparison table
 cat("\n--- Stage 2 distance distribution: A vs B ---\n")
+
 dist_compare <- bind_rows(
-  s2_A$mdist %>% mutate(analysis = "A: excl zero-injury"),
-  s2_B$mdist %>% mutate(analysis = "B: incl zero-injury")
-) %>% group_by(analysis) %>%
-  summarise(n = n(), mean = round(mean(mdist), 3), median = round(median(mdist), 3),
-            p90 = round(quantile(mdist, 0.90), 3), p95 = round(quantile(mdist, 0.95), 3),
-            max = round(max(mdist), 3), .groups = "drop")
+  s2_A$primary_data %>% select(OA, mdist) %>% mutate(analysis = "A: excl zero-injury"),
+  s2_B$primary_data %>% select(OA, mdist) %>% mutate(analysis = "B: incl zero-injury")
+) %>%
+  group_by(analysis) %>%
+  summarise(
+    n      = n(),
+    mean   = round(mean(mdist,             na.rm = TRUE), 3),
+    median = round(median(mdist,           na.rm = TRUE), 3),
+    p90    = round(quantile(mdist, 0.90,   na.rm = TRUE), 3),
+    p95    = round(quantile(mdist, 0.95,   na.rm = TRUE), 3),
+    max    = round(max(mdist,              na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
 print(dist_compare)
-cat("\nNOTE: B will show lower mean/median — zero-injury pairs have near-zero\n")
-cat("distances by construction. Lower distance ≠ better match here.\n\n")
-
-dist_both <- bind_rows(
-  s2_A$mdist %>% mutate(analysis = "A: Excluding zero-injury OAs"),
-  s2_B$mdist %>% mutate(analysis = "B: Including zero-injury OAs")
-)
-p_compare <- ggplot(dist_both, aes(x = mdist, fill = analysis)) +
-  geom_histogram(bins = 40, alpha = 0.6, position = "identity") +
-  facet_wrap(~ analysis, scales = "free_y") +
-  scale_fill_manual(values = c("steelblue", "darkorange")) +
-  theme_minimal() + theme(legend.position = "none") +
-  labs(title = "Stage 2 distances: A vs B",
-       subtitle = "Spike near zero in B = zero-injury pairs",
-       x = "Mahalanobis distance", y = "Count")
 
 
-ggsave(here("output", "s2_dist_comparison_A_vs_B.png"),
-       p_compare, width = 12, height = 5, dpi = 300)
+# A Mahalanobis distance of 115/123  means some treated OAs are being matched to controls that are very far away#
+# in injury-dynamic space, which undermines the parallel trends assumption for those specific units.
+
+# who are those OAs 
+s2_A$primary_data %>%
+  filter(treat_indicator == 1) %>%
+  arrange(desc(mdist)) %>%
+  select(OA, mdist, starts_with("trend_"), starts_with("mean_")) %>%
+  head(30)
+
+# These are OAs with extreme pre-treatment injury dynamics that sit far from the control distribution.
+
+# See the distribution of treated OA distances
+s2_A$primary_data %>%
+  filter(treat_indicator == 1) %>%
+  summarise(
+    n_over_20  = sum(mdist > 20),
+    n_over_30  = sum(mdist > 30),
+    n_over_50  = sum(mdist > 50),
+    n_over_100 = sum(mdist > 100)
+  )
+
+# 30 as caliper threshold — will  drop 11 OAs (1.4% of treated sample), 
+# this eliminate the genuinely problematic matches,then all retained pairs have reasonable parallel trends support.
+
+# Identify treated OAs to drop
+drop_OAs <- s2_A$primary_data %>%
+  filter(treat_indicator == 1, mdist > 30) %>%
+  pull(OA)
+drop_OAs
+
+
+# Are they concentrated in particular schemes or years?
+s2_A$primary_data %>%
+  filter(OA %in% drop_OAs) %>%
+  select(OA, mdist, country) %>%
+  arrange(desc(mdist))
+
+
+
+
 
 # =============================================================================
 # SECTION 9 — EXTRACT AND SAVE MATCHED SAMPLES
 # =============================================================================
-
-cat("\n====================================================\n")
-cat("SECTION 9: SAVE MATCHED SAMPLES\n")
-cat("====================================================\n\n")
 
 extract_matched <- function(s2_result, label) {
   treated  <- s2_result$primary_data %>%
@@ -659,8 +738,8 @@ matched_B <- extract_matched(s2_B, "Analysis B (incl zero-injury)")
 
 #####################################################################################
 
-# checking wieght distribution 
-w_check <- s2_B$primary_data %>%
+# checking wieght distribution A
+w_checkA <- s2_A$primary_data %>%
   filter(treat_indicator == 0) %>%
   summarise(
     n_controls     = n(),
@@ -669,7 +748,19 @@ w_check <- s2_B$primary_data %>%
     pct_weight_gt5 = mean(weights > 5) * 100,
     effective_n    = sum(weights)^2 / sum(weights^2)
   )
-print(w_check)
+print(w_checkA)
+
+# checking wieght distribution B
+w_checkB <- s2_B$primary_data %>%
+  filter(treat_indicator == 0) %>%
+  summarise(
+    n_controls     = n(),
+    mean_weight    = mean(weights),
+    max_weight     = max(weights),
+    pct_weight_gt5 = mean(weights > 5) * 100,
+    effective_n    = sum(weights)^2 / sum(weights^2)
+  )
+print(w_checkB)
 
 
 top_controls <- s2_B$primary_data %>%
@@ -690,7 +781,7 @@ hist(s2_B$primary_data$weights, breaks = 50)
 
 weight_diagnostics <- function(s2_result, analysis_label) {
   
-  controls <- s2_result$primary_data_trimmed %>%
+  controls <- s2_result$primary_data %>%
     filter(treat_indicator == 0)
   
   cat("\n--- Weight diagnostics:", analysis_label, "---\n")
@@ -729,7 +820,7 @@ weight_diagnostics <- function(s2_result, analysis_label) {
     eff_n_cap <- sum(capped$w_cap)^2 / sum(capped$w_cap^2)
     
     # Recalculate trend SMDs with capped weights (weighted mean)
-    treated_rows <- s2_result$primary_data_trimmed %>%
+    treated_rows <- s2_result$primary_data %>%
       filter(treat_indicator == 1)
     
     trend_smds <- map_dbl(stage2_trends, function(v) {
@@ -762,56 +853,11 @@ wd_B <- weight_diagnostics(s2_B, "B_incl_zero")
 
 
 
-# Apply weight cap to Analysis B matched data before saving
-# ---------------------------------------------------------------
-# Justification: effective N without cap = 184 vs nominal 1,973
-# Cap at 10 restores effective N to ~943 (efficiency 0.48)
-# with only marginal trend SMD increase (0.026 -> 0.045, well < 0.10)
-# Cap is applied AFTER matching; it does not alter who is matched,
-# only the relative contribution of heavily-reused controls.
-
-cap_weights <- function(matched_list, cap, label) {
-  
-  cat("\n--- Weight cap:", cap, "—", label, "---\n")
-  
-  controls_raw    <- matched_list$controls
-  controls_capped <- controls_raw %>%
-    mutate(weights_raw    = weights,
-           weights        = pmin(weights, cap),
-           weight_capped  = weights < weights_raw)
-  
-  cat("  Controls with capped weights:",
-      sum(controls_capped$weight_capped), "\n")
-  cat("  Max weight before cap:", round(max(controls_raw$weights), 2), "\n")
-  cat("  Max weight after cap: ", round(max(controls_capped$weights), 2), "\n")
-  cat("  Effective N before:   ",
-      round(sum(controls_raw$weights)^2 /
-              sum(controls_raw$weights^2), 1), "\n")
-  cat("  Effective N after:    ",
-      round(sum(controls_capped$weights)^2 /
-              sum(controls_capped$weights^2), 1), "\n")
-  
-  list(
-    treated  = matched_list$treated,
-    controls = controls_capped %>% select(-weights_raw, -weight_capped)
-  )
-}
-
-
-
-
-# Apply cap to B only (A does not need it)
-matched_B_capped <- cap_weights(matched_B, cap = 10, "B_incl_zero")
-
-# Save capped version as primary B output
-saveRDS(matched_B_capped$treated,
-        here("data", "processed", "OA_matched_treated_B.rds"))
-saveRDS(matched_B_capped$controls,
-        here("data", "processed", "OA_matched_donors_B.rds"))
-
-# Also save uncapped version for sensitivity
-saveRDS(matched_B$controls,
-        here("data", "processed", "OA_matched_donors_B_nocap.rds"))
+# The zero-injury OAs (B only) are meaningfully different from the injury-exposed OAs on several structural dimensions:
+# Much shorter roads (0.24 km vs 1.10 km, SMD 0.86) — these are small, low-traffic OAs
+# Higher population density (17,681 vs 10,985, SMD -0.81) — more urban/residential
+# Almost entirely minor roads (96% vs 83%, SMD -0.73) — very little A/B road exposure
+# Predominantly Scotland (114 of 191 = 60%) — geographically skewed
 
 
 
@@ -827,8 +873,8 @@ saveRDS(matched_A$controls, here("data", "processed", "OA_matched_donors_A.rds")
 
 
 
-#saveRDS(matched_B$treated,  here("data", "processed", "OA_matched_treated_B.rds"))
-# saveRDS(matched_B$controls, here("data", "processed", "OA_matched_donors_B.rds"))
+saveRDS(matched_B$treated,  here("data", "processed", "OA_matched_treated_B.rds"))
+saveRDS(matched_B$controls, here("data", "processed", "OA_matched_donors_B.rds"))
 
 
 
@@ -847,12 +893,10 @@ cat("====================================================\n\n")
 cat("STAGE 1  | MDM on", length(stage1_vars), "vars (road + urban + socdem)\n")
 cat("         | No caliper — all variables treated symmetrically\n")
 cat("         | replace=TRUE, ratio=10\n")
-cat("         | P95 trim on min(matched-pair distance) per treated OA\n\n")
 
 cat("STAGE 2  | MDM on", length(stage2_vars), "vars (7 trends + 7 levels, per km)\n")
 cat("         | No caliper\n")
 cat("         | replace=TRUE, ratios 1/2/5 tested\n")
-cat("         | P95 trim on subclass (retains treated + matched controls)\n\n")
 
 cat("Country exact constraint at both stages.\n\n")
 
@@ -867,13 +911,11 @@ cat("           | Ratio:", s2_B$primary_ratio,
 cat("WEIGHTS: Pass weights column to att_gt(weightsname = 'weights')\n\n")
 
 cat("NEXT STEP: Run C&S on both samples.\n")
-cat("  ATT(A) ≈ ATT(B) => B is primary, A is robustness check\n")
+cat("  ATT(A) ≈ ATT(B) => A is primary, B is robustness check\n")
 cat("  ATT(A) ≠ ATT(B) => report both; discuss zero-injury subgroup\n")
 
 
 ########## final matching data #
-
-str(s2_B_r5 )
 
 
 #####    If ATT(A) ≈ ATT(B): The zero-injury OAs don't change the result. 

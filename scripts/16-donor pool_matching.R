@@ -514,13 +514,12 @@ for (nm in names(s2_results)) {
               nm, nt, nc, ndrop, 100 * ndrop / s1_treated))
 }
 
-###   1 to 1 is the best option 
-# =============================================================================
-# STEP 7 — BALANCE DIAGNOSTICS AND RATIO SELECTION
+###  
+# BALANCE DIAGNOSTICS AND RATIO SELECTION
 # =============================================================================
 # Selection rule: choose the highest ratio at which:
 #   - All Stage 2 SMDs remain below 0.10
-#   - Pre-trend trajectories visually overlay (on _pkm scale — see plot below)
+#   - Pre-trend trajectories visually overlay 
 #   - Exclusion rate does not exceed ~25% of Stage 1 sample
 
 run_diagnostics <- function(m_obj, label, stage2_vars) {
@@ -548,7 +547,7 @@ run_diagnostics <- function(m_obj, label, stage2_vars) {
     cat("  Country check: PASSED\n")
   }
   
-  # Love plot
+  
   lp <- love.plot(
     m_obj,
     threshold    = 0.1,
@@ -580,9 +579,8 @@ for (nm in names(s2_results)) {
   run_diagnostics(s2_results[[nm]], nm, s2_vars_present)
 }
 
-# --- Pre-trend overlay plot (on _pkm scale — consistent with Stage 2 vars) ---
-# FIX: previous version plotted raw counts per OA; now plots per road-km rates
-# to match the scale on which Stage 2 matching was done.
+# --- Pre-trend overlay plot 
+# # to match the scale on which Stage 2 matching was done.
 
 plot_pretrend <- function(m_obj, label, inj_pre, road_lengths) {
   if (is.null(m_obj)) return(invisible(NULL))
