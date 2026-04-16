@@ -980,7 +980,7 @@ cat("     by pre-treatment injury exposure level\n")
 
 
 
-NEXT STEP:
+#NEXT STEP:
   #   Pass matched datasets to att_gt(..., weightsname = "weights") in did package.
   #   If ATT(A) ≈ ATT(B): A confirmed as primary, B reported as robustness check.
   #   If ATT(A) ≠ ATT(B): report both; difference reveals heterogeneous effects
