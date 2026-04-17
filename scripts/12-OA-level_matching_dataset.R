@@ -48,6 +48,7 @@ library(tidyverse)
 library(lubridate)
 library(here)
 library(sf)
+library(naniar)
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 
@@ -57,17 +58,14 @@ OA_analysis <- readRDS(
 names(OA_analysis)
 table(OA_analysis$assignment)
 
-# Deduplicate OA_analysis — keep first row per OA 
-OA_analysis <- OA_analysis %>%
-  arrange(OA, scheme) %>%
-  distinct(OA, .keep_all = TRUE)
+
 
 glimpse(OA_analysis)
 table(OA_analysis$scheme, useNA = "always")
 table(OA_analysis$treated_OA, useNA = "always")
 
 OA_roads <- readRDS(
-  here("data", "processed", "OA_roads.rds")
+  here("data", "processed", "OA_roads.rds")  
 )
 glimpse(OA_roads)
 
@@ -101,14 +99,9 @@ caz_dates <- caz %>%
   )
 print(caz_dates)
 
-# ── Clean OA_roads — keep only road-specific columns 
-
-OA_roads %>% count(OA) %>% filter(n > 1) %>% nrow()
-# and
-OA_roads %>% count(OA) %>% summarise(max(n), median(n))
 
 
-# OA_roads has 69,318 — only OAs that have at least one road
+## OA_roads is OA with roads 
 # OA_roads_clean right_joins to oa_sub to recover the 1,752 road-free OAs
 
 OA_roads_clean <- OA_roads %>%
@@ -132,9 +125,9 @@ OA_roads_clean <- OA_roads %>%
   ))
 
 
-nrow(OA_roads_clean)                                          # must be 71,070
-OA_roads_clean %>% count(OA) %>% filter(n > 1) %>% nrow()    # must be 0
-n_distinct(OA_roads_clean %>% filter(n_roads == 0) %>% pull(OA))  # should be 1,752
+nrow(OA_roads_clean)                                          
+OA_roads_clean %>% count(OA) %>% filter(n > 1) %>% nrow()    
+n_distinct(OA_roads_clean %>% filter(n_roads == 0) %>% pull(OA))  # Oa without roads 
 
 anti_join(
   oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),
@@ -153,15 +146,7 @@ has_injuries_no_roads <- OA_injuries %>%
   filter(OA %in% no_road_oas) %>%
   distinct(OA)
 nrow(has_injuries_no_roads)
- 
-## are these genuinly no roads OAs ??
- OA_roads_clean %>%
-   filter(n_roads == 0) %>%
-   summarise(
-     min_len = min(total_road_length),
-     max_len = max(total_road_length),
-     mean_len = mean(total_road_length)
-   )
+
  
 # ── Build scheme/treatment lookup ─────────────────────────────────────────────
 
@@ -171,31 +156,13 @@ nrow(has_injuries_no_roads)
    dplyr::select(OA, scheme, treated_OA, control_group2_OA) %>%
    left_join(caz_dates, by = "scheme")
  
- # V
- oa_scheme_lookup %>% count(OA) %>% filter(n > 1) %>% nrow()
- 
- 
- 
 
-# How many injuries do these 95 OAs actually have?
-OA_injuries %>%
-  filter(OA %in% no_road_oas) %>%
-  summarise(
-    n_OAs        = n_distinct(OA),
-    total_inj    = sum(total_injuries, na.rm = TRUE),
-    mean_inj     = mean(total_injuries, na.rm = TRUE)
-  )
 
-# Are they concentrated in treated/buffer areas?
+# where Are they concentrated 
 OA_roads_clean %>%
   filter(n_roads == 0) %>%
   left_join(OA_analysis %>% select(OA, assignment), by = "OA") %>%
   count(assignment)
-
-
-nrow(oa_sub)           
-nrow(OA_roads_clean)   
-
 
 
 # ── Attach treatment info to injury panel ────────────────────────────────────
@@ -624,7 +591,7 @@ OA_matching_dataset <- OA_matching_dataset    %>%
 
 
 
-# ── Save ──────────────────────────────────────────────────────────────────────
+table(OA_matching_dataset$assignment)
 
 saveRDS(
   OA_matching_dataset,

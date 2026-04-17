@@ -13,10 +13,6 @@ library(tidyverse)
 library(sf)
 library(here)
 
-#============================================================
-# 1. Load Data
-#============================================================
-
 lads_sub <- readRDS(here("data","processed","LADs_sub.rds"))
 
 oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
@@ -27,12 +23,12 @@ caz <- st_read(
   here("data","processed","shp_files","CAZ_areas.shp"),
   quiet = TRUE
 ) %>%
-  st_transform(st_crs(oa)) %>%
+  st_transform(st_crs(27700)) %>%
   st_make_valid()
 
 st_crs(caz)
 #============================================================
-# 2. Keep OAs within study LADs
+# Keep OAs within study LADs
 #============================================================
 
 ##  keeping the LAD with the largest overlap
@@ -74,7 +70,10 @@ oa_caz_prop <- oa_caz_intersection %>%
 
 treated_OAs <- oa_caz_prop %>%
   filter(prop_caz >= 0.5) %>%
-dplyr::  select(OA, scheme)
+  arrange(OA, desc(prop_caz)) %>%   #
+  distinct(OA, .keep_all = TRUE) %>%
+  select(OA, scheme)
+
 #============================================================
 # Create 1km CAZ buffer
 #============================================================
@@ -101,11 +100,10 @@ buffer_OAs <- oa_buffer_prop %>%
 #============================================================
 
 treated_LADs <- oa_sub %>%
-  filter(OA %in% treated_OAs) %>%
+  filter(OA %in% treated_OAs$OA) %>%
   distinct(LAD24CD) %>%
   pull(LAD24CD)
 
-View(treated_LADs)
 #============================================================
 # Distance to city centre
 #============================================================
@@ -170,6 +168,9 @@ OA_analysis <- oa_sub %>%
 
 OA_analysis$dist_citycentre <- dist_citycentre
 
+nrow(OA_analysis)
+OA_analysis %>% distinct(OA) %>% nrow()
+
 
 OA_analysis %>%  dplyr:: select(dist_citycentre) %>%   summary()
 table(OA_analysis$treated_OA)
@@ -177,7 +178,6 @@ table(OA_analysis$treated_OA)
 OA_analysis  %>% filter(treated_OA==1)%>% dplyr::select(dist_citycentre) %>%   summary()
 
 ## # is this resonable 10K 
-
 
 OA_analysis <- OA_analysis %>%
   mutate(
@@ -189,7 +189,7 @@ OA_analysis <- OA_analysis %>%
       TRUE ~ NA_character_
     )
   )
-
+nrow(treated_OAs)
 
 OA_analysis <- OA_analysis %>%
   left_join(
@@ -212,10 +212,9 @@ OA_analysis %>%
   count(assignment) %>%
   mutate(pct = n / sum(n))
 
+glimpse(OA_analysis)
 
-#============================================================
-#save
-#============================================================
+
 saveRDS(
   OA_analysis,
   here("data","processed","OA_level_from_polygons.rds")
@@ -228,6 +227,4 @@ st_write(
 )
 
 
-
-#### oa_sub<-st_read (here("data","processed","shp_files","OA_subset.shp"))
 

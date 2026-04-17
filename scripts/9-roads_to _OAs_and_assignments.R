@@ -35,6 +35,7 @@ OA_analysis <- readRDS(
   here("data","processed","OA_level_from_polygons.rds")         # from 8
 )
 
+table(OA_analysis$assignment)
 
 if (st_crs(roads) != st_crs(oa_sub)) {
   roads <- st_transform(roads, st_crs(oa_sub))
@@ -114,33 +115,27 @@ OA_roads <- roads_oa %>%          #
   )
 
 # ── One-OA-per-road assignment (largest overlap) ──────────────────────────
-# Use this only where you need a single OA label per road
-# e.g. road-level analysis, attribution of crashes to OA
-
+# 
 road_attributes_OA <- roads_oa %>%
   group_by(identifier) %>%
   slice_max(int_length, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
   left_join(
     OA_analysis %>%
-      arrange(OA, scheme) %>%
-      distinct(OA, .keep_all = TRUE) %>%   # deduplicate here
-      select(OA, assignment, scheme),
+      arrange(OA) %>%
+      distinct(OA, .keep_all = TRUE) %>%    
+      select(OA, assignment),
     by = "OA"
   )
 
 # attach OA classification
 OA_roads <- OA_roads %>%
   left_join(
-    OA_analysis %>%
-      arrange(OA, scheme) %>%
-      distinct(OA, .keep_all = TRUE),  # one row per OA
-    by = "OA"
-  )
+    OA_analysis,  by = "OA"  )
 
 glimpse(OA_roads)
-OA_roads %>% count(OA) %>% filter(n > 1) %>% nrow()  # must be 0
-nrow(OA_roads)  # should be <= nrow(oa_sub) = 71,070
+OA_roads %>% count(OA) %>% filter(n > 1) %>% nrow()  # no road belong to more than 1 OA
+nrow(OA_roads)  
 
 OA_missing_roads <- OA_analysis %>%
   filter(!OA %in% OA_roads$OA)
@@ -149,6 +144,17 @@ nrow(OA_missing_roads)
 
 OA_missing_roads %>%
   count(assignment)
+
+
+table(OA_roads$assignment)
+
+
+OA_analysis %>%
+  count(OA) %>%
+  filter(n > 1)
+n_distinct(OA_analysis$OA)
+nrow(OA_analysis)
+
 
 # ============================================================
 # Save OA road dataset
