@@ -8,9 +8,6 @@ library(here)
 library(sf)
 library(naniar)
 
-# ------------------------------------------------------------
-# Load data
-# ------------------------------------------------------------
 ### census OA data 
 OA_char_raw <- read.csv(here("data","processed","outputArea_raw.csv"))
 OA_char_percent <- read.csv(here("data","processed","outputArea_percent.csv"))
@@ -42,8 +39,8 @@ OA_matching_dataset <- readRDS(
   here("data","processed","OA_matching_dataset.rds")
 )
 
-# ------------------------------------------------------------
-# Load OA shapefile and compute area
+# 
+# OA shapefile and compute area
 # ------------------------------------------------------------
 
 oa_sub <- st_read(
@@ -57,9 +54,9 @@ oa_sub <- st_read(
     area_km2 = area_m2 / 1e6
   )
 
-# ------------------------------------------------------------
-# Pre-merge checks
-# ------------------------------------------------------------
+# --------------- 
+# checks
+# -------------- 
 
 cat("OA_matching_dataset rows:", nrow(OA_matching_dataset), "\n")
 cat("OA_char_raw rows:", nrow(OA_char_raw), "\n")
@@ -100,10 +97,6 @@ OA_businesses <- OA_businesses %>%
 
 
 
-# ------------------------------------------------------------
-# Rename census variables
-# ------------------------------------------------------------
-
 vars_to_rename <- setdiff(
   names(OA_char_raw),
   c("OA","country","Total","IMD")
@@ -117,9 +110,8 @@ OA_char_pct_renamed <- OA_char_percent %>%
   rename_with(~ paste0(.x,"_pct"), all_of(vars_to_rename)) %>%
   select(-country,-Total,-IMD)
 
-# ------------------------------------------------------------
 # Merge census tables
-# ------------------------------------------------------------
+# ------------------------
 
 OA_census <- OA_char_raw_renamed %>%
   left_join(OA_char_pct_renamed, by="OA")
@@ -195,18 +187,14 @@ saveRDS(
 names(OA_matching_census)
 
 
-# ------------------------------------------------------------
-# Create spatial version
-# ------------------------------------------------------------
+# ---------------
+#  spatial version
+# ---------------------------------
 
 OA_matching_census_sf <- oa_sub %>%
   select(OA, geometry) %>%
   left_join(OA_matching_census, by="OA") %>%
   st_as_sf()
-
-# ------------------------------------------------------------
-# Save spatial dataset
-# ------------------------------------------------------------
 
 st_write(
   OA_matching_census_sf,
