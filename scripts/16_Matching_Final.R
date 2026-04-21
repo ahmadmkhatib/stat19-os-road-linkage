@@ -23,7 +23,6 @@
 
 library(MatchIt)
 library(cobalt)
-library(ggplot2)
 library(here)
 library(MASS)
 library(purrr)
@@ -37,6 +36,7 @@ filter <- dplyr::filter
 
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
+glimpse(OA_matching_dataset)
 
 print(table(OA_matching_dataset$assignment))
 cat("\n--- Zero-injury OA counts ---\n")
@@ -117,6 +117,14 @@ stage1_vars_log <- c(
 # Stage 2 level vars on log scale; trend vars unchanged
 stage2_vars_log <- c(stage2_trends, log_names_s2)
 
+### remove the diplicate road_density_m 
+stage1_vars_log <- c(
+  log_names_s1,
+  setdiff(stage1_vars, log_transform_s1)
+)
+
+
+
 # =============================================================================
 # — BUILD DATASETS + BUFFER DIAGNOSIS  + ZERO-PRE FINDING
 # =============================================================================
@@ -159,11 +167,15 @@ base_filter <- OA_matching_dataset %>%
 data_A <- base_filter %>%
   filter(!(treated_OA == 1 & zero_injury_OA == 1))
 
+ table(data_A$assignment)
+
 data_B <- base_filter %>%
   mutate(across(
     all_of(intersect(stage2_vars, names(.))),
     ~ if_else(zero_injury_OA == 1 & treated_OA == 1, 0, .)
   ))
+
+
 
 cat("=== Analysis A (zero-injury EXCLUDED) ===\n")
 cat("  Total OAs:", nrow(data_A), "| Treated:", sum(data_A$treat_indicator == 1),
@@ -996,12 +1008,6 @@ s2_B <- add_baseline_stratum(s2_B, "Analysis B")
 
 
 #### control reuse
-matched_data <- bind_rows(
-  matched_A_treated,
-  matched_A_controls
-)
-
-
 
 glimpse(
   s2_A
