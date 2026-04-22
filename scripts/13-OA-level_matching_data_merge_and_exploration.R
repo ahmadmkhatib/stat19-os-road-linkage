@@ -148,7 +148,7 @@ OA_matching_census <- OA_matching_census %>%
 
 
 
-table(OA_matching_census$pop_density)
+summary(OA_matching_census$pop_density)
 # ------------------------------------------------------------
 # Checks
 # ------------------------------------------------------------

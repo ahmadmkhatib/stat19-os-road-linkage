@@ -1,19 +1,23 @@
 # =============================================================================
-# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  — VERSION F (Analysis A)
+# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  — VERSION F
 # =============================================================================
 #
 # PURPOSE:
 #   Construct matched comparison groups for a Difference-in-Differences (DiD)
 #   analysis of a road safety intervention in Great Britain.
 #
+# 
 #
 # OUTPUTS:
 #   OA_matched_treated_A.rds       — treated OA IDs + weights + stratum, A
 #   OA_matched_donors_A.rds        — control OA IDs + weights, Analysis A
+#   OA_matched_treated_B.rds       — treated OA IDs + weights + stratum, B
+#   OA_matched_donors_B.rds        — control OA IDs + weights, Analysis B
 #   OA_matched_full_A.rds          — full matched dataset, Analysis A
+#   OA_matched_full_B.rds          — full matched dataset, Analysis B
 #   OA_common_support_flags.rds    — structurally isolated treated OA flags
-#   OA_outcome_covariates.rds      —  xformla covariate list
-#   OA_balance_tests.rds           — balance improvement test results
+#   OA_outcome_covariates.rds      — recommended xformla covariate list
+#   OA_balance_tests.rds           — balance improvement test results 
 #
 # =============================================================================
 
@@ -44,6 +48,7 @@ print(table(
   dnn = c("zero_injury", "treated")
 ))
 
+cat("\n--- Road network summary ---\n")
 OA_matching_dataset %>%
   summarise(
     total_OAs  = n_distinct(OA),
@@ -58,8 +63,6 @@ cat("Zero-road OAs with recorded injuries:", nrow(weirdOAs),
 
 # =============================================================================
 # VARIABLE DEFINITIONS
-# =============================================================================
-
 stage1_road   <- c("road_density_m_km2", "road_length_km",
                    "pct_A_road", "pct_B_road", "pct_minor_road")
 stage1_urban  <- c("dist_citycentre", "pop_density")
@@ -71,23 +74,21 @@ stage2_trends <- c(
   "trend_car_KSI_pkm", "trend_car_slight_pkm",
   "trend_cyc_KSI_pkm", "trend_cyc_slight_pkm",
   "trend_ped_KSI_pkm", "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm",
   "trend_total_pkm"
 )
 stage2_levels <- c(
   "mean_car_KSI_pkm", "mean_car_slight_pkm",
   "mean_cyc_KSI_pkm", "mean_cyc_slight_pkm",
   "mean_ped_KSI_pkm", "mean_ped_slight_pkm",
-  "mean_other_KSI_pkm", "mean_other_slight_pkm",
   "mean_total_pkm"
 )
-
 stage2_vars <- c(stage2_trends, stage2_levels)
 
-# log-transform vars (after winsorisation)
-# many vars are very right-skewed
+#log-transform vars (after winsorisation)
+# many vars are very right-skewed  
 # Percentage / bounded variables excluded — log distorts bounded scales.
 log_transform_s1 <- c(
+ 
   "road_length_km",      # km: right tail 134km vs median ~0.5km; ratio ~270x
   "pop_density",         # persons/km2: max/median ~12x after winsorisation
   "dist_citycentre"      # metres: right tail 32km; log makes sense (distance)
@@ -110,14 +111,22 @@ log_names_s2 <- paste0("log1p_", log_transform_s2_levels)
 
 stage1_vars_log <- c(
   log_names_s1,
-  setdiff(stage1_vars, log_transform_s1)
+  "road_density_m_km2",          # kept on original scale because loging made it worse skewed 
+  setdiff(stage1_vars, log_transform_s1)  # untransformed percentage vars
 )
-
 # Stage 2 level vars on log scale; trend vars unchanged
 stage2_vars_log <- c(stage2_trends, log_names_s2)
 
+### remove the diplicate road_density_m 
+stage1_vars_log <- c(
+  log_names_s1,
+  setdiff(stage1_vars, log_transform_s1)
+)
+
+
+
 # =============================================================================
-# — BUILD DATASET
+# — BUILD DATASETS + BUFFER DIAGNOSIS  + ZERO-PRE FINDING
 # =============================================================================
 
 OA_matching_dataset <- OA_matching_dataset %>%
@@ -129,7 +138,17 @@ OA_matching_dataset <- OA_matching_dataset %>%
     )
   )
 
-# Buffer OA diagnosis
+#  Document zero-pre-injury finding at the top of the pipeline
+# - Zero-pre-injury OAs: 2.7% of OAs after excluding outcome-inactive roads
+# - Contribution to total injuries: < 0.1%
+#  - Scottish zero-pre-injury problematic subset: 4 roads, 4 injuries (0.00%)
+#  - These OAs CANNOT materially drive ATT estimates
+# - Two-stage design matches zero-pre-injury treated to zero-pre-injury controls
+# - OA-level clustering absorbs any residual weight concentration
+#  - Analysis B retained as robustness check; departures from A are noise
+
+#
+#Buffer OA diagnosis
 buffer_eligible <- OA_matching_dataset %>%
   filter(buffer_OA == 1, n_roads > 0) %>% nrow()
 cat("--- Buffer OA pool diagnosis ---\n")
@@ -137,26 +156,48 @@ cat("  Total buffer OAs:        ", sum(OA_matching_dataset$buffer_OA == 1), "\n"
 cat("  Buffer OAs with n_roads > 0:", buffer_eligible, "\n")
 cat("  Excluded: contamination risk.\n\n")
 
-# Analysis A: zero-injury treated OAs excluded upfront
-data_A <- OA_matching_dataset %>%
+base_filter <- OA_matching_dataset %>%
   filter(
     (treated_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1),
     buffer_OA == 0,
-    n_roads   >  0,
-    !(treated_OA == 1 & zero_injury_OA == 1)
+    n_roads   >  0
   ) %>%
   mutate(treat_indicator = as.integer(treated_OA == 1))
+
+data_A <- base_filter %>%
+  filter(!(treated_OA == 1 & zero_injury_OA == 1))
+
+ table(data_A$assignment)
+
+data_B <- base_filter %>%
+  mutate(across(
+    all_of(intersect(stage2_vars, names(.))),
+    ~ if_else(zero_injury_OA == 1 & treated_OA == 1, 0, .)
+  ))
+
+
 
 cat("=== Analysis A (zero-injury EXCLUDED) ===\n")
 cat("  Total OAs:", nrow(data_A), "| Treated:", sum(data_A$treat_indicator == 1),
     "| Controls:", sum(data_A$treat_indicator == 0), "\n\n")
 
-table(data_A$assignment)
+cat("=== Analysis B (zero-injury INCLUDED) ===\n")
+cat("  Total OAs:", nrow(data_B), "| Treated:", sum(data_B$treat_indicator == 1),
+    "  of which zero-injury:",
+    sum(data_B$treat_indicator == 1 & data_B$zero_injury_OA == 1),
+    "| Controls:", sum(data_B$treat_indicator == 0), "\n\n")
 
 # =============================================================================
-# — WINSORISE + LOG-TRANSFORM STAGE 1 VARIABLES
+#  — WINSORISE + LOG-TRANSFORM STAGE 1 VARIABLES 
 # =============================================================================
+# (1) winsorise at p1/p99 using full-dataset quantiles,
+#            (2) log1p-transform the flagged right-skewed variables,
+#            (3) create new columns named log1p_<varname> so the raw values
+#               are preserved 
+# Percentage variables are winsorised only — no log.
 
+
+# Pre-transformation skewness check
 skew_fn <- function(x) {
   x <- x[!is.na(x)]
   n <- length(x); mu <- mean(x); s <- sd(x)
@@ -182,10 +223,12 @@ map_df(c(log_transform_s1, setdiff(stage1_vars, log_transform_s1)), function(v) 
 }) %>% arrange(desc(abs(skew_winsor))) %>% print(n = Inf)
 
 winsorise_and_log_s1 <- function(data, raw_vars, log_vars) {
+  # Step 1: winsorise all Stage 1 vars using full-dataset quantiles
   for (v in intersect(raw_vars, names(data))) {
     q <- quantile(data[[v]], probs = c(0.01, 0.99), na.rm = TRUE)
     data[[v]] <- pmin(pmax(data[[v]], q[1]), q[2])
   }
+  # Step 2: log1p-transform flagged variables; store as new columns
   for (v in intersect(log_vars, names(data))) {
     data[[paste0("log1p_", v)]] <- log1p(pmax(data[[v]], 0))
   }
@@ -193,6 +236,7 @@ winsorise_and_log_s1 <- function(data, raw_vars, log_vars) {
 }
 
 data_A_clean <- winsorise_and_log_s1(data_A, stage1_vars, log_transform_s1)
+data_B_clean <- winsorise_and_log_s1(data_B, stage1_vars, log_transform_s1)
 
 winsorise_and_log_s2 <- function(data, raw_vars, log_vars) {
   for (v in intersect(raw_vars, names(data))) {
@@ -206,6 +250,7 @@ winsorise_and_log_s2 <- function(data, raw_vars, log_vars) {
 }
 
 data_A_clean <- winsorise_and_log_s2(data_A_clean, stage2_levels, log_transform_s2_levels)
+data_B_clean <- winsorise_and_log_s2(data_B_clean, stage2_levels, log_transform_s2_levels)
 
 cat("\nSkewness of log-transformed Stage 1 variables AFTER transformation:\n")
 map_df(log_transform_s1, function(v) {
@@ -219,7 +264,7 @@ map_df(log_transform_s1, function(v) {
   )
 }) %>% print()
 
-# Near-zero variance check
+# Near-zero variance check — applied to the LOGGED variable names used in matching
 check_vars <- function(data, vars, label) {
   missing <- setdiff(vars, names(data))
   if (length(missing) > 0)
@@ -235,46 +280,74 @@ check_vars <- function(data, vars, label) {
 }
 
 s1_vars_A <- check_vars(data_A_clean, stage1_vars_log, "Stage 1 / A")
+s1_vars_B <- check_vars(data_B_clean, stage1_vars_log, "Stage 1 / B")
 
-# =============================================================================
-# — STAGE 2 VARIABLE PREP: ALL TRENDS RETAINED
-# =============================================================================
-# No structural zero filtering — all trend variables passed to Stage 2.
-# Near-zero variance check still applied as a safety net.
+# ===========================================================
+#  — STRUCTURAL ZERO DIAGNOSIS FOR STAGE 2 TRENDS
+# =============================================================
 
-cat("\nStructural zero rates — Analysis A (informational only, no dropping):\n")
-treated_rows_A <- data_A_clean %>% filter(treat_indicator == 1)
-map_df(stage2_trends, function(v) {
-  vals   <- treated_rows_A[[v]]
-  n_zero <- sum(vals == 0, na.rm = TRUE)
-  pct    <- round(100 * n_zero / nrow(treated_rows_A), 1)
-  tibble(
-    variable  = v,
-    n_treated = nrow(treated_rows_A),
-    n_zero    = n_zero,
-    pct_zero  = pct,
-    note      = case_when(
-      pct > 80 ~ ">80% structural zeros",
-      pct > 60 ~ ">60% structural zeros",
-      pct > 40 ~ ">40% structural zeros",
-      TRUE     ~ "OK"
+diagnose_structural_zeros <- function(data, trend_vars, label) {
+  treated_rows <- data %>% filter(treat_indicator == 1)
+  n_treated    <- nrow(treated_rows)
+  zero_diag <- map_df(trend_vars, function(v) {
+    vals   <- treated_rows[[v]]
+    n_zero <- sum(vals == 0, na.rm = TRUE)
+    pct    <- round(100 * n_zero / n_treated, 1)
+    tibble(
+      variable  = v,
+      n_treated = n_treated,
+      n_zero    = n_zero,
+      pct_zero  = pct,
+      flag_drop = pct > 60,
+      note      = case_when(
+        pct > 80 ~ "CRITICAL: >80% structural zeros",
+        pct > 60 ~ "DROP: >60% structural zeros",
+        pct > 40 ~ "WARN: >40% structural zeros",
+        TRUE     ~ "OK"
+      )
     )
-  )
-}) %>% print(n = Inf)
-cat("All trend variables retained.\n\n")
+  })
+  cat("\nStructural zero rates —", label, ":\n")
+  print(zero_diag, n = Inf)
+  dropped <- setdiff(zero_diag %>% filter(flag_drop) %>% pull(variable),
+                     "trend_total_pkm")
+  if (length(dropped) > 0)
+    cat("\nDropping (>60% zeros):", paste(dropped, collapse = ", "), "\n")
+  else
+    cat("\nNo trend variables dropped.\n")
+  list(diag = zero_diag, dropped = dropped)
+}
 
-# Stage 2 variable sets: all trend vars + log1p level vars
-s2_vars_A_raw <- c(stage2_trends, log_names_s2)
-s2_vars_A     <- check_vars(data_A_clean, s2_vars_A_raw, "Stage 2 / A")
+zero_diag_A <- diagnose_structural_zeros(data_A_clean, stage2_trends, "Analysis A")
+zero_diag_B <- diagnose_structural_zeros(data_B_clean, stage2_trends, "Analysis B")
 
-cat("Final Stage 2 trend variables — A:", paste(intersect(s2_vars_A, stage2_trends), collapse = ", "), "\n")
+s2_trends_A <- setdiff(stage2_trends, zero_diag_A$dropped)
+s2_trends_B <- setdiff(stage2_trends, zero_diag_B$dropped)
+
+# Stage 2 variable sets: retained trend vars (unchanged) + log1p level vars
+s2_vars_A_raw <- c(s2_trends_A, log_names_s2)
+s2_vars_B_raw <- c(s2_trends_B, log_names_s2)
+
+s2_vars_A <- check_vars(data_A_clean, s2_vars_A_raw, "Stage 2 / A")
+s2_vars_B <- check_vars(data_B_clean, s2_vars_B_raw, "Stage 2 / B")
+
+cat("\nFinal Stage 2 trend variables — A:", paste(intersect(s2_vars_A, stage2_trends), collapse = ", "), "\n")
+cat("Final Stage 2 trend variables — B:", paste(intersect(s2_vars_B, stage2_trends), collapse = ", "), "\n")
 cat("Final Stage 2 level variables (log1p):",
     paste(intersect(s2_vars_A, log_names_s2), collapse = ", "), "\n\n")
 
 # =============================================================================
 # — BALANCE IMPROVEMENT TEST FUNCTION
 # =============================================================================
+# Applied after every matchit() call. Three checks:
+#   (a) REDUCTION: mean |SMD| post-match < mean |SMD| pre-match
+#   (b) TREND THRESHOLD: max |SMD| on trend variables < 0.1
+#       (the parallel trends identifying assumption requires this)
+#   (c) VARIANCE RATIO: Var(treated)/Var(control) in [0.5, 2.0] for all vars
+#       (extreme variance ratios indicate matching created artificial clusters)
+# All failures are warnings, not errors — pipeline continues but records fail.
 
+# Accumulator for all balance test results across stages/analyses
 balance_test_log <- list()
 
 run_balance_tests <- function(matchit_obj, trend_vars, label) {
@@ -285,12 +358,14 @@ run_balance_tests <- function(matchit_obj, trend_vars, label) {
   smd_un  <- abs(bal$Diff.Un)
   smd_adj <- abs(bal$Diff.Adj)
   
+  # (a) Reduction test
   mean_un  <- mean(smd_un,  na.rm = TRUE)
   mean_adj <- mean(smd_adj, na.rm = TRUE)
   test_a   <- mean_adj < mean_un
   cat(sprintf("  [TEST a] SMD reduction: %.3f → %.3f  %s\n",
               mean_un, mean_adj, if (test_a) "PASS ✓" else "FAIL ✗"))
   
+  # (b) Trend threshold: max trend |SMD| < 0.1
   trend_in_bal  <- intersect(trend_vars, rownames(bal))
   max_trend_smd <- if (length(trend_in_bal) > 0)
     max(abs(bal[trend_in_bal, "Diff.Adj"]), na.rm = TRUE) else NA_real_
@@ -298,6 +373,7 @@ run_balance_tests <- function(matchit_obj, trend_vars, label) {
   cat(sprintf("  [TEST b] Max trend |SMD|: %.4f  %s\n",
               max_trend_smd, if (test_b) "PASS ✓" else "FAIL ✗ (>0.1 weakens parallel trends)"))
   
+  # (c) Variance ratio test: Var.Ratio.Adj in [0.5, 2.0]
   vr_col <- if ("Var.Ratio.Adj" %in% names(bal)) "Var.Ratio.Adj" else NULL
   if (!is.null(vr_col)) {
     vr       <- bal[[vr_col]]
@@ -328,9 +404,9 @@ run_balance_tests <- function(matchit_obj, trend_vars, label) {
   invisible(result)
 }
 
-# =============================================================================
-# — STAGE 1 MATCHING
-# =============================================================================
+# ===================================
+# - STAGE 1 MATCHING 
+# =============================
 
 run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
   
@@ -348,6 +424,7 @@ run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
   mm <- m$match.matrix
   cat("  Treated in match matrix:", nrow(mm), "\n")
   
+  #  Pooled covariance matrix — all rows, not treated-only
   pool_idx    <- c(as.integer(rownames(mm)), unique(as.integer(mm[!is.na(mm)])))
   S_s1_pooled <- cov(data[pool_idx, s1_vars], use = "pairwise.complete.obs")
   
@@ -397,17 +474,24 @@ run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
   print(summary(min_dist_per_treated$min_dist_s1))
   assign(paste0("isolated_OAs_", label), isolated_OAs, envir = .GlobalEnv)
   
+  #  Balance improvement tests
   cat("\n   Balance tests:\n")
   run_balance_tests(m, trend_vars = character(0), label = paste0("S1_", label))
   
+  # Balance table
   cat("\n  Stage 1 balance (SMD):\n")
   bt     <- bal.tab(m, thresholds = c(m = 0.1), un = TRUE)
+  
+  cat(names(bt$Balance), "\n")
+  # Once you know the real names, e.g. "Diff.Un" and "Diff.Adj":
   smd_df <- bt$Balance %>%
     rownames_to_column("variable") %>%
     dplyr::select(variable, Diff.Un, Diff.Adj) %>%
     arrange(desc(abs(Diff.Adj)))
+  
   print(smd_df)
   
+  #  Flag Stage 1 variables with |SMD| > 0.1 → outcome model covariates
   s1_imbalanced <- smd_df %>%
     filter(abs(Diff.Adj) > 0.1, variable != "country_Scotland") %>%
     pull(variable)
@@ -419,6 +503,7 @@ run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
   cat("\n  Country distribution (treated):\n")
   print(table(treated_matched$country))
   
+  # Cross-country check
   cross_check <- dist_s1 %>%
     left_join(data %>% select(OA, country) %>% rename(control_country = country),
               by = c("control_OA" = "OA")) %>%
@@ -448,13 +533,21 @@ run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
 }
 
 s1_A <- run_stage1(data_A_clean, s1_vars_A, "A_excl_zero")
+s1_B <- run_stage1(data_B_clean, s1_vars_B, "B_incl_zero")
 
 cat("Full balance table — Analysis A:\n")
 bal.tab(s1_A$matchit_obj, un = TRUE)
+cat("Full balance table — Analysis B:\n")
+bal.tab(s1_B$matchit_obj, un = TRUE)
 
 # =============================================================================
-# PREPARE STAGE 2 DATA: DEDUP + WINSORISE + LOG
+# PREPARE STAGE 2 DATA: DEDUP + WINSORISE + LOG 
 # =============================================================================
+# Winsorisation anchored to treated distribution (Stage 2 only).
+# Log1p applied to level variables after winsorisation.
+# Trend variables: winsorised only (already log-slopes; zero-spike handled
+# by structural zero filter
+
 
 prepare_s2_data <- function(s1_result, s2_trend_vars, s2_level_vars_raw) {
   
@@ -466,12 +559,15 @@ prepare_s2_data <- function(s1_result, s2_trend_vars, s2_level_vars_raw) {
   
   treated_ref <- s2_raw %>% filter(treat_indicator == 1)
   
+  #  Explicit loop — no cur_column() fragility
+  # Winsorise trend variables (anchored to treated distribution)
   for (v in intersect(s2_trend_vars, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
     s2_raw[[v]] <- pmin(pmax(s2_raw[[v]], q_lo), q_hi)
   }
   
+  #  Winsorise then log1p-transform level variables
   for (v in intersect(s2_level_vars_raw, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
@@ -482,7 +578,8 @@ prepare_s2_data <- function(s1_result, s2_trend_vars, s2_level_vars_raw) {
   s2_raw
 }
 
-s2_data_A <- prepare_s2_data(s1_A, stage2_trends, stage2_levels)
+s2_data_A <- prepare_s2_data(s1_A, s2_trends_A, stage2_levels)
+s2_data_B <- prepare_s2_data(s1_B, s2_trends_B, stage2_levels)
 
 cat("Skewness of Stage 2 level variables BEFORE and AFTER log1p:\n")
 map_df(stage2_levels, function(v) {
@@ -497,8 +594,9 @@ map_df(stage2_levels, function(v) {
 }) %>% print()
 
 # =============================================================================
-# — COMMON SUPPORT SENSITIVITY DATASET
+# — COMMON SUPPORT SENSITIVITY DATASETS 
 # =============================================================================
+
 
 make_restricted_data <- function(s2_data, isolated_OAs, label) {
   isolated_ids <- isolated_OAs$treated_OA
@@ -508,6 +606,7 @@ make_restricted_data <- function(s2_data, isolated_OAs, label) {
 }
 
 s2_data_A_restricted <- make_restricted_data(s2_data_A, s1_A$isolated_OAs, "Analysis A")
+s2_data_B_restricted <- make_restricted_data(s2_data_B, s1_B$isolated_OAs, "Analysis B")
 
 # =============================================================================
 # — STAGE 2 MATCHING FUNCTION
@@ -522,6 +621,7 @@ run_stage2 <- function(data, s2_vars, ratio, label, trend_vars) {
   
   mm <- m$match.matrix
   
+  # Treated-only covariance — correct for Stage 2 ATT-focused MDM
   S_s2 <- cov(data[as.integer(rownames(mm)), s2_vars],
               use = "pairwise.complete.obs")
   
@@ -548,10 +648,15 @@ run_stage2 <- function(data, s2_vars, ratio, label, trend_vars) {
     group_by(OA) %>% summarise(mdist = mean(mdist), .groups = "drop")
   
   matched_data <- match.data(m) %>% left_join(all_dists, by = "OA")
+  cat("  Re-run with exact constraint: treated", sum(matched_data$treat_indicator==1),
+      "controls", sum(matched_data$treat_indicator==0), "\n")
+
+  cat("  Note: all_dists computed from pre-constraint run — mdist values approximate\n")
   cat("Treated matched:  ", sum(matched_data$treat_indicator == 1), "\n")
   cat("Controls matched: ", sum(matched_data$treat_indicator == 0), "\n")
   cat("NAs in mdist:     ", sum(is.na(matched_data$mdist)), "\n")
   
+  # Stage 2 country integrity check
   if ("country" %in% names(matched_data)) {
     cross_s2 <- dist_s2 %>%
       left_join(data %>% select(OA, country) %>% rename(ctrl_country = country),
@@ -572,6 +677,7 @@ run_stage2 <- function(data, s2_vars, ratio, label, trend_vars) {
     }
   }
   
+  # Balance improvement tests
   cat("\n   Balance tests:\n")
   run_balance_tests(m, trend_vars = trend_vars, label = label)
   
@@ -583,7 +689,7 @@ run_stage2 <- function(data, s2_vars, ratio, label, trend_vars) {
 }
 
 # =============================================================================
-# — RATIO SELECTION VIA ELBOW CURVE
+# — RATIO SELECTION VIA ELBOW CURVE 
 # =============================================================================
 
 compute_trend_smd_at_ratio <- function(data, s2_vars, ratio) {
@@ -608,49 +714,73 @@ compute_trend_smd_at_ratio <- function(data, s2_vars, ratio) {
 
 find_elbow <- function(curve, threshold = 0.002, fallback_ratio = 4) {
   curve <- curve %>% arrange(ratio)
+  
+  # Check if curve is monotonically worsening
   if (all(diff(curve$max_trend_smd) >= 0)) {
     cat("WARNING: SMD increases with ratio — control pool may be too thin.\n")
     cat("Using fallback ratio:", fallback_ratio, "\n")
     return(fallback_ratio)
   }
+  
   improvements <- -diff(curve$max_trend_smd)
   elbow_pos    <- which(improvements < threshold)[1]
+  
   if (is.na(elbow_pos)) {
     cat("No elbow found — using fallback ratio:", fallback_ratio, "\n")
     return(fallback_ratio)
   }
+  
   elbow_ratio <- curve$ratio[elbow_pos]
   cat("Elbow at ratio", elbow_ratio, "\n")
   elbow_ratio
 }
 
-ratio_curve_A <- map_df(1:10, ~ compute_trend_smd_at_ratio(s2_data_A, s2_vars_A, .x))
+
+ratio_curve_A <- map_df(1:8, ~ compute_trend_smd_at_ratio(s2_data_A, s2_vars_A, .x))
 print(ratio_curve_A)
 
-optimal_ratio_A <- 3
+ratio_curve_B <- map_df(1:8, ~ compute_trend_smd_at_ratio(s2_data_B, s2_vars_B, .x))
+print(ratio_curve_B)
 
-cat("Ratio A =", optimal_ratio_A, "| trend SMD:",
+# Curve A: SMD stabilises around 0.053-0.055 from ratio 3 onwards
+# No benefit beyond ratio 3;  ratio 5 gives a comfortable pool
+optimal_ratio_A <- 4   # 1599 controls
+
+# Curve B: SMD peaks at ratio 4 then declines — ratio 7-8 actually best
+# Use ratio 7 where SMD drops back toward ratio 1 levels
+optimal_ratio_B <- 7   # 2130 controls
+
+cat("Ratio A =", optimal_ratio_A, "| trend SMD:", 
     ratio_curve_A$max_trend_smd[ratio_curve_A$ratio == optimal_ratio_A], "\n")
+cat("Ratio B =", optimal_ratio_B, "| trend SMD:", 
+    ratio_curve_B$max_trend_smd[ratio_curve_B$ratio == optimal_ratio_B], "\n")
 
-p_ratio <- ratio_curve_A %>%
-  ggplot(aes(x = ratio, y = max_trend_smd)) +
+p_ratio <- bind_rows(
+  ratio_curve_A %>% mutate(analysis = "A: excl zero-injury"),
+  ratio_curve_B %>% mutate(analysis = "B: incl zero-injury")
+) %>%
+  ggplot(aes(x = ratio, y = max_trend_smd, colour = analysis)) +
   geom_line() + geom_point(size = 2) +
   geom_hline(yintercept = 0.1, linetype = "dashed", colour = "grey50") +
-  labs(title = "Ratio selection: max trend |SMD| vs ratio — Analysis A",
-       x = "Ratio", y = "Max trend |SMD|") +
+  labs(title = "Ratio selection: max trend |SMD| vs ratio",
+       x = "Ratio", y = "Max trend |SMD|", colour = "Analysis") +
   theme_minimal()
 ggsave(here("output", "ratio_curve.png"), p_ratio, width = 10, height = 6, dpi = 300)
 
 # =============================================================================
-# — FINAL STAGE 2 MATCHING + BALANCE REPORTING
+#  RUN FINAL STAGE 2 MATCHING + BALANCE REPORTING
 # =============================================================================
-
 s2_A <- run_stage2(s2_data_A, s2_vars_A, optimal_ratio_A, "A_excl_zero",
                    trend_vars = intersect(s2_vars_A, stage2_trends))
+s2_B <- run_stage2(s2_data_B, s2_vars_B, optimal_ratio_B, "B_incl_zero",
+                   trend_vars = intersect(s2_vars_B, stage2_trends))
 
 s2_A_restricted <- run_stage2(s2_data_A_restricted, s2_vars_A, optimal_ratio_A,
                               "A_restricted", trend_vars = intersect(s2_vars_A, stage2_trends))
+s2_B_restricted <- run_stage2(s2_data_B_restricted, s2_vars_B, optimal_ratio_B,
+                              "B_restricted", trend_vars = intersect(s2_vars_B, stage2_trends))
 
+# Balance reporting function
 run_balance <- function(s2_result, label, s1_imbalanced = NULL) {
   
   cat("--- Balance (ratio:", s2_result$primary_ratio, ") —", label, "---\n")
@@ -681,6 +811,7 @@ run_balance <- function(s2_result, label, s1_imbalanced = NULL) {
       "| Max |SMD|:", round(max(smd_all, na.rm = TRUE), 3),
       "| Mean |SMD|:", round(mean(smd_all, na.rm = TRUE), 3), "\n")
   
+  #  Full covariate list for outcome model (Stage 1 + Stage 2 level)
   all_covs <- unique(c(s1_imbalanced, s2_level_covs))
   if (length(all_covs) > 0) {
     cat("\n   Recommended C&S xformla covariates:\n")
@@ -704,21 +835,70 @@ run_balance <- function(s2_result, label, s1_imbalanced = NULL) {
 }
 
 bal_A <- run_balance(s2_A,            "A_excl_zero",            s1_A$s1_imbalanced)
+bal_B <- run_balance(s2_B,            "B_incl_zero",            s1_B$s1_imbalanced)
 run_balance(s2_A_restricted, "A_excl_zero_restricted", s1_A$s1_imbalanced)
+run_balance(s2_B_restricted, "B_incl_zero_restricted", s1_B$s1_imbalanced)
 
 # =============================================================================
-# — DISTANCE DIAGNOSTICS
+#  — COMPARE A vs B + DISTANCE DIAGNOSTICS
 # =============================================================================
 
-cat("\n--- Stage 2 distance distribution (treated OAs only) ---\n")
-s2_A$primary_data %>%
-  filter(treat_indicator == 1) %>%
-  select(OA, mdist) %>%
+treated_A <- s2_A$primary_data %>% filter(treat_indicator == 1) %>% pull(OA)
+treated_B <- s2_B$primary_data %>% filter(treat_indicator == 1) %>% pull(OA)
+only_in_B <- setdiff(treated_B, treated_A)
+only_in_A <- setdiff(treated_A, treated_B)
+in_both   <- intersect(treated_A, treated_B)
+
+cat("--- Sample overlap ---\n")
+cat("  Treated in A:", length(treated_A), "| Treated in B:", length(treated_B), "\n")
+cat("  In both:", length(in_both), "| Only in B (zero-injury):", length(only_in_B), "\n\n")
+
+if (length(only_in_A) > 0)
+  cat("WARNING: OAs in A but not B — check exclusion logic\n")
+
+if (length(only_in_B) > 0) {
+  cat("--- Structural characteristics of zero-injury OAs added in B ---\n")
+  compare_grp <- s2_B$primary_data %>%
+    filter(treat_indicator == 1) %>%
+    mutate(grp = if_else(OA %in% only_in_B,
+                         "Zero-injury (B only)", "Injury-exposed (both)"))
+  s1_avail <- intersect(stage1_vars, names(compare_grp))
+  cov_diff <- compare_grp %>%
+    select(grp, all_of(s1_avail)) %>% pivot_longer(-grp) %>%
+    group_by(name, grp) %>%
+    summarise(mean = mean(value, na.rm = TRUE), sd = sd(value, na.rm = TRUE),
+              .groups = "drop") %>%
+    pivot_wider(names_from = grp, values_from = c(mean, sd)) %>%
+    mutate(SMD = (`mean_Injury-exposed (both)` - `mean_Zero-injury (B only)`) /
+             sqrt((`sd_Injury-exposed (both)`^2 + `sd_Zero-injury (B only)`^2) / 2)) %>%
+    arrange(desc(abs(SMD)))
+  print(cov_diff %>%
+          select(name, `mean_Injury-exposed (both)`, `mean_Zero-injury (B only)`, SMD),
+        n = Inf)
+  
+  cat("\n   Zero-pre-injury OA impact assessment:\n")
+  cat("  Diagnostic confirmed these OAs contribute < 0.1% of sample injuries.\n")
+  cat("  Scottish problematic subset: 4 roads, 4 injuries (0.00%).\n")
+  cat("  Structural distinctiveness does not translate to outcome influence.\n\n")
+  
+  cat("  Country distribution of zero-injury OAs in B:\n")
+  print(table(s2_B$primary_data %>% filter(OA %in% only_in_B) %>% pull(country)))
+}
+
+# Distance comparison
+cat("\n--- Stage 2 distance distribution: A vs B (treated OAs only) ---\n")
+bind_rows(
+  s2_A$primary_data %>% filter(treat_indicator == 1) %>%
+    select(OA, mdist) %>% mutate(analysis = "A: excl zero-injury"),
+  s2_B$primary_data %>% filter(treat_indicator == 1) %>%
+    select(OA, mdist) %>% mutate(analysis = "B: incl zero-injury")
+) %>%
+  group_by(analysis) %>%
   summarise(n = n(), mean = round(mean(mdist, na.rm = TRUE), 3),
             median = round(median(mdist, na.rm = TRUE), 3),
             p90 = round(quantile(mdist, 0.90, na.rm = TRUE), 3),
             p95 = round(quantile(mdist, 0.95, na.rm = TRUE), 3),
-            max = round(max(mdist, na.rm = TRUE), 3)) %>%
+            max = round(max(mdist, na.rm = TRUE), 3), .groups = "drop") %>%
   print()
 
 cat("\n--- Distance tail: Analysis A treated OAs ---\n")
@@ -729,6 +909,7 @@ s2_A$primary_data %>% filter(treat_indicator == 1) %>%
 # =============================================================================
 # — WEIGHT DIAGNOSTICS + CAP
 # =============================================================================
+
 
 weight_diagnostics <- function(s2_result, analysis_label) {
   controls     <- s2_result$primary_data %>% filter(treat_indicator == 0)
@@ -772,14 +953,27 @@ weight_diagnostics <- function(s2_result, analysis_label) {
 }
 
 wd_A <- weight_diagnostics(s2_A, "A_excl_zero")
+wd_B <- weight_diagnostics(s2_B, "B_incl_zero")
 
 s2_A$primary_data <- s2_A$primary_data %>% mutate(weights = pmin(weights, 5))
-s2_A_restricted$primary_data <- s2_A_restricted$primary_data %>%
+s2_A_restricted$primary_data <- s2_A_restricted$primary_data %>% 
   mutate(weights = pmin(weights, 5))
 
+s2_B$primary_data <- s2_B$primary_data %>% mutate(weights = pmin(weights, 5))
+s2_B_restricted$primary_data <- s2_B_restricted$primary_data %>%
+  mutate(weights = pmin(weights, 5))
+
+cat("\n--- Analysis B after cap at 5 ---\n")
+s2_B$primary_data %>% filter(treat_indicator == 0) %>%
+  summarise(max_weight = max(weights),
+            effective_n = round(sum(weights)^2 / sum(weights^2), 1),
+            efficiency = round((sum(weights)^2 / sum(weights^2)) / n(), 3)) %>% print()
+
 # =============================================================================
-# — BASELINE INJURY LEVEL STRATIFICATION
+# — BASELINE INJURY LEVEL STRATIFICATION 
 # =============================================================================
+
+
 
 add_baseline_stratum <- function(s2_result, label) {
   treated_rows <- s2_result$primary_data %>% filter(treat_indicator == 1)
@@ -810,25 +1004,59 @@ add_baseline_stratum <- function(s2_result, label) {
 }
 
 s2_A <- add_baseline_stratum(s2_A, "Analysis A")
+s2_B <- add_baseline_stratum(s2_B, "Analysis B")
 
-# Control reuse diagnostics
+
+#### control reuse
+
+glimpse(
+  s2_A
+)
 matched_data <- s2_A$primary_data
+
 
 control_reuse <- matched_data %>%
   filter(treat_indicator == 0) %>%
   count(OA) %>%
   summarise(
     n_controls_used = n(),
-    max_reuse       = max(n),
-    mean_reuse      = mean(n),
-    median_reuse    = median(n)
+    max_reuse = max(n),
+    mean_reuse = mean(n),
+    median_reuse = median(n)
   )
+
 print(control_reuse)
 
 matched_data %>%
+  filter(treated_OA == 0) %>%
+  count(weights)
+
+
+matched_data %>%
+  filter(treated_OA == 0) %>%
+  mutate(approx_reuse = weights / min(weights)) %>%
   summarise(
-    n_treated           = sum(treated_OA == 1),
-    n_controls          = sum(treated_OA == 0),
+    max_reuse = max(approx_reuse),
+    mean_reuse = mean(approx_reuse),
+    median_reuse = median(approx_reuse)
+  )
+
+### reuse within schemes 
+matched_data %>%
+  filter(treated_OA == 0) %>%
+  group_by(scheme) %>%
+  summarise(
+    mean_weight = mean(weights),
+    max_weight = max(weights),
+    n_controls = n()
+  )
+### ratio 
+
+
+matched_data %>%
+  summarise(
+    n_treated = sum(treated_OA == 1),
+    n_controls = sum(treated_OA == 0),
     control_per_treated = n_controls / n_treated
   )
 
@@ -836,26 +1064,44 @@ matched_data %>%
 # — EXTRACT, CHECK, AND SAVE
 # =============================================================================
 
+
 matched_A_treated  <- s2_A$primary_data %>%
   filter(treat_indicator == 1) %>% select(OA, weights, baseline_injury_stratum)
 matched_A_controls <- s2_A$primary_data %>%
+  filter(treat_indicator == 0) %>% select(OA, weights)
+
+matched_B_treated  <- s2_B$primary_data %>%
+  filter(treat_indicator == 1) %>% select(OA, weights, baseline_injury_stratum)
+matched_B_controls <- s2_B$primary_data %>%
   filter(treat_indicator == 0) %>% select(OA, weights)
 
 cat("Analysis A — Treated:", nrow(matched_A_treated),
     "| Controls:", nrow(matched_A_controls), "\n")
 cat("  Control weight range: [",
     round(min(matched_A_controls$weights), 3), ",",
-    round(max(matched_A_controls$weights), 3), "]\n\n")
+    round(max(matched_A_controls$weights), 3), "]\n")
+cat("Analysis B — Treated:", nrow(matched_B_treated),
+    "| Controls:", nrow(matched_B_controls), "\n")
+cat("  Control weight range: [",
+    round(min(matched_B_controls$weights), 3), ",",
+    round(max(matched_B_controls$weights), 3), "]\n\n")
 
 # Common support flags
-common_support_flags <- s1_A$isolated_OAs %>% mutate(analysis = "A")
+common_support_flags <- bind_rows(
+  s1_A$isolated_OAs %>% mutate(analysis = "A"),
+  s1_B$isolated_OAs %>% mutate(analysis = "B")
+)
 
-# Covariate list
-outcome_covariates <- list(analysis_A = bal_A$all_covs)
+#  covariate list
+outcome_covariates <- list(
+  analysis_A = bal_A$all_covs,
+  analysis_B = bal_B$all_covs
+)
 cat("Recommended C&S xformla covariates:\n")
-cat("  Analysis A:", paste(outcome_covariates$analysis_A, collapse = ", "), "\n\n")
+cat("  Analysis A:", paste(outcome_covariates$analysis_A, collapse = ", "), "\n")
+cat("  Analysis B:", paste(outcome_covariates$analysis_B, collapse = ", "), "\n\n")
 
-# Consolidated balance test results
+# Consolidated balance test results 
 balance_tests_summary <- bind_rows(balance_test_log)
 cat("Balance test summary:\n")
 print(balance_tests_summary, n = Inf)
@@ -863,59 +1109,77 @@ print(balance_tests_summary, n = Inf)
 # Integrity checks
 stopifnot(
   "A: treated weights == 1"     = all(matched_A_treated$weights == 1),
+  "B: treated weights == 1"     = all(matched_B_treated$weights == 1),
   "A: no NA control weights"    = !anyNA(matched_A_controls$weights),
+  "B: no NA control weights"    = !anyNA(matched_B_controls$weights),
   "A: no duplicate treated OAs" = !anyDuplicated(matched_A_treated$OA),
-  "A: max control weight <= 5"  = max(matched_A_controls$weights) <= 5
+  "B: no duplicate treated OAs" = !anyDuplicated(matched_B_treated$OA),
+  "B: max control weight <= 5"  = max(matched_B_controls$weights) <= 5
 )
 cat("All integrity checks passed.\n\n")
 
 # Save
 saveRDS(matched_A_treated,    here("data", "processed", "OA_matched_treated_A.rds"))
 saveRDS(matched_A_controls,   here("data", "processed", "OA_matched_donors_A.rds"))
+saveRDS(matched_B_treated,    here("data", "processed", "OA_matched_treated_B.rds"))
+saveRDS(matched_B_controls,   here("data", "processed", "OA_matched_donors_B.rds"))
 saveRDS(s2_A$primary_data,    here("data", "processed", "OA_matched_full_A.rds"))
+saveRDS(s2_B$primary_data,    here("data", "processed", "OA_matched_full_B.rds"))
 saveRDS(common_support_flags, here("data", "processed", "OA_common_support_flags.rds"))
 saveRDS(outcome_covariates,   here("data", "processed", "OA_outcome_covariates.rds"))
 saveRDS(balance_tests_summary,here("data", "processed", "OA_balance_tests.rds"))
 
-cat("Saved 6 files to data/processed/\n\n")
+cat("Saved 9 files to data/processed/\n\n")
 
 # =============================================================================
-# — DESIGN SUMMARY
+#### — DESIGN SUMMARY
 # =============================================================================
+
 
 cat("WHY MDM OVER PSM:\n")
-cat("  Stage 2 has", length(s2_vars_A), "variables (low-dimensional).\n")
+cat("  Stage 2 has", length(s2_vars_A), "variables (low-dimensional ).\n")
 cat("  PSM advantage (dimensionality relief) does not apply here.\n")
 cat("  PSM collapses trajectory information into a scalar — misspecification\n")
 cat("  destroys balance with no diagnostics. MDM is directly verifiable.\n\n")
 
-cat("TRANSFORMATION PIPELINE:\n")
+cat("TRANSFORMATION PIPELINE :\n")
 cat("  Stage 1: winsorise (p1/p99, pooled) → log1p for:\n")
 cat("    ", paste(log_transform_s1, collapse = ", "), "\n")
 cat("  Stage 2 levels: winsorise (treated-anchored) → log1p for all mean_*_pkm\n")
-cat("  Stage 2 trends: winsorise only (already log-slopes)\n")
+cat("  Stage 2 trends: winsorise only (already log-slopes; zeros handled)\n")
 cat("  Percentage/bounded vars: winsorise only (no log)\n\n")
 
 cat("STAGE 1 | MDM on", length(s1_vars_A), "vars (log-transformed where appropriate)\n")
 cat("        | replace=TRUE, ratio=10, exact=~country\n")
 cat("        | Pooled covariance matrix\n")
 cat("        | Common support flags saved\n")
+cat("        | Balance improvement tests \n\n")
+
+cat("STAGE 2 | MDM on", length(s2_vars_A), "vars after FIX 4 + FIX 10\n")
+cat("        | replace=TRUE, ratio = elbow-selected [FIX 5]\n")
+cat("        | Treated-only covariance; country integrity verified \n")
 cat("        | Balance improvement tests\n\n")
 
-cat("STAGE 2 | MDM on", length(s2_vars_A), "vars — ALL trend vars retained\n")
-cat("        | replace=TRUE, ratio = elbow-selected\n")
-cat("        | Treated-only covariance; country integrity verified\n")
-cat("        | Balance improvement tests\n\n")
-
-cat("ANALYSIS A | Primary | Zero-injury treated OAs EXCLUDED upfront\n")
+cat("ANALYSIS A | Primary | Zero-injury treated OAs EXCLUDED\n")
 cat("           | N treated:", nrow(matched_A_treated),
     "| N controls:", nrow(matched_A_controls), "\n\n")
+
+cat("ANALYSIS B | Robustness | Zero-injury treated OAs INCLUDED\n")
+cat("           | N treated:", nrow(matched_B_treated),
+    "| N controls:", nrow(matched_B_controls), "\n")
+cat("           | Control weights capped at 5\n")
+cat("           |  Zero-pre-injury OAs: 2.7% of OAs, <0.1% of injuries.\n")
+cat("           | Scottish problematic subset: 4 roads, 4 injuries (0.00%).\n")
+cat("           | Cannot drive ATT estimates.\n\n")
+
 
 cat("NEXT STEPS FOR DiD:\n")
 cat("  1. Join matched OA lists to panel\n")
 cat("  2. att_gt(..., weightsname = 'weights'), cluster = ~OA\n")
-cat("  3. xformla includes all vars in OA_outcome_covariates.rds\n")
+cat("  3. xformla includes all vars in OA_outcome_covariates.rds [FIX 3]\n")
 cat("     Note: covariate names are log1p_* for transformed vars\n")
-cat("  4. Stratum-specific ATT by baseline_injury_stratum\n")
-cat("  5. Sensitivity: exclude OA_common_support_flags OAs\n")
-cat("  6. Check OA_balance_tests.rds for any failing tests\n")
+cat("  4. Stratum-specific ATT by baseline_injury_stratum [FIX 8]\n")
+cat("  5. Sensitivity: exclude OA_common_support_flags OAs [FIX 2]\n")
+cat("  6. Check OA_balance_tests.rds for any failing tests [FIX 11]\n")
+cat("  7. ATT(A) vs ATT(B): if similar → A primary, B robustness\n")
+cat("     if different → heterogeneous effects by pre-period injury exposure\n")

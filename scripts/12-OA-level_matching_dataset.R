@@ -8,7 +8,7 @@
 #   - Treated OAs: all quarters before the CAZ implementation date.
 #   - Control OAs: all available quarters (no treatment cutoff).
 #   Pre-treatment periods vary in length across schemes due to
-#   staggered CAZ adoption — this is expected and handled correctly.
+#   staggered CAZ adoption — 
 #
 # Zero-filling:
 #   OA_injuries_quarterly only contains OA-quarter rows where at least
@@ -50,7 +50,7 @@ library(here)
 library(sf)
 library(naniar)
 
-# ── Load data ─────────────────────────────────────────────────────────────────
+
 
 OA_analysis <- readRDS(
   here("data", "processed", "OA_level_from_polygons.rds")             # from 8 
@@ -74,6 +74,31 @@ glimpse(OA_roads)
 OA_injuries <- readRDS(
   here("data", "processed", "OA_injuries_quarterly.rds")
 )
+glimpse(OA_injuries)
+
+
+OA_injuries %>%
+  mutate(
+    computed_total = Car_Van_KSI + Car_Van_Slight + 
+      Cyclist_KSI + Cyclist_Slight +
+      Pedestrian_KSI + Pedestrian_Slight +
+      Other_KSI + Other_Slight
+  ) %>%
+  summarise(
+    total_matches_computed = mean(total_injuries == computed_total, na.rm = TRUE),
+    n_discrepant           = sum(total_injuries != computed_total, na.rm = TRUE),
+    max_diff               = max(abs(total_injuries - computed_total), na.rm = TRUE)
+  )
+
+
+OA_injuries %>%
+  summarise(
+    total_casualties    = sum(total_injuries, na.rm = TRUE),
+    other_casualties    = sum(Other_KSI + Other_Slight, na.rm = TRUE),
+    other_pct_of_total  = 100 * other_casualties / total_casualties
+  )
+
+
 
 oa_sub <- st_read(
   here("data", "processed", "shp_files", "OA_subset.shp"),
@@ -166,7 +191,7 @@ OA_roads_clean %>%
 
 
 # ── Attach treatment info to injury panel ────────────────────────────────────
-# Note: OA_injuries only has rows where injuries > 0 at this stage
+# Note: OA_injuries only has rows where injuries > 0  
 
 OA_injuries <- OA_injuries %>%
   left_join(oa_scheme_lookup, by = "OA")
@@ -294,6 +319,8 @@ inj_trends <- inj_pre %>%
     trend_cyc_slight = poisson_slope(Cyclist_Slight,    time),
     trend_ped_KSI    = poisson_slope(Pedestrian_KSI,    time),
     trend_ped_slight = poisson_slope(Pedestrian_Slight, time),
+    trend_other_KSI    = poisson_slope(Other_KSI,       time),
+    trend_other_slight = poisson_slope(Other_Slight,    time),
     trend_total      = poisson_slope(total_injuries,    time),
     .groups = "drop"
   )
@@ -309,6 +336,8 @@ inj_baseline <- inj_pre %>%
     mean_cyc_slight = mean(Cyclist_Slight,      na.rm = TRUE),
     mean_ped_KSI    = mean(Pedestrian_KSI,      na.rm = TRUE),
     mean_ped_slight = mean(Pedestrian_Slight,   na.rm = TRUE),
+    mean_other_KSI    = mean(Other_KSI,        na.rm = TRUE),
+    mean_other_slight = mean(Other_Slight,      na.rm = TRUE),
     mean_total      = mean(total_injuries,      na.rm = TRUE),
     .groups = "drop"
   )
@@ -318,6 +347,8 @@ inj_baseline <- inj_pre %>%
 inj_per_km <- inj_baseline %>%
   left_join(road_lengths, by = "OA") %>%
   mutate(
+    mean_other_KSI_pkm    = mean_other_KSI    / road_length_km,
+    mean_other_slight_pkm = mean_other_slight / road_length_km,
     mean_car_KSI_pkm    = mean_car_KSI    / road_length_km,
     mean_car_slight_pkm = mean_car_slight / road_length_km,
     mean_cyc_KSI_pkm    = mean_cyc_KSI    / road_length_km,
@@ -339,17 +370,18 @@ inj_pre_offset <- inj_pre %>%
       NA_real_
     )
   )
-
 inj_trends_pkm <- inj_pre_offset %>%
   group_by(OA) %>%
   summarise(
-    trend_car_KSI_pkm    = poisson_slope(Car_Van_KSI,       time, log_road_km),
-    trend_car_slight_pkm = poisson_slope(Car_Van_Slight,    time, log_road_km),
-    trend_cyc_KSI_pkm    = poisson_slope(Cyclist_KSI,       time, log_road_km),
-    trend_cyc_slight_pkm = poisson_slope(Cyclist_Slight,    time, log_road_km),
-    trend_ped_KSI_pkm    = poisson_slope(Pedestrian_KSI,    time, log_road_km),
-    trend_ped_slight_pkm = poisson_slope(Pedestrian_Slight, time, log_road_km),
-    trend_total_pkm      = poisson_slope(total_injuries,    time, log_road_km),
+    trend_car_KSI_pkm     = poisson_slope(Car_Van_KSI,    time, log_road_km),
+    trend_car_slight_pkm  = poisson_slope(Car_Van_Slight, time, log_road_km),
+    trend_cyc_KSI_pkm     = poisson_slope(Cyclist_KSI,    time, log_road_km),
+    trend_cyc_slight_pkm  = poisson_slope(Cyclist_Slight, time, log_road_km),
+    trend_ped_KSI_pkm     = poisson_slope(Pedestrian_KSI,    time, log_road_km),
+    trend_ped_slight_pkm  = poisson_slope(Pedestrian_Slight, time, log_road_km),
+    trend_other_KSI_pkm   = poisson_slope(Other_KSI,    time, log_road_km),
+    trend_other_slight_pkm = poisson_slope(Other_Slight, time, log_road_km),
+    trend_total_pkm       = poisson_slope(total_injuries, time, log_road_km),
     .groups = "drop"
   )
 
@@ -415,8 +447,8 @@ anti_join(
   OA_matching_dataset, by = "OA"
 ) %>% nrow()
 
-# 3. Pre-period length by scheme — now using balanced panel so all OAs
-#    should have the same number of quarters within each scheme
+# Pre-period length by scheme —  using balanced panel ##
+
 inj_pre %>%
   group_by(scheme, treated_OA) %>%
   summarise(
@@ -428,14 +460,41 @@ inj_pre %>%
   ) %>%
   print()
 
-# 4. Short pre-period flag (should be 0 or very few after zero-filling)
+
+
+# Short pre-period flag (should be 0 or very few after zero-filling)
 short_pre <- inj_pre %>%
   filter(treated_OA == 1) %>%
   count(OA, name = "n_pre_quarters") %>%
   filter(n_pre_quarters < 4)
+
+###### other
+
+inj_pre %>%
+  group_by(OA) %>%
+  summarise(
+    all_zero_other_KSI    = all(Other_KSI == 0),
+    all_zero_other_slight = all(Other_Slight == 0),
+    .groups = "drop"
+  ) %>%
+  summarise(
+    pct_zero_other_KSI    = 100 * mean(all_zero_other_KSI),
+    pct_zero_other_slight = 100 * mean(all_zero_other_slight)
+  )
+
+class(OA_injuries_balanced$quarter_year)
+head(OA_injuries_balanced$quarter_year)
+inj_pre <- OA_injuries_balanced %>%
+  filter(period == "pre") %>%
+  arrange(OA, quarter_year) %>%
+  mutate(
+    time_cal = as.numeric(quarter_year - min(quarter_year)) / 90  
+  )
+
+
 cat("OAs with fewer than 4 pre-treatment quarters:", nrow(short_pre), "\n")
 
-# 5. Zero inflation in baseline injury variables
+# Zero inflation in baseline injury variables
 inj_baseline %>%
   left_join(OA_analysis %>% select(OA, treated_OA, control_group2_OA), by = "OA") %>%
   group_by(treated_OA, control_group2_OA) %>%
@@ -597,8 +656,8 @@ saveRDS(
   OA_matching_dataset,
   here("data", "processed", "OA_matching_dataset.rds")
 )
-OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_dataset.rds"))
-
+#OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_dataset.rds"))
+names(OA_matching_dataset)
 
 
 ######################################################################################
