@@ -1,5 +1,5 @@
 # =============================================================================
-# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  — VERSION F (Analysis A)
+# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  — VERSION Final
 # =============================================================================
 #
 # PURPOSE:
@@ -452,6 +452,20 @@ s1_A <- run_stage1(data_A_clean, s1_vars_A, "A_excl_zero")
 cat("Full balance table — Analysis A:\n")
 bal.tab(s1_A$matchit_obj, un = TRUE)
 
+bt <- bal.tab(s1_A$matchit_obj, un = TRUE, stats = c("mean.diffs","variance.ratios"))
+ bt$Balance
+
+ 
+stage1_table <- bt$Balance %>%
+   as.data.frame() %>%
+   rownames_to_column("variable") %>%
+   mutate(
+     SMD_before = abs(Diff.Un),
+     SMD_after  = abs(Diff.Adj)
+   ) %>%
+   select(variable, SMD_before, SMD_after)
+ 
+stage1_table 
 # =============================================================================
 # PREPARE STAGE 2 DATA: DEDUP + WINSORISE + LOG
 # =============================================================================

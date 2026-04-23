@@ -95,11 +95,10 @@ st_write(
   delete_dsn = TRUE
 )
 
-# ============================================================
+# ==============================================
 # Aggregate road characteristics to OA
-# ============================================================
-# ── Keep full intersection (one row per road-OA pair) ─────────────────────
-## Each OA gets credit for every road that touches it
+# =====================================
+# ──# Each road contributes only to its dominant OA (largest overlap)
 
 OA_roads <- roads_oa %>%          # 
   st_drop_geometry() %>%
