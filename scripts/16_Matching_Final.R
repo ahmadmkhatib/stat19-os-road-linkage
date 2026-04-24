@@ -603,9 +603,12 @@ run_stage2 <- function(data, s2_vars, ratio, label, trend_vars) {
 compute_trend_smd_at_ratio <- function(data, s2_vars, ratio) {
   trend_vars <- intersect(s2_vars, stage2_trends)
   formula    <- reformulate(s2_vars, response = "treat_indicator")
+  # Use exact = ~country to match the constraint applied in run_stage2,
+  # so the ratio curve reflects the actual final model (not an unconstrained one).
   m <- tryCatch(
     matchit(formula, data = data, method = "nearest",
-            distance = "mahalanobis", ratio = ratio, replace = TRUE),
+            distance = "mahalanobis", ratio = ratio, replace = TRUE,
+            exact = ~ country),
     error = function(e) NULL
   )
   if (is.null(m)) return(NULL)
@@ -620,28 +623,29 @@ compute_trend_smd_at_ratio <- function(data, s2_vars, ratio) {
          mean_trend_smd = round(smd$mean_trend_smd, 5))
 }
 
-find_elbow <- function(curve, threshold = 0.002, fallback_ratio = 4) {
-  curve <- curve %>% arrange(ratio)
-  if (all(diff(curve$max_trend_smd) >= 0)) {
-    cat("WARNING: SMD increases with ratio — control pool may be too thin.\n")
-    cat("Using fallback ratio:", fallback_ratio, "\n")
-    return(fallback_ratio)
-  }
-  improvements <- -diff(curve$max_trend_smd)
-  elbow_pos    <- which(improvements < threshold)[1]
-  if (is.na(elbow_pos)) {
-    cat("No elbow found — using fallback ratio:", fallback_ratio, "\n")
-    return(fallback_ratio)
-  }
-  elbow_ratio <- curve$ratio[elbow_pos]
-  cat("Elbow at ratio", elbow_ratio, "\n")
-  elbow_ratio
-}
 
 ratio_curve_A <- map_df(1:10, ~ compute_trend_smd_at_ratio(s2_data_A, s2_vars_A, .x))
 print(ratio_curve_A)
 
-optimal_ratio_A <- 3
+
+# Select the ratio that minimises max_trend_smd (primary criterion).
+# Ties broken by most controls. This handles flat, non-monotone curves
+# without relying on a tolerance that can jump over locally bad ratios.
+find_best_ratio <- function(curve) {
+  curve      <- curve |> dplyr::arrange(ratio)
+  global_min <- min(curve$max_trend_smd, na.rm = TRUE)
+  # Among ratios that share the minimum (within floating-point noise), prefer more controls
+  best <- curve |>
+    dplyr::filter(max_trend_smd == global_min) |>
+    dplyr::slice_max(n_controls, n = 1)
+  cat(sprintf("Global min max_trend_smd = %.4f at ratio %d  (n_controls = %d)\n",
+              global_min, best$ratio, best$n_controls))
+  cat(sprintf("Full curve:\n"))
+  print(curve |> dplyr::mutate(selected = ratio == best$ratio))
+  best$ratio
+}
+
+optimal_ratio_A <- find_best_ratio(ratio_curve_A)
 
 cat("Ratio A =", optimal_ratio_A, "| trend SMD:",
     ratio_curve_A$max_trend_smd[ratio_curve_A$ratio == optimal_ratio_A], "\n")
@@ -656,7 +660,7 @@ p_ratio <- ratio_curve_A %>%
 ggsave(here("output", "ratio_curve.png"), p_ratio, width = 10, height = 6, dpi = 300)
 
 # =============================================================================
-# — FINAL STAGE 2 MATCHING + BALANCE REPORTING
+# —  STAGE 2 MATCHING + BALANCE REPORTING
 # =============================================================================
 
 s2_A <- run_stage2(s2_data_A, s2_vars_A, optimal_ratio_A, "A_excl_zero",

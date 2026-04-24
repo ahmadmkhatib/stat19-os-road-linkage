@@ -177,8 +177,8 @@ nrow(has_injuries_no_roads)
 
  oa_scheme_lookup <- OA_analysis %>%
    arrange(OA, scheme) %>%
-   distinct(OA, .keep_all = TRUE) %>%   # 
-   dplyr::select(OA, scheme, treated_OA, control_group2_OA) %>%
+   distinct(OA, .keep_all = TRUE) %>%
+   dplyr::select(OA, scheme, treated_OA, control_group1_OA, control_group2_OA) %>%
    left_join(caz_dates, by = "scheme")
  
 
@@ -217,7 +217,7 @@ OA_injuries_balanced <- all_oas %>%
     ~ replace_na(.x, 0)
   )) %>%
   # scheme/treatment info dropped by cross_join — re-attach
-dplyr::   select(-any_of(c("scheme", "treated_OA", "control_group2_OA", "caz_start_date"))) %>%
+dplyr::   select(-any_of(c("scheme", "treated_OA", "control_group1_OA", "control_group2_OA", "caz_start_date"))) %>%
   left_join(oa_scheme_lookup, by = "OA")
 
 # Verify balance
@@ -236,6 +236,7 @@ OA_injuries_balanced <- OA_injuries_balanced %>%
         quarter_year <  caz_start_date ~ "pre",
       treated_OA == 1 & !is.na(caz_start_date) &
         quarter_year >= caz_start_date ~ "post",
+      control_group1_OA == 1          ~ "pre",
       control_group2_OA == 1          ~ "pre",
       TRUE                            ~ NA_character_
     )
@@ -438,7 +439,7 @@ OA_matching_dataset <- OA_matching_dataset %>%
 
 # 1. Unit counts by assignment group
 OA_matching_dataset %>%
-  count(treated_OA, control_group2_OA, buffer_OA) %>%
+  count(treated_OA, control_group1_OA, control_group2_OA, buffer_OA) %>%
   print()
 
 # 2. No OAs missing from oa_sub
@@ -484,25 +485,29 @@ inj_pre %>%
 
 class(OA_injuries_balanced$quarter_year)
 head(OA_injuries_balanced$quarter_year)
-inj_pre <- OA_injuries_balanced %>%
+# Diagnostic version with calendar time — kept separate to avoid overwriting
+# inj_pre (which uses row_number() time and was used for all trend estimation above)
+inj_pre_cal <- OA_injuries_balanced %>%
   filter(period == "pre") %>%
   arrange(OA, quarter_year) %>%
   mutate(
-    time_cal = as.numeric(quarter_year - min(quarter_year)) / 90  
+    time_cal = as.numeric(quarter_year - min(quarter_year)) / 90
   )
 
 
 cat("OAs with fewer than 4 pre-treatment quarters:", nrow(short_pre), "\n")
 
-# Zero inflation in baseline injury variables
+# Zero inflation in baseline injury variables — all three groups
 inj_baseline %>%
-  left_join(OA_analysis %>% select(OA, treated_OA, control_group2_OA), by = "OA") %>%
-  group_by(treated_OA, control_group2_OA) %>%
+  left_join(OA_analysis %>% select(OA, treated_OA, control_group1_OA, control_group2_OA),
+            by = "OA") %>%
+  group_by(treated_OA, control_group1_OA, control_group2_OA) %>%
   summarise(
-    pct_zero_car_KSI = mean(mean_car_KSI  == 0) * 100,
-    pct_zero_cyc_KSI = mean(mean_cyc_KSI  == 0) * 100,
-    pct_zero_ped_KSI = mean(mean_ped_KSI  == 0) * 100,
-    pct_zero_total   = mean(mean_total    == 0) * 100,
+    n                = n(),
+    pct_zero_car_KSI = mean(mean_car_KSI == 0) * 100,
+    pct_zero_cyc_KSI = mean(mean_cyc_KSI == 0) * 100,
+    pct_zero_ped_KSI = mean(mean_ped_KSI == 0) * 100,
+    pct_zero_total   = mean(mean_total   == 0) * 100,
     .groups = "drop"
   ) %>%
   print()
@@ -523,7 +528,8 @@ OA_matching_dataset %>%
 trend_plot <- inj_pre %>%
   mutate(group = case_when(
     treated_OA        == 1 ~ "Treated",
-    control_group2_OA == 1 ~ "Control",
+    control_group1_OA == 1 ~ "Control (Group 1)",
+    control_group2_OA == 1 ~ "Control (Group 2)",
     TRUE                   ~ NA_character_
   )) %>%
   filter(!is.na(group)) %>%
@@ -573,12 +579,6 @@ missing_oas <- anti_join(
   by = "OA"
 )
 nrow(missing_oas)
-## flag no injuries OAs
-OA_matching_dataset <- OA_matching_dataset %>%
-  mutate(zero_injury_OA = if_else(
-    OA %in% (missing_oas %>% pull(OA)), 1L, 0L
-  ))
-
 cat("OAs never in OA_injuries:", nrow(missing_oas), "\n")
 missing_oas %>%
   left_join(oa_scheme_lookup, by = "OA") %>%

@@ -7,9 +7,7 @@ library(tidyverse)
 library(lubridate)
 library(here)
 
-# ----------------------------------------------------------------------
-# data
-# ----------------------------------------------------------------------
+
 
 collisions  <- read_csv(here("../stat19-os-road-linkage-data",
                              "dft-road-casualty-statistics-collision-1979-latest-published-year.csv"),
@@ -29,9 +27,6 @@ names(casualties)  <- tolower(names(casualties))
 
 
 
-# -------------------------------------------------------
-# Filtering
-# --------------------------------------------------------
 
 collisions <- collisions %>%
   mutate(date = dmy(date)) %>%
@@ -47,7 +42,7 @@ vehicles <- vehicles %>%
   filter(collision_index %in% collisions$collision_index)
 
 
-### Ensure keys unique BEFORE join
+### Ensure keys unique
 # ----------------------------------------
 
 nrow(casualties) - (casualties %>%
@@ -150,7 +145,7 @@ stats19 <- stats19 %>%
     casualty_type1 = case_when(
       casualty_type_num == 1 ~ "Cyclist",
       casualty_type_num == 0 ~ "Pedestrian",
-      casualty_type_num %in% c(9, 8, 19, 10) ~ "Car or van driver or occupant",
+      casualty_type_num %in% c(9, 8, 10, 16, 19) ~ "Car or van driver or occupant",
       car_passenger %in% c(1, 2) ~ "Car or van driver or occupant",
       TRUE ~ "Other"
     ),
@@ -250,7 +245,7 @@ injuries_sf <- st_join(injuries_sf,
                        left = F)
 
 st_write(LADs_filtered,
-         here("data","processed","shp_files","LADs_filtered.shp"))
+         here("data","processed","shp_files","LADs_filtered.shp",delete_dsn = T))
 
 sum(duplicated(injuries_sf$injury_id))
 
