@@ -1,0 +1,67 @@
+variable,label,group,n,mean,sd,median,p25,p75
+road_density_m_km2,Road density (m/km²),England,613,21833.649,8954.7661,20495.957,15546.7149,27173.1531
+road_length_km,Road length (km),England,613,1.2402,1.3894,0.8866,0.4714,1.4655
+pct_A_road,% A-road,England,613,13.5558,17.5372,3.0303,0,23.8095
+pct_B_road,% B-road,England,613,4.2416,10.4331,0,0,0
+pct_minor_road,% Minor road,England,613,81.8437,19.9662,87.7551,69.2308,100
+dist_citycentre,Distance to city centre (m),England,613,8258.323,3713.5847,8642.6699,3935.0012,11656.7869
+pop_density,Population density (persons/km²),England,613,10628.5796,7620.531,8725.1238,4404.3566,15677.7728
+IMD,Index of Multiple Deprivation,England,613,40.4414,18.1001,36.9,25.8,56.3
+cars_none_pct,% households: no car,England,613,49.1475,16.8289,50,36.0656,62.8788
+Drive_Car_pct,% commuting by car,England,613,18.8269,8.0616,17.8947,12.5541,23.5075
+Walk_pct,% commuting on foot,England,613,15.9092,8.7517,12.9944,8.5714,22.3881
+Bicycle_pct,% commuting by bicycle,England,613,1.2761,1.6904,0.5952,0.1972,1.6746
+X65plus_pct,% aged 65+,England,613,8.0028,7.4126,6.2016,2.864,11.0119
+X5to19_pct,% aged 5–19,England,613,18.1393,10.5998,19.0722,7.9051,27.6827
+X20to24_pct,% aged 20–24,England,613,15.2729,11.5095,10.4167,7.0866,21.4286
+trend_car_KSI_pkm,Trend: car KSI/km,England,613,0.0043,0.0801,0,0,0
+trend_car_slight_pkm,Trend: car slight/km,England,613,-0.0245,0.129,0,-0.0519,0.0086
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,England,613,0.0062,0.0706,0,0,0
+trend_cyc_slight_pkm,Trend: cycling slight/km,England,613,-0.0157,0.1351,0,-0.0177,0
+trend_ped_KSI_pkm,Trend: pedestrian KSI/km,England,613,-0.0023,0.0984,0,0,0
+trend_ped_slight_pkm,Trend: pedestrian slight/km,England,613,-0.0078,0.1067,0,-0.0332,0.0059
+trend_other_KSI_pkm,Trend: other KSI/km,England,613,0.0029,0.0743,0,0,0
+trend_other_slight_pkm,Trend: other slight/km,England,613,-0.0093,0.1056,0,0,0
+trend_total_pkm,Trend: total injuries/km,England,613,-0.0171,0.0933,-0.0119,-0.048,0.022
+mean_car_KSI_pkm,Mean: car KSI/km,England,613,0.0102,0.0216,0,0,0
+mean_car_slight_pkm,Mean: car slight/km,England,613,0.1646,0.1694,0.1046,0.0231,0.2616
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,England,613,0.0068,0.0165,0,0,0
+mean_cyc_slight_pkm,Mean: cycling slight/km,England,613,0.0377,0.054,0.0101,0,0.0559
+mean_ped_KSI_pkm,Mean: pedestrian KSI/km,England,613,0.0212,0.0329,0,0,0.0351
+mean_ped_slight_pkm,Mean: pedestrian slight/km,England,613,0.0628,0.0698,0.0414,0,0.098
+mean_other_KSI_pkm,Mean: other KSI/km,England,613,0.0065,0.0166,0,0,0
+mean_other_slight_pkm,Mean: other slight/km,England,613,0.0258,0.041,0,0,0.038
+mean_total_pkm,Mean: total injuries/km,England,613,0.3751,0.3006,0.2947,0.1388,0.5459
+road_density_m_km2,Road density (m/km²),Scotland,201,21971.302,8977.7582,21511.9198,15057.3383,28488.7117
+road_length_km,Road length (km),Scotland,201,0.6723,1.3381,0.2584,0.1329,0.6041
+pct_A_road,% A-road,Scotland,201,10.55,18.9378,0,0,14.5985
+pct_B_road,% B-road,Scotland,201,1.1545,6.5195,0,0,0
+pct_minor_road,% Minor road,Scotland,201,86.6645,22.3734,100,80,100
+dist_citycentre,Distance to city centre (m),Scotland,201,6623.8543,4339.6,7695.6429,1005.4173,10590.7144
+pop_density,Population density (persons/km²),Scotland,201,11903.5157,8656.7198,9813.9833,4675.0987,17233.5483
+IMD,Index of Multiple Deprivation,Scotland,201,20.7856,11.4119,19.5,15.1,23.3
+cars_none_pct,% households: no car,Scotland,201,65.0597,11.0711,69.2308,59.6774,74
+Drive_Car_pct,% commuting by car,Scotland,201,18.535,7.431,17.757,12.5,22.619
+Walk_pct,% commuting on foot,Scotland,201,31.3276,3.0003,32.288,32.288,32.288
+Bicycle_pct,% commuting by bicycle,Scotland,201,2.6893,3.1511,1.7857,0,4.2553
+X65plus_pct,% aged 65+,Scotland,201,5.7055,6.203,4,1.5306,7.377
+X5to19_pct,% aged 5–19,Scotland,201,12.4601,9.193,9.4737,5.4348,17.2638
+X20to24_pct,% aged 20–24,Scotland,201,30.5005,11.4813,32.8767,21.2121,41.9654
+trend_car_KSI_pkm,Trend: car KSI/km,Scotland,201,0.0037,0.0673,0,0,0
+trend_car_slight_pkm,Trend: car slight/km,Scotland,201,-0.0255,0.0955,0,-0.0388,0
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,Scotland,201,-8e-4,0.0686,0,0,0
+trend_cyc_slight_pkm,Trend: cycling slight/km,Scotland,201,-0.0202,0.0892,0,-0.0263,0
+trend_ped_KSI_pkm,Trend: pedestrian KSI/km,Scotland,201,-0.0112,0.1092,0,-0.0104,0
+trend_ped_slight_pkm,Trend: pedestrian slight/km,Scotland,201,-0.0359,0.1173,0,-0.0692,0
+trend_other_KSI_pkm,Trend: other KSI/km,Scotland,201,-0.0063,0.0766,0,0,0
+trend_other_slight_pkm,Trend: other slight/km,Scotland,201,-0.0301,0.0997,0,0,0
+trend_total_pkm,Trend: total injuries/km,Scotland,201,-0.0376,0.1009,-0.0373,-0.0752,0.0042
+mean_car_KSI_pkm,Mean: car KSI/km,Scotland,201,0.0071,0.0213,0,0,0
+mean_car_slight_pkm,Mean: car slight/km,Scotland,201,0.1012,0.1557,0,0,0.1476
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,Scotland,201,0.0106,0.0226,0,0,0
+mean_cyc_slight_pkm,Mean: cycling slight/km,Scotland,201,0.0477,0.0662,0,0,0.0871
+mean_ped_KSI_pkm,Mean: pedestrian KSI/km,Scotland,201,0.0361,0.0452,0,0,0.0858
+mean_ped_slight_pkm,Mean: pedestrian slight/km,Scotland,201,0.0893,0.085,0.0726,0,0.1759
+mean_other_KSI_pkm,Mean: other KSI/km,Scotland,201,0.0097,0.0226,0,0,0
+mean_other_slight_pkm,Mean: other slight/km,Scotland,201,0.0293,0.0491,0,0,0.0421
+mean_total_pkm,Mean: total injuries/km,Scotland,201,0.4198,0.3005,0.3362,0.1674,0.5758
