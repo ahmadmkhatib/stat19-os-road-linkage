@@ -435,7 +435,7 @@ run_stage1 <- function(data, s1_vars, label, trend_vars_for_test = NULL) {
     shapes    = c("circle filled", "triangle filled"),
     colors    = c("#E74C3C", "#2ECC71"),
     sample.names = c("Before", "After")
-  ) + theme(plot.margin = margin(10, 30, 10, 180), legend.position = "bottom")
+  ) + theme(plot.margin = margin(10, 30, 10, 400), legend.position = "bottom")
   ggsave(here("output", paste0("s1_balance_", label, ".png")),
          lp, width = 13, height = 9, dpi = 300)
   cat("  Love plot saved.\n\n")
@@ -712,7 +712,7 @@ run_balance <- function(s2_result, label, s1_imbalanced = NULL) {
     colors       = c("#E74C3C", "#2ECC71"),
     sample.names = c("Before", "After")
   ) + theme(axis.text.y = element_text(size = 9),
-            plot.margin  = margin(10, 30, 10, 180),
+            plot.margin  = margin(10, 30, 10, 400),
             legend.position = "bottom")
   ggsave(here("output", paste0("s2_balance_", label, ".png")),
          lp, width = 13, height = 9, dpi = 300)
