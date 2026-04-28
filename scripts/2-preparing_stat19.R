@@ -150,9 +150,7 @@ stats19 <- stats19 %>%
       TRUE ~ "Other"
     ),
     
-    # =========================
-    # PROPULSION CODE
-    # =========================
+      # =========================
     propulsion_code_num = safe_int(propulsion_code),
     
     propulsion_code1 = case_when(
@@ -228,7 +226,7 @@ nrow(collisions_missing)
 
 # ----------------------------------------------------------------------
 # Attach LAD 
-# ----------------------------------------------------------------------
+
 
 LADs <- st_read( here("../stat19-os-road-linkage-data", "LAD_DEC_24_UK_BGC.shp"), quiet = TRUE) %>%
   st_transform(27700)

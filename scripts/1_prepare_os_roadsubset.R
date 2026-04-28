@@ -1,8 +1,6 @@
 # ==========================================================
-# STAT19 – OS Open Roads Linkage Framework
-# Script: 01_prepare_os_roads.R
-# Purpose: Prepare OS Open Roads data within selected LADs
-#          defined in Script 00 (large city subset)
+## Purpose: Prepare OS Open Roads data within selected LADs
+#          defined in Script 0 (large city subset)
 # Output:  data/processed/roads_filtered.rds
 # ==========================================================
 
