@@ -508,7 +508,7 @@ ld_s2 <- love_data_fn(unmatched_pool, matched_A, c(stage2_trends, stage2_levels)
 p_love_s2 <- make_love_plot(
   ld_s2,
   "Stage 2 Balance — Analysis A",
-  "Pre-treatment injury trends and levels | ratio 10, exact = country")
+  "Pre-treatment injury trends and levels | ratio 5, exact = country")
 save_fig(p_love_s2, "fig02_love_plot_stage2_A.png", width = 13, height = 11)
 
 cat("  Saved: fig01_love_plot_stage1_A.png\n")
@@ -781,7 +781,7 @@ p_ratio <- ggplot(ratio_curve_data, aes(x = ratio)) +
   scale_y_continuous(limits = c(0, 0.075)) +
   labs(
     title    = "Ratio Selection: Trend Balance vs Matching Ratio — Analysis A",
-    subtitle = "Ratio 1:3 selected: lowest max trend |SMD| (0.056) with 1,342 initial controls",
+    subtitle = "Ratio 1:10 selected: lowest max trend |SMD| (0.056) with 1,342 initial controls",
     x        = "Matching ratio (1:k)",
     y        = "Trend variable |SMD|",
     colour   = NULL,

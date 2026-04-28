@@ -125,7 +125,7 @@ dist_citycentre <- st_distance(
 
 #============================================================
 # OA classification
-#============================================================
+####
 #dups
 oa_sub %>% st_drop_geometry() %>% count(OA) %>% filter(n > 1) %>% nrow()
 

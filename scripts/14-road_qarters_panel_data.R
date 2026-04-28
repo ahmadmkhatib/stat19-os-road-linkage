@@ -276,22 +276,22 @@ road_panel_model <- arrow::open_dataset(
   here("data", "processed", "road_panel_dataset")
 ) %>% collect()
 
-# 1. Basic dimensions
+#  dimensions
 cat("Roads:   ", n_distinct(road_panel_model$identifier), "\n")
 cat("Quarters:", n_distinct(road_panel_model$quarter_year), "\n")
 cat("Rows:    ", nrow(road_panel_model), "\n")
 
-# 2. Variable names
+# Variable names
 names(road_panel_model)
 
-# 3. Treatment group counts
+# Treatment group counts
 road_panel_model %>%
   distinct(identifier, treated_group_any, treated_group_50pct,
            control_group1, control_group2, scheme) %>%
   count(treated_group_50pct, control_group1, control_group2) %>%
   print()
 
-# 4. Treatment timing — what does caz_start_q look like?
+#Treatment timing — what does caz_start_q look like?
 road_panel_model %>%
   filter(treated_group_50pct == 1) %>%
   distinct(scheme, caz_start_q) %>%
@@ -302,7 +302,7 @@ road_panel_model %>%
 class(road_panel_model$quarter_year)
 head(road_panel_model$quarter_year, 5)
 
-# 6. Outcome variable check
+#  Outcome variable check
 road_panel_model %>%
   summarise(
     mean_KSI   = mean(KSI_adj_All, na.rm = TRUE),
@@ -312,7 +312,7 @@ road_panel_model %>%
   ) %>%
   print()
 
-# 7. Does the panel link back to OAs?
+# Does the panel link back to OAs?
 "OA" %in% names(road_panel_model)
 
 

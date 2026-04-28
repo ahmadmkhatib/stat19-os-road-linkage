@@ -49,9 +49,7 @@ library(tidyverse)
 library(lubridate)
 library(here)
 
-# ------------------------------------------------------------
-# Load matched injuries dataset
-# ------------------------------------------------------------
+
 injuries <- readRDS(
   here("data", "processed","injuries_matched_final.rds")
 )
@@ -117,9 +115,7 @@ OA_injuries_wide <- OA_injuries_wide %>%
 
 glimpse(OA_injuries_wide)
 
-# ------------------------------------------------------------
-# Save OA × quarter injury dataset
-# ------------------------------------------------------------
+
 saveRDS(
   OA_injuries_wide,
   here("data","processed","OA_injuries_quarterly.rds")

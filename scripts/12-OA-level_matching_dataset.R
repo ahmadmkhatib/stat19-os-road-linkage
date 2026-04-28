@@ -437,12 +437,12 @@ OA_matching_dataset <- OA_matching_dataset %>%
 
 # ── Checks ────────────────────────────────────────────────────────────────────
 
-# 1. Unit counts by assignment group
+# Unit counts by assignment group
 OA_matching_dataset %>%
   count(treated_OA, control_group1_OA, control_group2_OA, buffer_OA) %>%
   print()
 
-# 2. No OAs missing from oa_sub
+# No OAs missing from oa_sub
 anti_join(
   oa_sub %>% st_drop_geometry() %>% select(OA),
   OA_matching_dataset, by = "OA"
@@ -512,7 +512,7 @@ inj_baseline %>%
   ) %>%
   print()
 
-# 6. NAs remaining in matching variables for treated OAs
+# NAs remaining in matching variables for treated OAs
 OA_matching_dataset %>%
   filter(treated_OA == 1) %>%
   summarise(across(
@@ -524,7 +524,7 @@ OA_matching_dataset %>%
   arrange(desc(n_NA)) %>%
   print()
 
-# 7. Parallel trends plot — uses inj_pre directly (already has treated_OA etc.)
+# Parallel trends plot — uses inj_pre directly (already has treated_OA etc.)
 trend_plot <- inj_pre %>%
   mutate(group = case_when(
     treated_OA        == 1 ~ "Treated",
@@ -560,12 +560,12 @@ OA_matching_dataset %>%
   ) %>%
   print()
 
-# 9. Duplicate OA check — must be zero
+# Duplicate OA check — must be zero
 dupes <- OA_matching_dataset %>% count(OA) %>% filter(n > 1)
 cat("Duplicate OAs:", nrow(dupes), "\n")
 stopifnot(nrow(dupes) == 0)
 
-# 10. Balanced panel verification
+#  Balanced panel verification
 cat("Balanced panel rows:    ", nrow(inj_pre), "\n")
 cat("Expected (n_OA × n_qtr):",
     n_distinct(inj_pre$OA) * n_distinct(inj_pre$quarter_year), "\n")

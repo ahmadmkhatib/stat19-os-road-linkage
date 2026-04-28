@@ -14,13 +14,14 @@ library(here)
 injuries_matched <- read_rds(here("data", "processed", "injuries_matched.rds"))
 
 
-# Convert to sf using injury coordinates (British National Grid)
+# British National Grid coord
 injuries_matched_sf <- injuries_matched %>%
   st_as_sf(
     coords = c("injury_x", "injury_y"),
     crs = 27700,
     remove = FALSE
   )
+  
 
 # Load Output Area boundaries (England and scotland 2011) ### scotland does not have 2021 
 # ------------------------------------------------------------

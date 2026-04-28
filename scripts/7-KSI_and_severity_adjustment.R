@@ -1,9 +1,10 @@
+####     KSI and Sevirity adjustment from stats method
+
 library(tidyverse)
 library(lubridate)
 library(here)
 
-# ------------------------------------------------------------
-# Load matched RTI data
+
 # -------------------------------
 injuries <- read_rds(here("data", "processed", "injuries_matched_OA.rds"))
 # -------------------------------
@@ -38,9 +39,8 @@ injuries <- injuries %>%
       TRUE ~ 0
     )
   )
-# ------------------------------------------------------------
+# -----------
 #checks
-# ------------------------------------------------------------
 
 stopifnot(
   all(injuries$KSI_adj >= 0 & injuries$KSI_adj <= 1),
