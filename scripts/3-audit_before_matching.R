@@ -11,11 +11,7 @@ injuries_sf <- readRDS(here("data","processed","injuries_final.rds"))
 lad_sub <- st_read( here("data", "processed", "shp_files","LADs_filtered.shp"))
 
 
-injuries_sf %>% 
-  filter(casualty_severity1 == "KSI") %>% 
-  select(n_fatalities = collision_index) %>% 
-  aggregate(by = police_boundaries, FUN = length) %>% 
-  plot()
+
 
 injuries_sf %>% 
   filter(casualty_severity1 == "KSI") %>% 

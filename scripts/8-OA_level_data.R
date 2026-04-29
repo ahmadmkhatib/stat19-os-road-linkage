@@ -130,8 +130,6 @@ dist_citycentre <- st_distance(
 oa_sub %>% st_drop_geometry() %>% count(OA) %>% filter(n > 1) %>% nrow()
 
 
-OA_analysis %>% count(OA) %>% filter(n > 1) %>% nrow()
-
 # Are all oa_sub OAs actually in OA_analysis?
 anti_join(
   oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),

@@ -60,15 +60,15 @@ selected_lads <- c(
   filter(LAD24CD %in% selected_lads)
   
   ### remove Wales
-  lads_sub <- lads_sub %>% filter(!grepl("^W", LAD24CD))
+  LADs_sub <- LADs_sub %>% filter(!grepl("^W", LAD24CD))
   
   
   
   ### save the LADs sub 
 
-saveRDS(lads_sub, here("data", "processed", "LADs_sub.rds"))
+saveRDS(LADs_sub, here("data", "processed", "LADs_sub.rds"))
 
-lads_union <- st_union(lads_sub)
+lads_union <- st_union(LADs_sub)
 
 # ----------------------------------------------------------
 # Load OS Open Roads (only for the lads subset)
@@ -76,7 +76,7 @@ lads_union <- st_union(lads_sub)
 roads <- st_read(roads_path, quiet = TRUE)
 # for speed ## dealing with .gpkg is faster than .shp 
 
-roads <- roads %>% st_zm(roads, drop = TRUE, what = "ZM") %>% select(-fid)
+roads <- roads %>% st_zm( drop = TRUE, what = "ZM") %>% select(-fid)
 st_write(roads, "data/processed/roads.gpkg", delete_dsn = TRUE)
 rm(roads)
 

@@ -1,10 +1,9 @@
 # =============================================================================
-# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  — VERSION Final
+# OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING  
 # =============================================================================
 #
 # PURPOSE:
-#   Construct matched comparison groups for a Difference-in-Differences (DiD)
-#   analysis of a road safety intervention in Great Britain.
+#   Construct matched comparison groups for a  (DiD) 
 #
 #
 # OUTPUTS:

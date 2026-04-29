@@ -8,14 +8,14 @@ library(lubridate)
 library(here)
 
 # ------------------------------------------------------------
-# 1. Load matched injuries_with_oa data
+# Load matched injuries_with_oa data
 # ------------------------------------------------------------
 
 injuries_with_oa <- read_rds(here("data", "processed", "injuries_with_oa.rds"))
 
-# ------------------------------------------------------------
-# 2. Basic Structure Checks
-# ------------------------------------------------------------
+# 
+#  Checks
+# ----------------------------------------
 
 cat("Total injuries_with_oa:", nrow(injuries_with_oa), "\n")
 
@@ -23,9 +23,6 @@ cat("Total injuries_with_oa:", nrow(injuries_with_oa), "\n")
 dup_count <- sum(duplicated(injuries_with_oa$injury_id))
 cat("Duplicate injury_id count:", dup_count, "\n")
 
-# ------------------------------------------------------------
-# 3. Coordinate / Geometry Checks
-# ------------------------------------------------------------
 
 # Check if any geometries are empty
 empty_geom <- sum(st_is_empty(injuries_with_oa))
@@ -39,7 +36,7 @@ cat("Invalid geometries:", invalid_geom, "\n")
 cat("CRS (EPSG):", st_crs(injuries_with_oa)$epsg, "\n")
 
 # ------------------------------------------------------------
-# 4. Output Area (OA) Assignment Validation
+# Output Area (OA) Assignment Validation
 # ------------------------------------------------------------
 
 oa_summary <- injuries_with_oa %>%
@@ -52,7 +49,7 @@ oa_summary <- injuries_with_oa %>%
 print(oa_summary)
 
 # ------------------------------------------------------------
-# 5. Road Linkage Distance Check (if matched road geometry available)
+# Road Linkage Distance Check (if matched road geometry available)
 # ------------------------------------------------------------
 
 if("road_geom" %in% names(injuries_with_oa)) {
@@ -92,22 +89,9 @@ future_dates <- injuries_with_oa %>%
 
 cat("Future-dated injuries:", nrow(future_dates), "\n")
 
-# ------------------------------------------------------------
-# 7. Optional: OA fallback / distance check
-# ------------------------------------------------------------
 
-# If needed, you can check nearest OA fallback distances:
-# (This is just a rough spatial sanity check)
-if(!all(is.na(injuries_with_oa$OA_CODE))) {
-  cat("Checking OA centroid distances...\n")
-  # centroids of OA polygons (approx)
-  # only meaningful if you have OA polygons stored separately
-  # injuries_with_oa %>% st_join(oa_2011) %>% st_distance(...)
-}
 
-# ------------------------------------------------------------
-# 8. Save Validation Summary
-# ------------------------------------------------------------
+
 
 validation_report <- list(
   total_injuries = nrow(injuries_with_oa),

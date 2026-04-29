@@ -28,7 +28,8 @@ injuries_matched_sf <- injuries_matched %>%
 
 oa_scot <- st_read("../stat19-os-road-linkage-data/OutputArea2022_EoR.shp") %>%
   st_transform(27700) %>%
-  st_make_valid() 
+  st_make_valid() %>%
+  select(OA = code, geometry)
 
 oa_eng <- st_read("../stat19-os-road-linkage-data/OA_2021_EW_BFE_V9.shp") %>%
   st_transform(27700) %>%
@@ -104,7 +105,7 @@ injuries_with_oa <- injuries_with_oa %>%
 
 write_rds(
   injuries_with_oa,
-  here("data", "processed", "injuries_matched_OA.rds")
+  here("data", "processed", "injuries_with_oa.rds")
 )
 
 
@@ -130,5 +131,4 @@ write_rds(
 
 st_write(oa,
          here("data","processed","shp_files","OAs_comb.shp"),
-         layer = "injuries_final",
-         delete_layer = TRUE)
+          delete_layer = TRUE)

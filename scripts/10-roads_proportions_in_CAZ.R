@@ -1,8 +1,11 @@
 
 library(sf)
 library(tidyverse)
+library(lubridate)
+library(zoo)
 library(here)
 library(units)
+library(lubridate)
 
 
 
@@ -45,10 +48,16 @@ roads_caz_props <- roads_caz %>%
     roads %>% st_drop_geometry() %>% select(identifier, road_length),
     by = "identifier"
   ) %>%
-  mutate(prop_in_caz = as.numeric(length_in_caz / road_length))
+  mutate(prop_in_caz = as.numeric(length_in_caz / road_length)) %>%
+  left_join(
+    caz %>%
+      st_drop_geometry() %>%
+      select(scheme, startDt) %>%
+      distinct(scheme, .keep_all = TRUE) %>%
+      mutate(caz_start_q =as.yearqtr(dmy(startDt))),
+    by = "scheme"
+  )
 
-
-# ── Save dataset ───────────────────────────────────────────
 
 # ── Join CAZ proportion back to roads ───────────────────────
 roads <- roads %>%
@@ -57,17 +66,13 @@ roads <- roads %>%
     by = "identifier"
   )
 
-# ── Save final roads dataset ─────────────────────────────────
+
 st_write(
   roads,
   here("data","processed","roads_final.gpkg"),
   delete_dsn = TRUE
 )
 
-
-####
-#
-#
 
 
 saveRDS(

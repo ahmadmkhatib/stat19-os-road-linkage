@@ -109,7 +109,7 @@ glimpse(road_caz_prop)
 road_caz_prop <- road_caz_prop %>%
   mutate(
     ever_treated_any   = 1,
-    ever_treated_50pct = if_else(prop_inside >= 0.5, 1, 0)
+    ever_treated_50pct = if_else(prop_in_caz >= 0.5, 1, 0)
   )
 
 
@@ -223,21 +223,9 @@ road_panel_model <- road_panel_complete %>%
   rename_with(~ make.names(.x))
 
 
-road_panel_model <- arrow::open_dataset(
-  here("data", "processed", "road_panel_dataset")
-) %>% collect()
 
-#1#1#1#1#1#1#1#1#1#1#1#1#11#
-# These three outputs are what I need to see tomorrow
-class(road_panel_model$quarter_year)
-head(road_panel_model$quarter_year, 5)
-road_panel_model %>%
-  filter(treated_group_50pct == 1) %>%
-  distinct(scheme, caz_start_q) %>%
-  arrange(caz_start_q)
-# -----------------------------
-# Arrow Dataset
-# -----------------------------
+
+
 
 
 ### add some road and city vars 
@@ -298,7 +286,7 @@ road_panel_model %>%
   arrange(caz_start_q) %>%
   print()
 
-# 5. How is quarter_year formatted?
+
 class(road_panel_model$quarter_year)
 head(road_panel_model$quarter_year, 5)
 
