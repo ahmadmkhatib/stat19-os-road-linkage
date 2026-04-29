@@ -156,8 +156,6 @@ nrow(OA_analysis)
 
 
 
-
-
 saveRDS(
   OA_roads,
   here("data","processed","OA_roads.rds")
