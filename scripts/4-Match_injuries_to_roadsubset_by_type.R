@@ -36,9 +36,9 @@ roads_B        <- roads %>% filter(road_class == "B")
 roads_motorway <- roads %>% filter(road_class == "Motorway")
 roads_minor    <- roads %>% filter(road_class == "minor")
 
-# ----------------------------------------------------------
+# -----------------
 # Matching Function
-# ----------------------------------------------------------
+# ----
 
 match_one_class <- function(injuries, roads_same, roads_any,
                             max_same = 50, max_any = 100) {
@@ -72,9 +72,9 @@ match_one_class <- function(injuries, roads_same, roads_any,
     ) %>%
     filter(match_type != "dropped")
 }
-# ----------------------------------------------------------
+# --------------------------------
 # Perform Matching by Injury Class
-# ----------------------------------------------------------
+# --------------------------------
 
 matched_A <- match_one_class(
   injuries %>% filter(road_class == "A"),
@@ -107,9 +107,9 @@ matched <- bind_rows(
   matched_minor
 )
 
-# ----------------------------------------------------------
+# -----------------
 #   Diagnostics 
-# ----------------------------------------------------------
+# -------------
 
 # total unique injuries entering matching
 n_total <- injuries %>%

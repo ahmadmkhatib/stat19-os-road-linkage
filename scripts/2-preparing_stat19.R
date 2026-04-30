@@ -243,7 +243,7 @@ injuries_sf <- st_join(injuries_sf,
                        left = F)
 
 st_write(LADs_filtered,
-         here("data","processed","shp_files","LADs_filtered.shp"))
+         here("data","processed","shp_files","LADs_filtered.shp"), append=FALSE)
 
 sum(duplicated(injuries_sf$injury_id))
 

@@ -36,7 +36,6 @@ CAZ_LADs <- c(
 
 LADs <- st_read(lads_path, quiet = TRUE)
 
-View(caz_LADS<-LADs %>% filter(LAD24CD %in% CAZ_LADs))
 
 cities_with_LADs <- readRDS(cities_path)
 
@@ -73,12 +72,12 @@ lads_union <- st_union(LADs_sub)
 # ----------------------------------------------------------
 # Load OS Open Roads (only for the lads subset)
 # ----------------------------------------------------------
-roads <- st_read(roads_path, quiet = TRUE)
+#roads <- st_read(roads_path, quiet = TRUE)
 # for speed ## dealing with .gpkg is faster than .shp 
 
-roads <- roads %>% st_zm( drop = TRUE, what = "ZM") %>% select(-fid)
-st_write(roads, "data/processed/roads.gpkg", delete_dsn = TRUE)
-rm(roads)
+#roads <- roads %>% st_zm( drop = TRUE, what = "ZM") %>% select(-fid)
+#st_write(roads, "data/processed/roads.gpkg", delete_dsn = TRUE)
+#rm(roads)
 
 roads <- st_read(
   "data/processed/roads.gpkg",

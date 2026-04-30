@@ -5,6 +5,8 @@
 # 1. Assign each road link to ONE Output Area
 #    based on the largest share of road length.
 # 2. Attach OA treatment assignment
+# create road level data 
+####  road_attributes_OA 
 # 3. Create OA-level road characteristics dataset
 # # # output : OA_roads_dataset.rds
 # ============================================================
@@ -41,9 +43,9 @@ if (st_crs(roads) != st_crs(oa_sub)) {
   roads <- st_transform(roads, st_crs(oa_sub))
 }
 
-# ============================================================
+# ==================================############
 #  Intersect Roads with OAs
-# ============================================================
+# =================================
 
 roads_oa <- st_intersection(
   roads,
@@ -65,9 +67,9 @@ roads_oa <- roads_oa %>%
   slice_max(int_length, n = 1, with_ties = FALSE) %>%
   ungroup()
 
-# ============================================================
+# ===================================================
 #Attach OA treatment classification
-# ============================================================
+# =======================================
 
 road_attributes_OA <- roads_oa %>%
   left_join(
@@ -85,9 +87,9 @@ missing_roads <- roads %>%
 
 nrow(missing_roads)
 
-# ============================================================
+# ==================
 # road-level dataset
-# ============================================================
+#========================
 
 st_write(
   road_attributes_OA,
@@ -95,7 +97,7 @@ st_write(
   delete_dsn = TRUE
 )
 
-# ==============================================
+# =====================================
 # Aggregate road characteristics to OA
 # =====================================
 # ──# Each road contributes only to its dominant OA (largest overlap)

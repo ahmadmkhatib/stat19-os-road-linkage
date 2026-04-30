@@ -39,7 +39,7 @@ oa_eng <- st_read("../stat19-os-road-linkage-data/OA_2021_EW_BFE_V9.shp") %>%
 glimpse(oa_scot)
 glimpse(oa_eng)
 
-oa_scot <-oa_scot %>%   select(OA = code, geometry)
+oa_scot <-oa_scot %>%   select(OA, geometry)
 oa_eng<-oa_eng %>% select(OA = OA21CD, geometry)
 
 oa<-bind_rows(oa_eng, oa_scot)

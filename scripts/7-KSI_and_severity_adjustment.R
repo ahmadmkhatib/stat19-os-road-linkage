@@ -6,7 +6,7 @@ library(here)
 
 
 # -------------------------------
-injuries <- read_rds(here("data", "processed", "injuries_matched_OA.rds"))
+injuries <- read_rds(here("data", "processed", "injuries_with_oa.rds"))
 # -------------------------------
 #  severity adjustment 
 # --------------------------------
