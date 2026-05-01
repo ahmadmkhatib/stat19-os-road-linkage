@@ -1,3 +1,3 @@
 country,n_treated,pct_of_total,mean_road_length_km,mean_pop_density,mean_dist_citycentre,mean_IMD,mean_Drive_Car_pct,mean_Walk_pct,mean_pct_minor,mean_total_pkm,median_mdist,pct_isolated
-England,613,75.3,1.24,10629,8258,40.4,18.8,15.9,81.8,0.37512,4.23,1.3
-Scotland,201,24.7,0.672,11904,6624,20.8,18.5,31.3,86.7,0.41984,4.98,16.4
+England,613,75.3,1.24,10629,8258,40.4,18.8,15.9,81.8,0.37563,4.22,1.3
+Scotland,201,24.7,0.672,11904,6624,20.8,18.5,31.3,86.7,0.42061,4.98,16.4

@@ -129,7 +129,7 @@ treated_cities <- road_caz_prop %>%
 # Control 1: Same city, outside CAZ
 # -----------------------------
 road_classification <- road_attributes %>%
-  left_join(road_caz_prop %>% select(identifier, scheme, ever_treated_any, ever_treated_50pct), by="identifier") 
+  left_join(road_caz_prop %>% select(identifier, ever_treated_any, ever_treated_50pct), by="identifier") 
 
 road_classification <- road_classification %>%
   mutate(
