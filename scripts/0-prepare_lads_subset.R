@@ -31,13 +31,11 @@ dir.create(here("data", "processed"), showWarnings = FALSE)
 LADs <- st_read(lads_path, quiet = TRUE)
 
 # ----------------------------------------------------------
-# Load Built-Up Areas (England + Wales)
+# Load Built-Up Areas (England + Scotland)
 # ----------------------------------------------------------
 
 england <- read_excel(buas_path, sheet = 1) %>%
   mutate(country = "England")
-
-### wales <- read_excel(buas_path, sheet = 2) %>%   mutate(country = "Wales")    ### decided to remove 
 
 
 buas <- bind_rows(england) %>%

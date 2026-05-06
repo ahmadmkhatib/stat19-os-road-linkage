@@ -497,7 +497,7 @@ caz_raw <- st_read(here("data","processed","shp_files","CAZ_areas.shp")) %>%
 oa_sub <- st_read(here("data","processed","shp_files","OA_subset.shp")) %>%
   st_transform(target_crs)
 
-# England & Scotland only — drop Wales, NI, Ireland
+# England & Scotland only
 # 
 eng_scot <- ne_countries(
   country     = "United Kingdom",

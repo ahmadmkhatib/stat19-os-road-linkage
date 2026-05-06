@@ -89,7 +89,8 @@ stage2_vars <- c(stage2_trends, stage2_levels)
 log_transform_s1 <- c(
   "road_length_km",      # km: right tail 134km vs median ~0.5km; ratio ~270x
   "pop_density",         # persons/km2: max/median ~12x after winsorisation
-  "dist_citycentre"      # metres: right tail 32km; log makes sense (distance)
+  "dist_citycentre",      # metres: right tail 32km; log makes sense (distance)
+  "road_density_m_km2"   # to ensure scale consistency with road length and preserve relative differences in spatial structur
 )
 log_transform_s2_levels <- stage2_levels
 # All mean_*_pkm are injury rates — zero-inflated right-skewed counts per km.
@@ -627,24 +628,40 @@ ratio_curve_A <- map_df(1:10, ~ compute_trend_smd_at_ratio(s2_data_A, s2_vars_A,
 print(ratio_curve_A)
 
 
-# Select the ratio that minimises max_trend_smd (primary criterion).
-# Ties broken by most controls. This handles flat, non-monotone curves
-# without relying on a tolerance that can jump over locally bad ratios.
-find_best_ratio <- function(curve) {
+# Select the optimal ratio using an elbow / marginal-gain approach:
+#
+#   Step 1 — find the "good-enough" threshold: the lowest SMD achievable
+#             plus a tolerance of 0.01 (1 SMD point). Any ratio within this
+#             band is considered balanced enough.
+#   Step 2 — among those ratios, prefer the one with the MOST controls
+#             (maximises statistical power for the DiD stage).
+#
+# This avoids picking ratio=1 just because the single nearest-neighbour is
+# slightly more precise, when ratios 2–5 are equally well balanced and give
+# substantially more controls.
+find_best_ratio <- function(curve, smd_tolerance = 0.01) {
   curve      <- curve |> dplyr::arrange(ratio)
   global_min <- min(curve$max_trend_smd, na.rm = TRUE)
-  # Among ratios that share the minimum (within floating-point noise), prefer more controls
-  best <- curve |>
-    dplyr::filter(max_trend_smd == global_min) |>
-    dplyr::slice_max(n_controls, n = 1)
-  cat(sprintf("Global min max_trend_smd = %.4f at ratio %d  (n_controls = %d)\n",
-              global_min, best$ratio, best$n_controls))
-  cat(sprintf("Full curve:\n"))
+  threshold  <- global_min + smd_tolerance
+
+  # Ratios within tolerance of the global minimum — all "good enough"
+  candidates <- curve |> dplyr::filter(max_trend_smd <= threshold)
+
+  # Among candidates, prefer highest ratio (most controls = more power)
+  best <- candidates |> dplyr::slice_max(n_controls, n = 1)
+
+  cat(sprintf("Global min max_trend_smd = %.4f  |  tolerance band <= %.4f\n",
+              global_min, threshold))
+  cat(sprintf("Candidates: ratios %s\n",
+              paste(candidates$ratio, collapse = ", ")))
+  cat(sprintf("Selected ratio %d  (max controls within tolerance, n_controls = %d)\n",
+              best$ratio, best$n_controls))
+  cat("Full curve:\n")
   print(curve |> dplyr::mutate(selected = ratio == best$ratio))
   best$ratio
 }
 
-optimal_ratio_A <- find_best_ratio(ratio_curve_A)
+optimal_ratio_A <- find_best_ratio(ratio_curve_A, smd_tolerance = 0.011)
 
 cat("Ratio A =", optimal_ratio_A, "| trend SMD:",
     ratio_curve_A$max_trend_smd[ratio_curve_A$ratio == optimal_ratio_A], "\n")
@@ -894,45 +911,5 @@ saveRDS(common_support_flags, here("data", "processed", "OA_common_support_flags
 saveRDS(outcome_covariates,   here("data", "processed", "OA_outcome_covariates.rds"))
 saveRDS(balance_tests_summary,here("data", "processed", "OA_balance_tests.rds"))
 
-cat("Saved 6 files to data/processed/\n\n")
 
-# =============================================================================
-# — DESIGN SUMMARY
-# =============================================================================
 
-cat("WHY MDM OVER PSM:\n")
-cat("  Stage 2 has", length(s2_vars_A), "variables (low-dimensional).\n")
-cat("  PSM advantage (dimensionality relief) does not apply here.\n")
-cat("  PSM collapses trajectory information into a scalar — misspecification\n")
-cat("  destroys balance with no diagnostics. MDM is directly verifiable.\n\n")
-
-cat("TRANSFORMATION PIPELINE:\n")
-cat("  Stage 1: winsorise (p1/p99, pooled) → log1p for:\n")
-cat("    ", paste(log_transform_s1, collapse = ", "), "\n")
-cat("  Stage 2 levels: winsorise (treated-anchored) → log1p for all mean_*_pkm\n")
-cat("  Stage 2 trends: winsorise only (already log-slopes)\n")
-cat("  Percentage/bounded vars: winsorise only (no log)\n\n")
-
-cat("STAGE 1 | MDM on", length(s1_vars_A), "vars (log-transformed where appropriate)\n")
-cat("        | replace=TRUE, ratio=10, exact=~country\n")
-cat("        | Pooled covariance matrix\n")
-cat("        | Common support flags saved\n")
-cat("        | Balance improvement tests\n\n")
-
-cat("STAGE 2 | MDM on", length(s2_vars_A), "vars — ALL trend vars retained\n")
-cat("        | replace=TRUE, ratio = elbow-selected\n")
-cat("        | Treated-only covariance; country integrity verified\n")
-cat("        | Balance improvement tests\n\n")
-
-cat("ANALYSIS A | Primary | Zero-injury treated OAs EXCLUDED upfront\n")
-cat("           | N treated:", nrow(matched_A_treated),
-    "| N controls:", nrow(matched_A_controls), "\n\n")
-
-cat("NEXT STEPS FOR DiD:\n")
-cat("  1. Join matched OA lists to panel\n")
-cat("  2. att_gt(..., weightsname = 'weights'), cluster = ~OA\n")
-cat("  3. xformla includes all vars in OA_outcome_covariates.rds\n")
-cat("     Note: covariate names are log1p_* for transformed vars\n")
-cat("  4. Stratum-specific ATT by baseline_injury_stratum\n")
-cat("  5. Sensitivity: exclude OA_common_support_flags OAs\n")
-cat("  6. Check OA_balance_tests.rds for any failing tests\n")

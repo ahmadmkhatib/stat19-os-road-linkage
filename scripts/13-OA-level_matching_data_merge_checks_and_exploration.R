@@ -205,14 +205,13 @@ country_tbl <- OA_matching_census |>
   mutate(.country = case_when(
     substr(LAD24CD, 1, 1) == "E" ~ "England",
     substr(LAD24CD, 1, 1) == "S" ~ "Scotland",
-    substr(LAD24CD, 1, 1) == "W" ~ "Wales",
     TRUE                         ~ "Unknown"
   )) |>
   count(.country)
 print(country_tbl)
 n_unknown <- country_tbl |> filter(.country == "Unknown") |> pull(n) |> sum()
 if (n_unknown == 0) qa_ok("No unrecognised LAD24CD prefixes") else
-  qa_fail(sprintf("%d OAs have unrecognised LAD24CD prefix (not E/S/W)", n_unknown))
+  qa_fail(sprintf("%d OAs have unrecognised LAD24CD prefix (not E/S)", n_unknown))
 
 # ── Assignment  counts by country ─────────────────────────────────────
 

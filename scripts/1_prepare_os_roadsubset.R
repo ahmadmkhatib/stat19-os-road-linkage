@@ -58,7 +58,6 @@ selected_lads <- c(
   LADs_sub <- LADs %>%
   filter(LAD24CD %in% selected_lads)
   
-  ### remove Wales
   LADs_sub <- LADs_sub %>% filter(!grepl("^W", LAD24CD))
   
   
