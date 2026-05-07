@@ -49,6 +49,11 @@ oa_sub <- st_read(
 ) %>%
   st_transform(27700) %>%
   st_make_valid() %>%
+  here("data","processed","shp_files","OA_subset.shp"),
+  quiet = TRUE
+) %>%
+  st_transform(27700) %>%
+  st_make_valid() %>%
   mutate(
     area_m2 = as.numeric(st_area(.)),
     area_km2 = area_m2 / 1e6

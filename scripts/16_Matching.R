@@ -34,6 +34,7 @@ OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds
 glimpse(OA_matching_dataset)
 
 print(table(OA_matching_dataset$assignment))
+print(table(OA_matching_dataset$scheme))
 cat("\n--- Zero-injury OA counts ---\n")
 print(table(OA_matching_dataset$zero_injury_OA))
 
@@ -59,12 +60,25 @@ cat("Zero-road OAs with recorded injuries:", nrow(weirdOAs),
 # VARIABLE DEFINITIONS
 # =============================================================================
 
-stage1_road   <- c("road_density_m_km2", "road_length_km",
-                   "pct_A_road", "pct_B_road", "pct_minor_road")
-stage1_urban  <- c("dist_citycentre", "pop_density")
-stage1_socdem <- c("IMD", "cars_none_pct", "Drive_Car_pct", "Walk_pct",
-                   "Bicycle_pct", "X65plus_pct", "X5to19_pct", "X20to24_pct")
-stage1_vars   <- c(stage1_road, stage1_urban, stage1_socdem)
+stage1_road     <- c("road_density_m_km2", "road_length_km",
+                     "pct_A_road", "pct_B_road", "pct_minor_road")
+stage1_urban    <- c("dist_citycentre", "pop_density", "area_km2")
+stage1_business <- c("business_retail_per_km2", "business_accommodation_food_per_km2")
+stage1_socdem   <- c(
+  "IMD",
+  # Car ownership: cars_none_pct dropped (smallest ~28%; avoids perfect collinearity)
+  "cars_one_pct", "cars_twoPlus_pct",
+  # Travel mode to work
+  "Drive_Car_pct", "Walk_pct", "Bicycle_pct",
+  # Ethnicity: Other_ethnicity_pct dropped (smallest ~2%)
+  "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
+  # Age structure: all 5-year bands except X85plus_pct (smallest ~2%)
+  "X4under_pct", "X5to9_pct", "X10to14_pct", "X15to19_pct",
+  "X20to24_pct", "X25to29_pct", "X30to34_pct", "X35to39_pct",
+  "X40to44_pct", "X45to49_pct", "X50to54_pct", "X55to59_pct",
+  "X60to64_pct", "X65to69_pct", "X70to74_pct", "X75to79_pct", "X80to84_pct"
+)
+stage1_vars   <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
 stage2_trends <- c(
   "trend_car_KSI_pkm", "trend_car_slight_pkm",
@@ -86,31 +100,40 @@ stage2_vars <- c(stage2_trends, stage2_levels)
 # log-transform vars (after winsorisation)
 # many vars are very right-skewed
 # Percentage / bounded variables excluded — log distorts bounded scales.
+# Variables to transform with log1p (may contain zeros)
 log_transform_s1 <- c(
-  "road_length_km",      # km: right tail 134km vs median ~0.5km; ratio ~270x
-  "pop_density",         # persons/km2: max/median ~12x after winsorisation
-  "dist_citycentre",      # metres: right tail 32km; log makes sense (distance)
-  "road_density_m_km2"   # to ensure scale consistency with road length and preserve relative differences in spatial structur
+  "road_length_km",                      # km: right tail 134km vs median ~0.5km; ratio ~270x
+  "pop_density",                         # persons/km2: right-skewed
+  "dist_citycentre",                     # metres: right tail 32km
+  "road_density_m_km2",                  # scale consistency with road length
+  "business_retail_per_km2",             # density: zero-inflated right tail
+  "business_accommodation_food_per_km2"  # density: zero-inflated right tail
 )
+# Variables with no zeros — use log() not log1p()
+# area_km2 median is ~0.05 km2; log1p(0.05) ≈ 0.05 (no compression), log(0.05) = -3.0 (proper spread)
+log_nozero_s1 <- c("area_km2")
 log_transform_s2_levels <- stage2_levels
 # All mean_*_pkm are injury rates — zero-inflated right-skewed counts per km.
 # Trend variables: NOT transformed — already log-slopes.
 
 cat("Stage 1 variables:", length(stage1_vars), "\n")
-cat("  Log-transformed after winsorisation:", paste(log_transform_s1, collapse = ", "), "\n")
+cat("  log1p-transformed (may have zeros):", paste(log_transform_s1, collapse = ", "), "\n")
+cat("  log-transformed (no zeros):", paste(log_nozero_s1, collapse = ", "), "\n")
 cat("  Untransformed (bounded/percentage):",
-    paste(setdiff(stage1_vars, log_transform_s1), collapse = ", "), "\n\n")
+    paste(setdiff(stage1_vars, c(log_transform_s1, log_nozero_s1)), collapse = ", "), "\n\n")
 cat("Stage 2 variables:", length(stage2_vars), "\n")
 cat("  Level vars log-transformed:", paste(log_transform_s2_levels, collapse = ", "), "\n")
 
 
 # Logged variable names (used in matching formula and covariance computation)
-log_names_s1 <- paste0("log1p_", log_transform_s1)
-log_names_s2 <- paste0("log1p_", log_transform_s2_levels)
+log_names_s1       <- paste0("log1p_", log_transform_s1)
+log_nozero_names_s1 <- paste0("log_", log_nozero_s1)
+log_names_s2       <- paste0("log1p_", log_transform_s2_levels)
 
 stage1_vars_log <- c(
   log_names_s1,
-  setdiff(stage1_vars, log_transform_s1)
+  log_nozero_names_s1,
+  setdiff(stage1_vars, c(log_transform_s1, log_nozero_s1))
 )
 
 # Stage 2 level vars on log scale; trend vars unchanged
@@ -181,18 +204,23 @@ map_df(c(log_transform_s1, setdiff(stage1_vars, log_transform_s1)), function(v) 
   )
 }) %>% arrange(desc(abs(skew_winsor))) %>% print(n = Inf)
 
-winsorise_and_log_s1 <- function(data, raw_vars, log_vars) {
+winsorise_and_log_s1 <- function(data, raw_vars, log_vars, log_nozero_vars = character(0)) {
   for (v in intersect(raw_vars, names(data))) {
     q <- quantile(data[[v]], probs = c(0.01, 0.99), na.rm = TRUE)
     data[[v]] <- pmin(pmax(data[[v]], q[1]), q[2])
   }
+  # log1p for variables that may contain zeros
   for (v in intersect(log_vars, names(data))) {
     data[[paste0("log1p_", v)]] <- log1p(pmax(data[[v]], 0))
+  }
+  # log (not log1p) for variables confirmed to have no zeros
+  for (v in intersect(log_nozero_vars, names(data))) {
+    data[[paste0("log_", v)]] <- log(data[[v]])
   }
   data
 }
 
-data_A_clean <- winsorise_and_log_s1(data_A, stage1_vars, log_transform_s1)
+data_A_clean <- winsorise_and_log_s1(data_A, stage1_vars, log_transform_s1, log_nozero_s1)
 
 winsorise_and_log_s2 <- function(data, raw_vars, log_vars) {
   for (v in intersect(raw_vars, names(data))) {
@@ -661,7 +689,7 @@ find_best_ratio <- function(curve, smd_tolerance = 0.01) {
   best$ratio
 }
 
-optimal_ratio_A <- find_best_ratio(ratio_curve_A, smd_tolerance = 0.011)
+optimal_ratio_A <- find_best_ratio(ratio_curve_A, smd_tolerance = 0.002)
 
 cat("Ratio A =", optimal_ratio_A, "| trend SMD:",
     ratio_curve_A$max_trend_smd[ratio_curve_A$ratio == optimal_ratio_A], "\n")
