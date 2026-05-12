@@ -130,21 +130,36 @@ stage2_levels <- c(
 log_names_s2 <- paste0("log1p_", stage2_levels)
 
 var_labels <- c(
-  road_density_m_km2      = "Road density (m/km\u00b2)",
-  road_length_km          = "Road length (km)",
-  pct_A_road              = "% A-road",
-  pct_B_road              = "% B-road",
-  pct_minor_road          = "% Minor road",
-  dist_citycentre         = "Distance to city centre (m)",
-  pop_density             = "Population density (persons/km\u00b2)",
-  IMD                     = "Index of Multiple Deprivation",
-  cars_none_pct           = "% households: no car",
-  Drive_Car_pct           = "% commuting by car",
-  Walk_pct                = "% commuting on foot",
-  Bicycle_pct             = "% commuting by bicycle",
-  X65plus_pct             = "% aged 65+",
-  X5to19_pct              = "% aged 5\u201319",
-  X20to24_pct             = "% aged 20\u201324",
+  # Road infrastructure
+  road_density_m_km2                   = "Road density (m/km\u00b2)",
+  road_length_km                       = "Road length (km)",
+  pct_A_road                           = "% A-road",
+  pct_B_road                           = "% B-road",
+  pct_minor_road                       = "% Minor road",
+  # Urban / area
+  dist_citycentre                      = "Distance to city centre (m)",
+  pop_density                          = "Population density (persons/km\u00b2)",
+  area_km2                             = "Area (km\u00b2)",
+  # Business (accommodation/food dropped; r = 0.80 with retail)
+  business_retail_per_km2              = "Retail businesses (per km\u00b2)",
+  # Socioeconomic
+  IMD                                  = "Index of Multiple Deprivation",
+  cars_one_pct                         = "% households: 1 car",
+  cars_twoPlus_pct                     = "% households: 2+ cars",
+  Drive_Car_pct                        = "% commuting by car",
+  Walk_pct                             = "% commuting on foot",
+  Bicycle_pct                          = "% commuting by bicycle",
+  # Ethnicity
+  White_pct                            = "% White",
+  Mixed_pct                            = "% Mixed ethnicity",
+  Asian_pct                            = "% Asian",
+  Black_pct                            = "% Black",
+  # Age structure: 5 broad groups
+  age_under15_pct                      = "% aged under 15",
+  age_15to24_pct                       = "% aged 15\u201324",
+  age_25to44_pct                       = "% aged 25\u201344",
+  age_45to64_pct                       = "% aged 45\u201364",
+  age_65plus_pct                       = "% aged 65+",
   trend_car_KSI_pkm       = "Trend: car KSI/km",
   trend_car_slight_pkm    = "Trend: car slight/km",
   trend_cyc_KSI_pkm       = "Trend: cycling KSI/km",

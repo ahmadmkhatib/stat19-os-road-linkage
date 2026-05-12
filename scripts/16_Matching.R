@@ -63,7 +63,9 @@ cat("Zero-road OAs with recorded injuries:", nrow(weirdOAs),
 stage1_road     <- c("road_density_m_km2", "road_length_km",
                      "pct_A_road", "pct_B_road", "pct_minor_road")
 stage1_urban    <- c("dist_citycentre", "pop_density", "area_km2")
-stage1_business <- c("business_retail_per_km2", "business_accommodation_food_per_km2")
+# Retail only: accommodation/food dropped (r = 0.80 with retail; redundant and
+# worsens Mahalanobis stability without improving post-matching balance).
+stage1_business <- c("business_retail_per_km2")
 stage1_socdem   <- c(
   "IMD",
   # Car ownership: cars_none_pct dropped (smallest ~28%; avoids perfect collinearity)
@@ -72,11 +74,14 @@ stage1_socdem   <- c(
   "Drive_Car_pct", "Walk_pct", "Bicycle_pct",
   # Ethnicity: Other_ethnicity_pct dropped (smallest ~2%)
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
-  # Age structure: all 5-year bands except X85plus_pct (smallest ~2%)
-  "X4under_pct", "X5to9_pct", "X10to14_pct", "X15to19_pct",
-  "X20to24_pct", "X25to29_pct", "X30to34_pct", "X35to39_pct",
-  "X40to44_pct", "X45to49_pct", "X50to54_pct", "X55to59_pct",
-  "X60to64_pct", "X65to69_pct", "X70to74_pct", "X75to79_pct", "X80to84_pct"
+  # Age structure: 5 broad groups instead of 17 individual bands.
+  # Individual bands create near-singular covariance matrices (compositional constraint);
+  # broad groups reduce dimensionality while retaining age structure information.
+  "age_under15_pct",   # 0–14
+  "age_15to24_pct",    # 15–24
+  "age_25to44_pct",    # 25–44
+  "age_45to64_pct",    # 45–64
+  "age_65plus_pct"     # 65–84 (85+ dropped as smallest group ~2%)
 )
 stage1_vars   <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
@@ -102,12 +107,11 @@ stage2_vars <- c(stage2_trends, stage2_levels)
 # Percentage / bounded variables excluded — log distorts bounded scales.
 # Variables to transform with log1p (may contain zeros)
 log_transform_s1 <- c(
-  "road_length_km",                      # km: right tail 134km vs median ~0.5km; ratio ~270x
-  "pop_density",                         # persons/km2: right-skewed
-  "dist_citycentre",                     # metres: right tail 32km
-  "road_density_m_km2",                  # scale consistency with road length
-  "business_retail_per_km2",             # density: zero-inflated right tail
-  "business_accommodation_food_per_km2"  # density: zero-inflated right tail
+  "road_length_km",          # km: right tail 134km vs median ~0.5km; ratio ~270x
+  "pop_density",             # persons/km2: right-skewed
+  "dist_citycentre",         # metres: right tail 32km
+  "road_density_m_km2",      # scale consistency with road length
+  "business_retail_per_km2"  # density: zero-inflated right tail
 )
 # Variables with no zeros — use log() not log1p()
 # area_km2 median is ~0.05 km2; log1p(0.05) ≈ 0.05 (no compression), log(0.05) = -3.0 (proper spread)
@@ -175,6 +179,17 @@ cat("  Total OAs:", nrow(data_A), "| Treated:", sum(data_A$treat_indicator == 1)
     "| Controls:", sum(data_A$treat_indicator == 0), "\n\n")
 
 table(data_A$assignment)
+
+# Collapse 17 individual 5-year age bands into 5 broad life-stage groups before
+# winsorising, to reduce near-singularity in the Mahalanobis covariance matrix.
+data_A <- data_A %>%
+  mutate(
+    age_under15_pct = X4under_pct  + X5to9_pct   + X10to14_pct,
+    age_15to24_pct  = X15to19_pct  + X20to24_pct,
+    age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
+    age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
+    age_65plus_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct
+  )
 
 # =============================================================================
 # — WINSORISE + LOG-TRANSFORM STAGE 1 VARIABLES

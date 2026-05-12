@@ -7,12 +7,12 @@ pct_minor_road,% Minor road,England,613,81.8437,19.9662,87.7551,69.2308,100
 dist_citycentre,Distance to city centre (m),England,613,8258.323,3713.5847,8642.6699,3935.0012,11656.7869
 pop_density,Population density (persons/km²),England,613,10628.5796,7620.531,8725.1238,4404.3566,15677.7728
 IMD,Index of Multiple Deprivation,England,613,40.4414,18.1001,36.9,25.8,56.3
-cars_none_pct,% households: no car,England,613,49.1475,16.8289,50,36.0656,62.8788
+cars_none_pct,% households: no car,England,613,49.7242,17.8114,50,36.0656,62.8788
 Drive_Car_pct,% commuting by car,England,613,18.8269,8.0616,17.8947,12.5541,23.5075
 Walk_pct,% commuting on foot,England,613,15.9092,8.7517,12.9944,8.5714,22.3881
 Bicycle_pct,% commuting by bicycle,England,613,1.2761,1.6904,0.5952,0.1972,1.6746
-X65plus_pct,% aged 65+,England,613,8.0028,7.4126,6.2016,2.864,11.0119
-X5to19_pct,% aged 5–19,England,613,18.1393,10.5998,19.0722,7.9051,27.6827
+X65plus_pct,% aged 65+,England,613,7.9857,7.6038,6.2016,2.864,11.0119
+X5to19_pct,% aged 5–19,England,613,18.7122,12.0511,19.0722,7.9051,27.6827
 X20to24_pct,% aged 20–24,England,613,15.2729,11.5095,10.4167,7.0866,21.4286
 trend_car_KSI_pkm,Trend: car KSI/km,England,613,0.0043,0.0801,0,0,0
 trend_car_slight_pkm,Trend: car slight/km,England,613,-0.0245,0.129,0,-0.0519,0.0086
@@ -40,12 +40,12 @@ pct_minor_road,% Minor road,Scotland,201,86.6645,22.3734,100,80,100
 dist_citycentre,Distance to city centre (m),Scotland,201,6623.8543,4339.6,7695.6429,1005.4173,10590.7144
 pop_density,Population density (persons/km²),Scotland,201,11903.5157,8656.7198,9813.9833,4675.0987,17233.5483
 IMD,Index of Multiple Deprivation,Scotland,201,20.7856,11.4119,19.5,15.1,23.3
-cars_none_pct,% households: no car,Scotland,201,65.0597,11.0711,69.2308,59.6774,74
+cars_none_pct,% households: no car,Scotland,201,67.1609,13.2946,69.2308,59.6774,76.4706
 Drive_Car_pct,% commuting by car,Scotland,201,18.535,7.431,17.757,12.5,22.619
 Walk_pct,% commuting on foot,Scotland,201,31.3276,3.0003,32.288,32.288,32.288
 Bicycle_pct,% commuting by bicycle,Scotland,201,2.6893,3.1511,1.7857,0,4.2553
-X65plus_pct,% aged 65+,Scotland,201,5.7055,6.203,4,1.5306,7.377
-X5to19_pct,% aged 5–19,Scotland,201,12.4601,9.193,9.4737,5.4348,17.2638
+X65plus_pct,% aged 65+,Scotland,201,5.7227,7.0493,4,1.5306,7.377
+X5to19_pct,% aged 5–19,Scotland,201,12.5713,9.8475,9.4737,5.4348,17.2638
 X20to24_pct,% aged 20–24,Scotland,201,30.5005,11.4813,32.8767,21.2121,41.9654
 trend_car_KSI_pkm,Trend: car KSI/km,Scotland,201,0.0037,0.0673,0,0,0
 trend_car_slight_pkm,Trend: car slight/km,Scotland,201,-0.0255,0.0955,0,-0.0388,0

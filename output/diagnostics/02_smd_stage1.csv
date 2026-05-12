@@ -1,16 +1,16 @@
 variable,label,smd_unmatched,smd_after_S1,balanced_after_S1
-road_density_m_km2,Road density (m/km²),0.7075,0.1635,FALSE
-road_length_km,Road length (km),-0.1122,-0.0251,TRUE
-pct_A_road,% A-road,0.4099,0.0177,TRUE
-pct_B_road,% B-road,0.0931,5e-4,TRUE
-pct_minor_road,% Minor road,-0.4131,-0.0155,TRUE
-dist_citycentre,Distance to city centre (m),0.5792,0.4501,FALSE
-pop_density,Population density (persons/km²),0.6132,0.2806,FALSE
-IMD,Index of Multiple Deprivation,0.4764,-0.0441,TRUE
-cars_none_pct,% households: no car,1.5072,0.5415,FALSE
-Drive_Car_pct,% commuting by car,-1.7787,-0.6127,FALSE
-Walk_pct,% commuting on foot,1.3374,0.6129,FALSE
-Bicycle_pct,% commuting by bicycle,-0.1691,-0.0607,TRUE
-X65plus_pct,% aged 65+,-1.0729,-0.4311,FALSE
-X5to19_pct,% aged 5–19,-0.0158,-0.1224,FALSE
-X20to24_pct,% aged 20–24,1.1168,0.4925,FALSE
+road_density_m_km2,Road density (m/km²),0.7075,0.2025,FALSE
+road_length_km,Road length (km),-0.1122,0.0249,TRUE
+pct_A_road,% A-road,0.4099,0.1812,FALSE
+pct_B_road,% B-road,0.0931,0.0443,TRUE
+pct_minor_road,% Minor road,-0.4131,-0.1807,FALSE
+dist_citycentre,Distance to city centre (m),0.5792,0.6119,FALSE
+pop_density,Population density (persons/km²),0.6132,0.2467,FALSE
+IMD,Index of Multiple Deprivation,0.4764,0.0438,TRUE
+cars_none_pct,% households: no car,1.5072,0.727,FALSE
+Drive_Car_pct,% commuting by car,-1.7787,-0.7976,FALSE
+Walk_pct,% commuting on foot,1.3374,0.7361,FALSE
+Bicycle_pct,% commuting by bicycle,-0.1691,-0.0872,TRUE
+X65plus_pct,% aged 65+,-1.0729,-0.41,FALSE
+X5to19_pct,% aged 5–19,-0.0158,-0.1204,FALSE
+X20to24_pct,% aged 20–24,1.1168,0.5355,FALSE
