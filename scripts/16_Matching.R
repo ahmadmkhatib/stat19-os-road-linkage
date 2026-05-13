@@ -70,8 +70,10 @@ stage1_socdem   <- c(
   "IMD",
   # Car ownership: cars_none_pct dropped (smallest ~28%; avoids perfect collinearity)
   "cars_one_pct", "cars_twoPlus_pct",
-  # Travel mode to work
-  "Drive_Car_pct", "Walk_pct", "Bicycle_pct",
+  # Travel mode to work: Motorcycle_pct dropped (smallest share ~0.43%; reference category)
+  "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
+  "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
+  "Taxi_pct", "workAthome_pct", "Other_pct",
   # Ethnicity: Other_ethnicity_pct dropped (smallest ~2%)
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
   # Age structure: 5 broad groups instead of 17 individual bands.
@@ -224,11 +226,11 @@ winsorise_and_log_s1 <- function(data, raw_vars, log_vars, log_nozero_vars = cha
     q <- quantile(data[[v]], probs = c(0.01, 0.99), na.rm = TRUE)
     data[[v]] <- pmin(pmax(data[[v]], q[1]), q[2])
   }
-  # log1p for variables that may contain zeros
+  # log1p for variables that contain zeros
   for (v in intersect(log_vars, names(data))) {
     data[[paste0("log1p_", v)]] <- log1p(pmax(data[[v]], 0))
   }
-  # log (not log1p) for variables confirmed to have no zeros
+  # log (not log1p) for variables  have no zeros
   for (v in intersect(log_nozero_vars, names(data))) {
     data[[paste0("log_", v)]] <- log(data[[v]])
   }
@@ -669,45 +671,8 @@ compute_trend_smd_at_ratio <- function(data, s2_vars, ratio) {
 
 ratio_curve_A <- map_df(1:10, ~ compute_trend_smd_at_ratio(s2_data_A, s2_vars_A, .x))
 print(ratio_curve_A)
-
-
-# Select the optimal ratio using an elbow / marginal-gain approach:
-#
-#   Step 1 — find the "good-enough" threshold: the lowest SMD achievable
-#             plus a tolerance of 0.01 (1 SMD point). Any ratio within this
-#             band is considered balanced enough.
-#   Step 2 — among those ratios, prefer the one with the MOST controls
-#             (maximises statistical power for the DiD stage).
-#
-# This avoids picking ratio=1 just because the single nearest-neighbour is
-# slightly more precise, when ratios 2–5 are equally well balanced and give
-# substantially more controls.
-find_best_ratio <- function(curve, smd_tolerance = 0.01) {
-  curve      <- curve |> dplyr::arrange(ratio)
-  global_min <- min(curve$max_trend_smd, na.rm = TRUE)
-  threshold  <- global_min + smd_tolerance
-
-  # Ratios within tolerance of the global minimum — all "good enough"
-  candidates <- curve |> dplyr::filter(max_trend_smd <= threshold)
-
-  # Among candidates, prefer highest ratio (most controls = more power)
-  best <- candidates |> dplyr::slice_max(n_controls, n = 1)
-
-  cat(sprintf("Global min max_trend_smd = %.4f  |  tolerance band <= %.4f\n",
-              global_min, threshold))
-  cat(sprintf("Candidates: ratios %s\n",
-              paste(candidates$ratio, collapse = ", ")))
-  cat(sprintf("Selected ratio %d  (max controls within tolerance, n_controls = %d)\n",
-              best$ratio, best$n_controls))
-  cat("Full curve:\n")
-  print(curve |> dplyr::mutate(selected = ratio == best$ratio))
-  best$ratio
-}
-
-optimal_ratio_A <- find_best_ratio(ratio_curve_A, smd_tolerance = 0.002)
-
-cat("Ratio A =", optimal_ratio_A, "| trend SMD:",
-    ratio_curve_A$max_trend_smd[ratio_curve_A$ratio == optimal_ratio_A], "\n")
+# best is 4 
+optimal_ratio_A <-3    # sweet spot 
 
 p_ratio <- ratio_curve_A %>%
   ggplot(aes(x = ratio, y = max_trend_smd)) +
@@ -953,6 +918,7 @@ saveRDS(s2_A$primary_data,    here("data", "processed", "OA_matched_full_A.rds")
 saveRDS(common_support_flags, here("data", "processed", "OA_common_support_flags.rds"))
 saveRDS(outcome_covariates,   here("data", "processed", "OA_outcome_covariates.rds"))
 saveRDS(balance_tests_summary,here("data", "processed", "OA_balance_tests.rds"))
+saveRDS(s2_A,                 here("data", "processed", "OA_s2_A.rds"))
 
 
 

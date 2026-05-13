@@ -1,9 +1,9 @@
 # =============================================================================
 # POST-MATCHING DIAGNOSTICS
-# OA-Level Two-Stage Mahalanobis Distance Matching — Analysis A
+# OA-Level Two-Stage Mahalanobis Distance Matching 
 #
 # INPUTS (from data/processed/):
-#   OA_matched_full_A.rds          — full matched dataset, Analysis A
+#   OA_matched_full_A.rds          — full matched dataset,
 #   OA_matched_treated_A.rds       — treated OAs + weights + stratum
 #   OA_matched_donors_A.rds        — control OAs + weights
 #   OA_common_support_flags.rds    — structurally isolated OA flags
@@ -40,7 +40,7 @@ outdir <- here("output", "diagnostics")
 # THEME AND COLOURS
 # =============================================================================
 
-theme_diag <- function(base_size = 11) {
+theme_diag <- function(base_size = 14) {
   theme_minimal(base_size = base_size) %+replace%
     theme(
       plot.title       = element_text(size = base_size + 2, face = "bold",
@@ -73,7 +73,7 @@ COL_AFTER    <- "#2ECC71"
 COL_SCOTLAND <- "#6B3FA0"
 COL_ENGLAND  <- "#2E6FAB"
 
-save_fig <- function(p, filename, width = 12, height = 8, dpi = 300) {
+save_fig <- function(p, filename, width = 14, height = 10, dpi = 300) {
   ggsave(file.path(outdir, filename), p,
          width = width, height = height, dpi = dpi, bg = "white")
   message("Saved: ", filename)
@@ -88,8 +88,9 @@ treated_A  <- readRDS(here("data", "processed", "OA_matched_treated_A.rds"))
 controls_A <- readRDS(here("data", "processed", "OA_matched_donors_A.rds"))
 csupport   <- readRDS(here("data", "processed", "OA_common_support_flags.rds"))
 full_data  <- readRDS(here("data", "processed", "OA_matching_census.rds"))
+s2_A       <- readRDS(here("data", "processed", "OA_s2_A.rds"))
 
-cat("  Analysis A: Treated =", sum(matched_A$treat_indicator == 1),
+cat("  Treated =", sum(matched_A$treat_indicator == 1),
     "| Controls =", sum(matched_A$treat_indicator == 0), "\n\n")
 
 # Unmatched eligible pool (denominator for before/after comparisons)
@@ -106,11 +107,19 @@ unmatched_pool <- full_data %>%
 # VARIABLES
 
 
-stage1_road   <- c("road_density_m_km2", "road_length_km",
+stage1_road   <- c("log1p_road_length_km", "log1p_road_density_m_km2",
+                   "log_area_km2",
                    "pct_A_road", "pct_B_road", "pct_minor_road")
-stage1_urban  <- c("dist_citycentre", "pop_density")
-stage1_socdem <- c("IMD", "cars_none_pct", "Drive_Car_pct", "Walk_pct",
-                   "Bicycle_pct", "X65plus_pct", "X5to19_pct", "X20to24_pct")
+stage1_urban  <- c("log1p_dist_citycentre", "log1p_pop_density",
+                   "log1p_business_retail_per_km2")
+stage1_socdem <- c("IMD",
+                   "cars_one_pct", "cars_twoPlus_pct",
+                   "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
+                   "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
+                   "Taxi_pct", "workAthome_pct", "Other_pct",
+                   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
+                   "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
+                   "age_45to64_pct", "age_65plus_pct")
 stage1_vars   <- c(stage1_road, stage1_urban, stage1_socdem)
 
 stage2_trends <- c(
@@ -130,36 +139,54 @@ stage2_levels <- c(
 log_names_s2 <- paste0("log1p_", stage2_levels)
 
 var_labels <- c(
-  # Road infrastructure
-  road_density_m_km2                   = "Road density (m/km\u00b2)",
-  road_length_km                       = "Road length (km)",
+  # Road infrastructure (log-transformed names used in matching)
+  log1p_road_length_km                 = "Road length (km)",
+  log1p_road_density_m_km2             = "Road density (m/km\u00b2)",
+  log_area_km2                         = "Area (km\u00b2)",
   pct_A_road                           = "% A-road",
   pct_B_road                           = "% B-road",
   pct_minor_road                       = "% Minor road",
-  # Urban / area
+  # Urban / area (log-transformed)
+  log1p_dist_citycentre                = "Distance to city centre (m)",
+  log1p_pop_density                    = "Population density (persons/km\u00b2)",
+  log1p_business_retail_per_km2        = "Retail businesses (per km\u00b2)",
+  # Raw names (for density plots and other uses)
+  road_density_m_km2                   = "Road density (m/km\u00b2)",
+  road_length_km                       = "Road length (km)",
   dist_citycentre                      = "Distance to city centre (m)",
   pop_density                          = "Population density (persons/km\u00b2)",
   area_km2                             = "Area (km\u00b2)",
-  # Business (accommodation/food dropped; r = 0.80 with retail)
   business_retail_per_km2              = "Retail businesses (per km\u00b2)",
   # Socioeconomic
   IMD                                  = "Index of Multiple Deprivation",
   cars_one_pct                         = "% households: 1 car",
   cars_twoPlus_pct                     = "% households: 2+ cars",
-  Drive_Car_pct                        = "% commuting by car",
-  Walk_pct                             = "% commuting on foot",
-  Bicycle_pct                          = "% commuting by bicycle",
+  Drive_Car_pct                        = "% commuting: drive car",
+  Passenger_Car_pct                    = "% commuting: car passenger",
+  Walk_pct                             = "% commuting: walk",
+  Bicycle_pct                          = "% commuting: bicycle",
+  bus_Coach_pct                        = "% commuting: bus/coach",
+  Train_pct                            = "% commuting: train",
+  Underground_train_tram_pct           = "% commuting: underground/tram",
+  Taxi_pct                             = "% commuting: taxi",
+  workAthome_pct                       = "% working from home",
+  Other_pct                            = "% commuting: other mode",
   # Ethnicity
   White_pct                            = "% White",
   Mixed_pct                            = "% Mixed ethnicity",
   Asian_pct                            = "% Asian",
   Black_pct                            = "% Black",
-  # Age structure: 5 broad groups
+  # Age structure (derived groups used in matching)
   age_under15_pct                      = "% aged under 15",
   age_15to24_pct                       = "% aged 15\u201324",
   age_25to44_pct                       = "% aged 25\u201344",
   age_45to64_pct                       = "% aged 45\u201364",
   age_65plus_pct                       = "% aged 65+",
+  # Age structure (original columns, used for distribution plots)
+  X4under_pct                          = "% aged under 5",
+  X5to19_pct                           = "% aged 5\u201319",
+  X20to24_pct                          = "% aged 20\u201324",
+  X65plus_pct                          = "% aged 65+",
   trend_car_KSI_pkm       = "Trend: car KSI/km",
   trend_car_slight_pkm    = "Trend: car slight/km",
   trend_cyc_KSI_pkm       = "Trend: cycling KSI/km",
@@ -497,7 +524,7 @@ make_love_plot <- function(ldat, title, subtitle = NULL, threshold = 0.1) {
                colour = "#999999", linewidth = 0.6) +
     geom_vline(xintercept = 0, colour = "#DDDDDD", linewidth = 0.3) +
     geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.5) +
-    geom_point(size = 3) +
+    geom_point(size = 4) +
     scale_colour_manual(
       values = c("Before matching" = COL_BEFORE, "After matching" = COL_AFTER)) +
     scale_shape_manual(
@@ -508,23 +535,46 @@ make_love_plot <- function(ldat, title, subtitle = NULL, threshold = 0.1) {
          colour = NULL, shape = NULL,
          caption = "Dashed line = |SMD| = 0.10 threshold") +
     theme_diag() +
-    theme(legend.position = "bottom", axis.text.y = element_text(size = 9),
-          plot.margin = margin(10, 20, 10, 10))
+    theme(legend.position = "bottom",
+          legend.text     = element_text(size = 13),
+          axis.text.y     = element_text(size = 13),
+          axis.text.x     = element_text(size = 12),
+          axis.title.x    = element_text(size = 13),
+          plot.title      = element_text(size = 16),
+          plot.subtitle   = element_text(size = 13),
+          plot.margin     = margin(10, 25, 10, 10))
 }
 
-ld_s1 <- love_data_fn(unmatched_pool, matched_A, stage1_vars)
+# Add log-transformed columns to unmatched_pool so love plot SMDs
+# are computed on the same scale as the matching (log-space)
+unmatched_pool_log <- unmatched_pool |>
+  mutate(
+    log1p_road_length_km          = log1p(pmax(road_length_km,          0)),
+    log1p_road_density_m_km2      = log1p(pmax(road_density_m_km2,      0)),
+    log_area_km2                  = log(area_km2),
+    log1p_dist_citycentre         = log1p(pmax(dist_citycentre,         0)),
+    log1p_pop_density             = log1p(pmax(pop_density,             0)),
+    log1p_business_retail_per_km2 = log1p(pmax(business_retail_per_km2, 0)),
+    age_under15_pct = X4under_pct  + X5to9_pct   + X10to14_pct,
+    age_15to24_pct  = X15to19_pct  + X20to24_pct,
+    age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
+    age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
+    age_65plus_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct
+  )
+
+ld_s1 <- love_data_fn(unmatched_pool_log, matched_A, stage1_vars)
 p_love_s1 <- make_love_plot(
   ld_s1,
-  "Stage 1 Balance — Analysis A",
+  "Stage 1 Balance ",
   "Structural and sociodemographic variables | ratio 10, exact = country")
-save_fig(p_love_s1, "fig01_love_plot_stage1_A.png", width = 13, height = 9)
+save_fig(p_love_s1, "fig01_love_plot_stage1_A.png", width = 16, height = 18)
 
 ld_s2 <- love_data_fn(unmatched_pool, matched_A, c(stage2_trends, stage2_levels))
 p_love_s2 <- make_love_plot(
   ld_s2,
-  "Stage 2 Balance — Analysis A",
-  "Pre-treatment injury trends and levels | ratio 5, exact = country")
-save_fig(p_love_s2, "fig02_love_plot_stage2_A.png", width = 13, height = 11)
+  "Stage 2 Balance ",
+  "Pre-treatment injury trends and levels | ratio 3, exact = country")
+save_fig(p_love_s2, "fig02_love_plot_stage2_A.png", width = 16, height = 16)
 
 cat("  Saved: fig01_love_plot_stage1_A.png\n")
 cat("  Saved: fig02_love_plot_stage2_A.png\n\n")
@@ -571,7 +621,7 @@ p_heatmap <- ggplot(smd_heat_data, aes(x = spec, y = label, fill = smd)) +
   ) +
   facet_grid(var_group ~ ., scales = "free_y", space = "free_y") +
   labs(
-    title    = "Absolute SMD Across Specifications — Analysis A",
+    title    = "Absolute SMD Across SpecificationsA",
     subtitle = "Green < 0.10 (balanced) | Yellow = marginal | Red > 0.20 (imbalanced)",
     x = NULL, y = NULL,
     caption  = "Stage 1 variables: unmatched → after S1. Stage 2 variables: unmatched → after S2."
@@ -581,7 +631,7 @@ p_heatmap <- ggplot(smd_heat_data, aes(x = spec, y = label, fill = smd)) +
         axis.text.y = element_text(size = 8),
         panel.spacing = unit(0.3, "lines"))
 
-save_fig(p_heatmap, "fig03_smd_heatmap.png", width = 11, height = 16)
+save_fig(p_heatmap, "fig03_smd_heatmap.png", width = 14, height = 20)
 cat("  Saved: fig03_smd_heatmap.png\n\n")
 
 # =============================================================================
@@ -618,27 +668,39 @@ plot_density_pair <- function(var, data_before, data_after,
     facet_wrap(~phase) +
     labs(title = paste0(title_prefix, lbl), x = x_lbl,
          y = "Density", colour = NULL, fill = NULL) +
-    theme_diag(base_size = 9) +
+    theme_diag(base_size = 12) +
     theme(legend.position = "bottom")
 }
 
-log_s1 <- c("road_length_km", "pop_density", "dist_citycentre")
+# Raw variable names for distribution plots (use original columns, not log-transformed)
+dist_road_vars   <- c("road_length_km", "road_density_m_km2", "area_km2",
+                      "pct_A_road", "pct_B_road", "pct_minor_road")
+dist_urban_vars  <- c("dist_citycentre", "pop_density", "business_retail_per_km2")
+dist_socdem_vars <- c("IMD",
+                      "cars_one_pct", "cars_twoPlus_pct",
+                      "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
+                      "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
+                      "Taxi_pct", "workAthome_pct", "Other_pct",
+                      "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
+                      "X4under_pct", "X5to19_pct", "X20to24_pct", "X65plus_pct")
+log_s1 <- c("road_length_km", "road_density_m_km2", "area_km2",
+            "dist_citycentre", "pop_density", "business_retail_per_km2")
 
-road_plots <- map(stage1_road, function(v)
+road_plots <- map(c(dist_road_vars, dist_urban_vars), function(v)
   plot_density_pair(v, unmatched_pool, matched_A, log_scale = v %in% log_s1))
 p_dist_road <- wrap_plots(road_plots, ncol = 2) +
   plot_annotation(
-    title    = "Road Network Variables — Treated vs Control",
-    subtitle = "Left panel: before matching | Right panel: after matching (Analysis A)")
-save_fig(p_dist_road, "fig04a_dist_road_network.png", width = 14, height = 12)
+    title    = "Road Network & Urban Variables — Treated vs Control",
+    subtitle = "Left panel: before matching | Right panel: after matching)")
+save_fig(p_dist_road, "fig04a_dist_road_network.png", width = 16, height = 22)
 
-socdem_plots <- map(stage1_socdem, function(v)
+socdem_plots <- map(dist_socdem_vars, function(v)
   plot_density_pair(v, unmatched_pool, matched_A, log_scale = FALSE))
 p_dist_socdem <- wrap_plots(socdem_plots, ncol = 3) +
   plot_annotation(
     title    = "Sociodemographic Variables — Treated vs Control",
-    subtitle = "Left panel: before matching | Right panel: after matching (Analysis A)")
-save_fig(p_dist_socdem, "fig04b_dist_socdem.png", width = 16, height = 16)
+    subtitle = "Left panel: before matching | Right panel: after matchin")
+save_fig(p_dist_socdem, "fig04b_dist_socdem.png", width = 16, height = 24)
 
 key_trends <- c("trend_total_pkm", "trend_ped_slight_pkm",
                 "trend_car_slight_pkm", "trend_cyc_slight_pkm")
@@ -647,7 +709,7 @@ trend_plots <- map(key_trends, function(v)
 p_dist_trends <- wrap_plots(trend_plots, ncol = 2) +
   plot_annotation(
     title    = "Key Pre-Treatment Injury Trend Variables — Treated vs Matched Controls",
-    subtitle = "Analysis A | Overlap of distributions supports the parallel trends assumption."
+    subtitle = " Overlap of distributions supports the parallel trends assumption."
   )
 save_fig(p_dist_trends, "fig05_dist_stage2_trends.png", width = 14, height = 10)
 
@@ -706,7 +768,7 @@ p_w3 <- ggplot(ctrl_A, aes(x = weights, colour = country)) +
 
 p_weights <- (p_w1 | p_w2 | p_w3) +
   plot_annotation(
-    title = "Weight Diagnostics — Analysis A (after cap at 5)",
+    title = "Weight Diagnostics (after cap at 5)",
     theme = theme(plot.title = element_text(size = 13, face = "bold",
                                             colour = "#1A2E5A"))
   )
@@ -734,7 +796,7 @@ p_mdist_ecdf <- ggplot(mdist_A, aes(x = mdist, colour = country)) +
   scale_colour_manual(values = c(England = COL_ENGLAND, Scotland = COL_SCOTLAND)) +
   coord_cartesian(xlim = c(0, 30)) +
   labs(
-    title    = "ECDF of Stage 2 Mahalanobis Distance — Treated OAs (Analysis A)",
+    title    = "ECDF of Stage 2 Mahalanobis Distance — Treated OAs",
     subtitle = "Distance = how far each treated OA is from its nearest control in trajectory space",
     x        = "Stage 2 Mahalanobis distance",
     y        = "Cumulative proportion of treated OAs",
@@ -761,55 +823,106 @@ save_fig(p_mdist, "fig07_mahalanobis_distance.png", width = 12, height = 11)
 cat("  Saved: fig07_mahalanobis_distance.png\n\n")
 
 # =============================================================================
-# SECTION 13 — RATIO SELECTION CURVE
+# SECTION 12b — SMD BY MAHALANOBIS DISTANCE QUARTILE
+# Does residual imbalance concentrate in poorly-matched (high-distance) OAs?
 # =============================================================================
 
-cat("=== Section 13: Ratio selection curve ===\n")
+cat("=== Section 12b: SMD by Mahalanobis distance quartile ===\n")
 
-ratio_curve_data <- tibble(
-  ratio          = 1:10,
-  n_controls     = c(604, 1015, 1342, 1580, 1762, 1895, 2013, 2106, 2198, 2254),
-  max_trend_smd  = c(0.0564, 0.0644, 0.0561, 0.0618, 0.0614,
-                     0.0651, 0.0655, 0.0661, 0.0636, 0.0637),
-  mean_trend_smd = c(0.0216, 0.0296, 0.0284, 0.0276, 0.0274,
-                     0.0278, 0.0280, 0.0282, 0.0288, 0.0299)
+# Assign each treated OA to a distance quartile
+quartile_labels <- c("Q1\n(best matched)", "Q2", "Q3", "Q4\n(worst matched)")
+
+treated_quartiles <- matched_A |>
+  filter(treat_indicator == 1, !is.na(mdist)) |>
+  mutate(dist_quartile       = ntile(mdist, 4),
+         dist_quartile_label = factor(quartile_labels[dist_quartile],
+                                      levels = quartile_labels))
+
+# Build treated -> control linkage from match matrix
+mm_s2 <- s2_A$matchit_obj$match.matrix
+
+pair_list <- map_df(seq_len(nrow(mm_s2)), function(i) {
+  t_row <- as.integer(rownames(mm_s2)[i])
+  c_rows <- as.integer(mm_s2[i, ])
+  c_rows <- c_rows[!is.na(c_rows)]
+  q      <- treated_quartiles$dist_quartile[
+    match(t_row, which(matched_A$treat_indicator == 1))]
+  q_lbl  <- treated_quartiles$dist_quartile_label[
+    match(t_row, which(matched_A$treat_indicator == 1))]
+  tibble(row_idx             = c(t_row, c_rows),
+         dist_quartile       = q,
+         dist_quartile_label = q_lbl)
+})
+
+matched_with_q <- matched_A |>
+  mutate(row_idx = row_number()) |>
+  inner_join(pair_list, by = "row_idx", relationship = "many-to-many") |>
+  filter(!is.na(dist_quartile))
+
+# Variables to assess — Stage 2 trends + key Stage 1 structural vars
+smd_q_vars <- c(
+  stage2_trends,
+  "Drive_Car_pct", "Walk_pct", "log1p_pop_density",
+  "log1p_road_density_m_km2", "log1p_business_retail_per_km2", "IMD"
 )
+smd_q_vars <- intersect(smd_q_vars, names(matched_A))
 
-p_ratio <- ggplot(ratio_curve_data, aes(x = ratio)) +
-  geom_line(aes(y = max_trend_smd,  colour = "Max trend |SMD|"),  linewidth = 1) +
-  geom_line(aes(y = mean_trend_smd, colour = "Mean trend |SMD|"), linewidth = 1,
-            linetype = "dashed") +
-  geom_point(aes(y = max_trend_smd,  colour = "Max trend |SMD|"),  size = 3) +
-  geom_point(aes(y = mean_trend_smd, colour = "Mean trend |SMD|"), size = 3,
-             shape = 17) +
-  geom_vline(xintercept = 3, linetype = "dotted", colour = "#E74C3C",
-             linewidth = 0.7) +
-  annotate("text", x = 3.15, y = 0.065, label = "Selected\nratio = 3",
-           size = 3.2, colour = "#E74C3C", hjust = 0) +
+# Compute |SMD| within each quartile group (treated vs their matched controls)
+smd_by_quartile <- map_df(1:4, function(q) {
+  d <- matched_with_q |> filter(dist_quartile == q)
+  map_df(smd_q_vars, function(v) {
+    tibble(
+      dist_quartile       = q,
+      dist_quartile_label = factor(quartile_labels[q], levels = quartile_labels),
+      variable            = v,
+      label               = coalesce(var_labels[v], v),
+      smd                 = abs(compute_smd(d, v))
+    )
+  })
+}) |>
+  mutate(var_type = if_else(variable %in% stage2_trends,
+                            "Stage 2 trend variable", "Stage 1 structural variable"))
+
+# Quartile n sizes for subtitle
+q_sizes <- treated_quartiles |>
+  count(dist_quartile_label) |>
+  mutate(lbl = paste0(gsub("\n", " ", as.character(dist_quartile_label)),
+                      " n=", n)) |>
+  pull(lbl) |>
+  paste(collapse = " | ")
+
+p_smd_quartile <- ggplot(
+  smd_by_quartile,
+  aes(x = dist_quartile_label, y = smd, group = label, colour = label)
+) +
   geom_hline(yintercept = 0.10, linetype = "dashed",
-             colour = "#888888", linewidth = 0.5) +
-  annotate("text", x = 10.1, y = 0.101, label = "0.10",
-           size = 3, colour = "#888888", hjust = 0) +
-  scale_colour_manual(values = c("Max trend |SMD|"  = "#D85A30",
-                                 "Mean trend |SMD|" = "#2E6FAB")) +
-  scale_x_continuous(breaks = 1:10) +
-  scale_y_continuous(limits = c(0, 0.075)) +
+             colour = "#999999", linewidth = 0.5) +
+  geom_line(linewidth = 0.8, alpha = 0.7) +
+  geom_point(size = 3) +
+  scale_colour_viridis_d(option = "turbo", name = "Variable") +
+  scale_y_continuous(limits = c(0, NA),
+                     expand = expansion(mult = c(0, 0.05))) +
+  facet_wrap(~ var_type, ncol = 1, scales = "free_y") +
   labs(
-    title    = "Ratio Selection: Trend Balance vs Matching Ratio — Analysis A",
-    subtitle = "Ratio 1:10 selected: lowest max trend |SMD| (0.056) with 1,342 initial controls",
-    x        = "Matching ratio (1:k)",
-    y        = "Trend variable |SMD|",
-    colour   = NULL,
-    caption  = "Red dotted = selected ratio. Dashed grey = 0.10 balance threshold."
+    title    = "Residual Imbalance by Mahalanobis Distance Quartile — Analysis A",
+    subtitle = paste0("Each line = one variable | Dashed = |SMD| = 0.10 threshold\n",
+                      q_sizes),
+    x        = "Distance quartile (Stage 2 Mahalanobis distance)",
+    y        = "Absolute SMD",
+    caption  = paste0("Rising lines toward Q4 indicate that residual imbalance ",
+                      "is concentrated in poorly-matched OAs.")
   ) +
   theme_diag() +
-  theme(legend.position = "bottom")
+  theme(legend.position  = "right",
+        legend.text      = element_text(size = 10),
+        legend.key.height = unit(0.6, "cm"),
+        strip.text       = element_text(size = 13, face = "bold"))
 
-save_fig(p_ratio, "fig08_ratio_selection_curve.png", width = 10, height = 6)
-cat("  Saved: fig08_ratio_selection_curve.png\n\n")
+save_fig(p_smd_quartile, "fig07b_smd_by_distance_quartile.png", width = 16, height = 14)
+cat("  Saved: fig07b_smd_by_distance_quartile.png\n\n")
 
 # =============================================================================
-# SECTION 14 — STRATUM INJURY DISTRIBUTION
+#  — STRATUM INJURY DISTRIBUTION
 # =============================================================================
 
 cat("=== Section 14: Stratum injury distribution ===\n")
@@ -828,7 +941,7 @@ p_strat_inj <- ggplot(strat_data,
   scale_y_log10(labels = label_comma()) +
   labs(
     title    = "Pre-Treatment Injury Rate by Baseline Stratum",
-    subtitle = "Treated OAs | Analysis A | log scale y-axis",
+    subtitle = "Treated OAs  | log scale y-axis",
     x        = "Baseline injury stratum",
     y        = "Mean total injuries per km (log scale)",
     fill     = NULL,
@@ -858,7 +971,7 @@ cat("  Saved: fig09_stratum_injury.png\n")
 cat("  Saved: fig09b_stratum_covariates.png\n\n")
 
 # =============================================================================
-# SECTION 15 — ENGLAND vs SCOTLAND COMPARISON
+# — ENGLAND vs SCOTLAND COMPARISON
 # =============================================================================
 
 cat("=== Section 15: England vs Scotland comparison ===\n")
@@ -901,7 +1014,7 @@ p_country_profile <- matched_A %>%
   facet_wrap(~label, scales = "free_y", ncol = 4) +
   labs(
     title    = "Treated OA Structural Profiles: England vs Scotland",
-    subtitle = paste0("England n=613 | Scotland n=201 | Analysis A"),
+    subtitle = paste0("England n=613 | Scotland n=201"),
     x = NULL, y = NULL, fill = NULL,
     caption  = paste0("Scotland treated OAs tend to be longer roads, ",
                       "lower pop density, higher car commuting, lower pre-treatment injury rates.")
@@ -960,7 +1073,7 @@ if (!file.exists(oa_path) || !file.exists(lad_path)) {
             size = 1.2, alpha = 0.7) +
     scale_colour_manual(values = c(England = COL_ENGLAND, Scotland = COL_SCOTLAND)) +
     coord_sf(xlim = c(-6, 2), ylim = c(50, 59), crs = 4326) +
-    labs(title    = "Geographic Distribution of Treated OAs — Analysis A",
+    labs(title    = "Geographic Distribution of Treated OAs",
          subtitle = paste0(nrow(treated_centroids),
                            " treated OAs (England n=613 | Scotland n=201)"),
          caption  = "Each point = one treated OA centroid",
@@ -997,7 +1110,7 @@ if (!file.exists(oa_path) || !file.exists(lad_path)) {
     coord_sf(xlim = c(-6, 2), ylim = c(50, 59), crs = 4326) +
     labs(title    = "Geographic Origin of Matched Control OAs",
          subtitle = "Fill = number of controls from each LAD | Red outline = LADs with treated OAs",
-         caption  = "Analysis A | square-root fill scale") +
+         caption  = " square-root fill scale") +
     theme_diag() +
     theme(axis.text = element_blank(), axis.title = element_blank(),
           legend.position = "right")
@@ -1102,7 +1215,7 @@ p_trend_density <- ggplot(trend_long,
   facet_wrap(~trend_label, scales = "free", ncol = 3) +
   labs(
     title    = "Pre-Treatment Injury Trend Slopes: Treated vs Matched Controls",
-    subtitle = "Analysis A | Overlap of distributions supports the parallel trends assumption",
+    subtitle = " Overlap of distributions supports the parallel trends assumption",
     x        = "Pre-treatment slope (log-linear regression coefficient)",
     y        = "Density",
     colour   = NULL, fill = NULL,
@@ -1119,13 +1232,7 @@ p_trend_density <- ggplot(trend_long,
 save_fig(p_trend_density, "fig14_parallel_trends_slopes.png", width = 14, height = 12)
 cat("  Saved: fig14_parallel_trends_slopes.png\n\n")
 
-# =============================================================================
-# SECTION 18 — FINAL SUMMARY
-# =============================================================================
 
-cat("=================================================================\n")
-cat("DIAGNOSTICS COMPLETE — ANALYSIS A\n")
-cat("=================================================================\n\n")
 
 cat("SAMPLE SIZES:\n")
 cat(sprintf("  Treated:  %d\n", sum(matched_A$treat_indicator == 1)))
@@ -1159,9 +1266,8 @@ cat("  fig04b = Sociodemographic distributions\n")
 cat("  fig05  = Stage 2 trend distributions\n")
 cat("  fig06  = Weight diagnostics\n")
 cat("  fig07  = Mahalanobis distance ECDF\n")
-cat("  fig08  = Ratio selection curve\n")
-cat("  fig09  = Stratum injury distribution\n")
-cat("  fig09b = Stratum covariate profiles\n")
+cat("  fig08  = Stratum injury distribution\n")
+cat("  fig09 = Stratum covariate profiles\n")
 cat("  fig10  = England vs Scotland profile\n")
 cat("  fig11-13 = Maps (if boundaries available)\n")
 cat("  fig14  = Parallel trends slope distributions\n")

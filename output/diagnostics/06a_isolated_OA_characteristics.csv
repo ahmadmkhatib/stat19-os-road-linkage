@@ -1,3 +1,3 @@
 isolated,n,mean_road_length,mean_pop_density,mean_pct_minor,mean_IMD,mean_Drive_Car_pct,mean_dist_citycentre,mean_total_pkm,pct_scotland
-Non-isolated,773,1.091,11095,83.2,36.2,18.6,7992,0.38788,21
-Isolated,41,1.269,8088,79.3,23.2,20.9,5261,0.36531,95.1
+Non-isolated,773,1.076,10974,83.6,36.2,18.9,8084,0.38477,21.1
+Isolated,41,1.554,10376,73,23.1,16.9,3528,0.42396,92.7

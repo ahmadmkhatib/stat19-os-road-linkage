@@ -1,16 +1,32 @@
 variable,label,smd_unmatched,smd_after_S1,balanced_after_S1
-road_density_m_km2,Road density (m/km²),0.7075,0.2025,FALSE
-road_length_km,Road length (km),-0.1122,0.0249,TRUE
-pct_A_road,% A-road,0.4099,0.1812,FALSE
-pct_B_road,% B-road,0.0931,0.0443,TRUE
-pct_minor_road,% Minor road,-0.4131,-0.1807,FALSE
-dist_citycentre,Distance to city centre (m),0.5792,0.6119,FALSE
-pop_density,Population density (persons/km²),0.6132,0.2467,FALSE
-IMD,Index of Multiple Deprivation,0.4764,0.0438,TRUE
-cars_none_pct,% households: no car,1.5072,0.727,FALSE
-Drive_Car_pct,% commuting by car,-1.7787,-0.7976,FALSE
-Walk_pct,% commuting on foot,1.3374,0.7361,FALSE
-Bicycle_pct,% commuting by bicycle,-0.1691,-0.0872,TRUE
-X65plus_pct,% aged 65+,-1.0729,-0.41,FALSE
-X5to19_pct,% aged 5–19,-0.0158,-0.1204,FALSE
-X20to24_pct,% aged 20–24,1.1168,0.5355,FALSE
+log1p_road_length_km,Road length (km),NA,-0.0391,TRUE
+log1p_road_density_m_km2,Road density (m/km²),NA,0.1955,FALSE
+log_area_km2,Area (km²),NA,-0.2167,FALSE
+pct_A_road,% A-road,0.4099,0.1068,FALSE
+pct_B_road,% B-road,0.0931,0.012,TRUE
+pct_minor_road,% Minor road,-0.4131,-0.0998,TRUE
+log1p_dist_citycentre,Distance to city centre (m),NA,0.3179,FALSE
+log1p_pop_density,Population density (persons/km²),NA,0.1855,FALSE
+log1p_business_retail_per_km2,Retail businesses (per km²),NA,0.8463,FALSE
+IMD,Index of Multiple Deprivation,0.4764,0.0387,TRUE
+cars_one_pct,% households: 1 car,-0.7341,-0.3952,FALSE
+cars_twoPlus_pct,% households: 2+ cars,-1.3923,-0.6034,FALSE
+Drive_Car_pct,% commuting: drive car,-1.7787,-0.7412,FALSE
+Passenger_Car_pct,% commuting: car passenger,-0.6518,-0.3301,FALSE
+Walk_pct,% commuting: walk,1.3374,0.6321,FALSE
+Bicycle_pct,% commuting: bicycle,-0.1691,-0.0964,TRUE
+bus_Coach_pct,% commuting: bus/coach,0.023,-0.0382,TRUE
+Train_pct,% commuting: train,0.4018,0.2972,FALSE
+Underground_train_tram_pct,% commuting: underground/tram,0.0905,0.1433,FALSE
+Taxi_pct,% commuting: taxi,0.1334,-0.0283,TRUE
+workAthome_pct,% working from home,0.1421,0.1916,FALSE
+Other_pct,% commuting: other mode,0.2839,0.1947,FALSE
+White_pct,% White,-1.1049,-0.3313,FALSE
+Mixed_pct,% Mixed ethnicity,0.4331,0.173,FALSE
+Asian_pct,% Asian,0.8823,0.2701,FALSE
+Black_pct,% Black,0.4187,0.0807,TRUE
+age_under15_pct,% aged under 15,NA,-0.3235,FALSE
+age_15to24_pct,% aged 15–24,NA,0.4888,FALSE
+age_25to44_pct,% aged 25–44,NA,0.2461,FALSE
+age_45to64_pct,% aged 45–64,NA,-0.5656,FALSE
+age_65plus_pct,% aged 65+,NA,-0.4897,FALSE

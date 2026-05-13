@@ -1,34 +1,50 @@
 variable,label,Treated_mean,Unmatched controls_mean,Matched controls_mean,Treated_sd,Unmatched controls_sd,Matched controls_sd,Treated_median,Unmatched controls_median,Matched controls_median,Treated_p25,Unmatched controls_p25,Matched controls_p25,Treated_p75,Unmatched controls_p75,Matched controls_p75,Treated_n,Unmatched controls_n,Matched controls_n,var_group
-mean_car_KSI_pkm,Mean: car KSI/km,0.0152,0.0056,0.0075,0.0553,0.0339,0.0179,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury levels (pre-treatment)
-mean_car_slight_pkm,Mean: car slight/km,0.1969,0.0606,0.1102,0.4747,0.2059,0.1277,0.0882,0.0096,0.07,0,0,0,0.2372,0.0735,0.158,814,65020,2174,Injury levels (pre-treatment)
-mean_cyc_KSI_pkm,Mean: cycling KSI/km,0.0122,0.004,0.006,0.0411,0.0205,0.0154,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury levels (pre-treatment)
-mean_cyc_slight_pkm,Mean: cycling slight/km,0.0524,0.0144,0.0276,0.1033,0.0873,0.045,0.0061,0,0,0,0,0,0.0653,0.01,0.0399,814,65020,2174,Injury levels (pre-treatment)
-mean_other_KSI_pkm,Mean: other KSI/km,0.0113,0.0048,0.0057,0.0433,0.0366,0.0148,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury levels (pre-treatment)
-mean_other_slight_pkm,Mean: other slight/km,0.0341,0.0114,0.0188,0.0748,0.1073,0.0355,0,0,0,0,0,0,0.0393,0,0.025,814,65020,2174,Injury levels (pre-treatment)
-mean_ped_KSI_pkm,Mean: pedestrian KSI/km,0.0351,0.0075,0.0154,0.0777,0.0395,0.0274,0,0,0,0,0,0,0.0435,0,0.0239,814,65020,2174,Injury levels (pre-treatment)
-mean_ped_slight_pkm,Mean: pedestrian slight/km,0.096,0.0181,0.0438,0.1778,0.067,0.0573,0.0454,0,0.0243,0,0,0,0.1116,0.0195,0.0643,814,65020,2174,Injury levels (pre-treatment)
-mean_total_pkm,Mean: total injuries/km,0.4533,0.1263,0.2512,0.5922,0.4394,0.231,0.3001,0.0537,0.1727,0.1476,0,0.0828,0.5541,0.1535,0.3367,814,65020,2174,Injury levels (pre-treatment)
-trend_car_KSI_pkm,Trend: car KSI/km,0.0049,0.0031,0.0059,0.1044,0.0768,0.0658,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_car_slight_pkm,Trend: car slight/km,-0.0236,-0.0129,-0.0243,0.13,0.1068,0.103,0,0,0,-0.0476,-0.0189,-0.0439,0,0,0.0018,814,65020,2174,Injury trends (pre-treatment)
-trend_cyc_KSI_pkm,Trend: cycling KSI/km,0.0051,-3e-4,0.0019,0.0888,0.0659,0.0599,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_cyc_slight_pkm,Trend: cycling slight/km,-0.015,-0.0059,-0.013,0.133,0.0948,0.1068,0,0,0,-0.0201,0,-0.0038,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_other_KSI_pkm,Trend: other KSI/km,2e-4,2e-4,0.0011,0.1022,0.0765,0.06,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_other_slight_pkm,Trend: other slight/km,-0.0149,-0.0053,-0.0096,0.1183,0.095,0.0903,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_ped_KSI_pkm,Trend: pedestrian KSI/km,-0.0042,4e-4,3e-4,0.1205,0.0788,0.085,0,0,0,0,0,0,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_ped_slight_pkm,Trend: pedestrian slight/km,-0.0147,-0.0065,-0.0105,0.132,0.1001,0.1012,0,0,0,-0.0431,0,-0.0268,0,0,0,814,65020,2174,Injury trends (pre-treatment)
-trend_total_pkm,Trend: total injuries/km,-0.0225,-0.0107,-0.019,0.1173,0.1062,0.0908,-0.0176,0,-0.0123,-0.0548,-0.0291,-0.0462,0.0192,0.0048,0.0164,814,65020,2174,Injury trends (pre-treatment)
-pct_A_road,% A-road,13.239,6.2631,9.7597,19.4236,14.2153,15.7108,0,0,0,0,0,0,23.0769,2.8571,16.6667,814,65020,2174,Road network
-pct_B_road,% B-road,3.7751,2.7881,3.0585,11.5365,9.5628,9.2962,0,0,0,0,0,0,0,0,0,814,65020,2174,Road network
-pct_minor_road,% Minor road,82.6172,90.7471,86.6027,22.0156,17.0258,18.7821,91.0101,100,100,71.0673,86.8421,76.9231,100,100,100,814,65020,2174,Road network
-road_density_m_km2,Road density (m/km²),22089.9519,15846.875,20128.0096,9633.4547,7931.3263,8210.8417,20803.5743,15189.6921,18788.6462,15368.4023,11012.9109,14389.087,27337.7499,19599.943,24671.2882,814,65020,2174,Road network
-road_length_km,Road length (km),1.0998000000000001,1.391,1.0673,1.3979,3.3949,1.219,0.7178,0.8166,0.8106,0.3338,0.52,0.4957,1.3103,1.2246,1.2301,814,65020,2174,Road network
-Bicycle_pct,% commuting by bicycle,1.6343,2.0579,1.806,2.2844,2.7076,1.9083,0.7394,1.31,1.25,0,0.4651,0.4137,2.0965,2.6596,2.591,814,65020,2174,Sociodemographic
-Drive_Car_pct,% commuting by car,18.4413,38.293,26.2686,8.3689,13.3823,10.7213,17.8182,38.8889,25.2831,12.5135,28.6996,18.0328,23.1534,47.5559,33.7622,814,65020,2174,Sociodemographic
-IMD,Index of Multiple Deprivation,35.6289,26.7464,34.7978,18.8149,18.4776,17.3146,30.5,22.1,33.3,20.1,11.3,21.2,52.8,38.8,46.6,814,65020,2174,Sociodemographic
-Walk_pct,% commuting on foot,22.1498,7.7964,12.9655,13.961,5.9552,8.0053,19.0489,6.2147,10.5548,10.1385,3.8835,6.7797,33.1817,9.8039,17.8571,814,65020,2174,Sociodemographic
-X20to24_pct,% aged 20–24,20.2778,6.7126,12.5809,15.8417,6.6405,10.7261,13.8907,5.2811,7.9936,7.6923,3.8462,5.673,30.1989,7.1429,15.0148,814,65020,2174,Sociodemographic
-X5to19_pct,% aged 5–19,17.1958,17.3486,18.4986,11.8407,6.8172,9.6835,15.5747,17.0492,18.2529,6.7303,13.1013,11.7324,26.2153,21.3058,24.7264,814,65020,2174,Sociodemographic
-X65plus_pct,% aged 65+,7.4269,17.407,10.6238,7.5301,10.7864,8.0562,5.4995,15.6484,9.0176,2.2618,9.6096,5.2632,10.0209,23.3108,13.8431,814,65020,2174,Sociodemographic
-cars_none_pct,% households: no car,54.0298,27.0039,41.199,18.4092,17.4406,16.8519,54.6322,23.8095,40.7525,40.6526,12.5984,28.3806,69.0596,38.6792,53.828,814,65020,2174,Sociodemographic
-dist_citycentre,Distance to city centre (m),7852.5226,5676.05,5702.8059,3942.6033,3562.9119,3036.6064,8642.3237,4920.2023,5046.7437,3742.1117,3050.6125,3409.2201,10954.9447,7555.6406,7372.2802,814,65020,2174,Urban geography
-pop_density,Population density (persons/km²),11763.9893,6444.3099,9205.388,10926.3644,5579.9443,6065.5335,9112.0451,5479.6697,7901.3463,4437.6639,3234.2435,4830.58,16037.7061,7989.6313,12123.5256,814,65020,2174,Urban geography
+mean_car_KSI_pkm,Mean: car KSI/km,0.0152,0.0056,0.0073,0.0553,0.0339,0.0181,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury levels (pre-treatment)
+mean_car_slight_pkm,Mean: car slight/km,0.1969,0.0606,0.1119,0.4747,0.2059,0.1307,0.0882,0.0096,0.0711,0,0,0,0.2372,0.0735,0.1526,814,65020,1430,Injury levels (pre-treatment)
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,0.0122,0.004,0.0059,0.0411,0.0205,0.0156,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury levels (pre-treatment)
+mean_cyc_slight_pkm,Mean: cycling slight/km,0.0524,0.0144,0.0281,0.1033,0.0873,0.0456,0.0061,0,0,0,0,0,0.0653,0.01,0.041,814,65020,1430,Injury levels (pre-treatment)
+mean_other_KSI_pkm,Mean: other KSI/km,0.0113,0.0048,0.0062,0.0433,0.0366,0.0154,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury levels (pre-treatment)
+mean_other_slight_pkm,Mean: other slight/km,0.0341,0.0114,0.0194,0.0748,0.1073,0.0365,0,0,0,0,0,0,0.0393,0,0.0242,814,65020,1430,Injury levels (pre-treatment)
+mean_ped_KSI_pkm,Mean: pedestrian KSI/km,0.0351,0.0075,0.0168,0.0777,0.0395,0.0291,0,0,0,0,0,0,0.0435,0,0.0257,814,65020,1430,Injury levels (pre-treatment)
+mean_ped_slight_pkm,Mean: pedestrian slight/km,0.096,0.0181,0.0463,0.1778,0.067,0.0604,0.0454,0,0.0247,0,0,0,0.1116,0.0195,0.0671,814,65020,1430,Injury levels (pre-treatment)
+mean_total_pkm,Mean: total injuries/km,0.4533,0.1263,0.2631,0.5922,0.4394,0.237,0.3001,0.0537,0.1813,0.1476,0,0.0899,0.5541,0.1535,0.3639,814,65020,1430,Injury levels (pre-treatment)
+trend_car_KSI_pkm,Trend: car KSI/km,0.0049,0.0031,0.0056,0.1044,0.0768,0.0632,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_car_slight_pkm,Trend: car slight/km,-0.0236,-0.0129,-0.0239,0.13,0.1068,0.1122,0,0,0,-0.0476,-0.0189,-0.046,0,0,0.002,814,65020,1430,Injury trends (pre-treatment)
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,0.0051,-3e-4,-1e-4,0.0888,0.0659,0.0576,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_cyc_slight_pkm,Trend: cycling slight/km,-0.015,-0.0059,-0.0124,0.133,0.0948,0.1041,0,0,0,-0.0201,0,-0.0038,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_other_KSI_pkm,Trend: other KSI/km,2e-4,2e-4,0.0042,0.1022,0.0765,0.0649,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_other_slight_pkm,Trend: other slight/km,-0.0149,-0.0053,-0.0088,0.1183,0.095,0.0894,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_ped_KSI_pkm,Trend: pedestrian KSI/km,-0.0042,4e-4,-0.0017,0.1205,0.0788,0.0842,0,0,0,0,0,0,0,0,0,814,65020,1430,Injury trends (pre-treatment)
+trend_ped_slight_pkm,Trend: pedestrian slight/km,-0.0147,-0.0065,-0.0087,0.132,0.1001,0.0976,0,0,0,-0.0431,0,-0.021,0,0,0.0023,814,65020,1430,Injury trends (pre-treatment)
+trend_total_pkm,Trend: total injuries/km,-0.0225,-0.0107,-0.0177,0.1173,0.1062,0.0888,-0.0176,0,-0.0118,-0.0548,-0.0291,-0.0476,0.0192,0.0048,0.0188,814,65020,1430,Injury trends (pre-treatment)
+log1p_road_density_m_km2,Road density (m/km²),NA,NA,9.8021,NA,NA,0.4631,NA,NA,9.8271,NA,NA,9.5605,NA,NA,10.0933,NA,NA,1430,Road network
+log1p_road_length_km,Road length (km),NA,NA,0.6354,NA,NA,0.4038,NA,NA,0.5816,NA,NA,0.374,NA,NA,0.8022,NA,NA,1430,Road network
+log_area_km2,Area (km²),NA,NA,-3.2141,NA,NA,0.9885,NA,NA,-3.2313,NA,NA,-3.7897,NA,NA,-2.6998,NA,NA,1430,Road network
+pct_A_road,% A-road,13.239,6.2631,10.951,19.4236,14.2153,16.946,0,0,0,0,0,0,23.0769,2.8571,19.0154,814,65020,1430,Road network
+pct_B_road,% B-road,3.7751,2.7881,3.3604,11.5365,9.5628,10.0892,0,0,0,0,0,0,0,0,0,814,65020,1430,Road network
+pct_minor_road,% Minor road,82.6172,90.7471,85.0688,22.0156,17.0258,20.1137,91.0101,100,97.6136,71.0673,86.8421,74.1935,100,100,100,814,65020,1430,Road network
+Asian_pct,% Asian,29.1714,10.4933,22.1596,25.6295,15.4754,23.5581,18.9101,4.799,11.7,10.1389,1.6393,5.3121,41.9183,12.0306,31.5616,814,65020,1430,Sociodemographic
+Bicycle_pct,% commuting: bicycle,1.6343,2.0579,1.8345,2.2844,2.7076,2.1129,0.7394,1.31,1.187,0,0.4651,0.3922,2.0965,2.6596,2.5747,814,65020,1430,Sociodemographic
+Black_pct,% Black,7.2981,3.8282,5.8997,10.2097,5.7571,7.31,3.8201,1.6949,2.9933,1.548,0,0.9901,8.5547,5.036,7.4476,814,65020,1430,Sociodemographic
+Drive_Car_pct,% commuting: drive car,18.4413,38.293,26.1412,8.3689,13.3823,11.6664,17.8182,38.8889,24.7423,12.5135,28.6996,16.9504,23.1534,47.5559,34.0647,814,65020,1430,Sociodemographic
+IMD,Index of Multiple Deprivation,35.6289,26.7464,34.8736,18.8149,18.4776,18.2136,30.5,22.1,33.95,20.1,11.3,19.9,52.8,38.8,48.3,814,65020,1430,Sociodemographic
+Mixed_pct,% Mixed ethnicity,3.9664,2.8876,3.5148,2.557,2.4227,2.3078,3.6428,2.439,3.1873,2.1057,1.105,1.8223,5.3712,4.1565,4.7619,814,65020,1430,Sociodemographic
+Other_pct,% commuting: other mode,0.7576,0.4672,0.5379,1.1851,0.8296,0.7566,0.4057,0,0.3552,0,0,0,0.9302,0.6002,0.789,814,65020,1430,Sociodemographic
+Passenger_Car_pct,% commuting: car passenger,2.5713,3.9989,3.2463,2.0626,2.3104,2.078,2.2173,3.7037,2.9364,1.061,2.4631,1.7309,3.7383,5.1282,4.4199,814,65020,1430,Sociodemographic
+Taxi_pct,% commuting: taxi,0.579,0.4727,0.5875,0.8123,0.7803,0.7401,0.3448,0,0.4049,0,0,0,0.8785,0.6645,0.904,814,65020,1430,Sociodemographic
+Train_pct,% commuting: train,4.088,2.5168,2.9125,4.1503,3.655,3.6285,2.7701,1.2422,1.5957,1.1696,0.4082,0.5013,5.7389,3.125,3.7373,814,65020,1430,Sociodemographic
+Underground_train_tram_pct,% commuting: underground/tram,0.6186,0.4739,0.4314,1.3611,1.8038,1.2336,0,0,0,0,0,0,0.4938,0.3584,0.3653,814,65020,1430,Sociodemographic
+Walk_pct,% commuting: walk,22.1498,7.7964,13.8104,13.961,5.9552,8.3935,19.0489,6.2147,11.2372,10.1385,3.8835,7.2637,33.1817,9.8039,19.3323,814,65020,1430,Sociodemographic
+White_pct,% White,54.5743,80.7741,63.7021,26.8731,20.0603,27.3634,62.2229,87.8205,72.7442,31.5283,74.4479,42.3409,76.4909,94.6058,86.7046,814,65020,1430,Sociodemographic
+age_15to24_pct,% aged 15–24,NA,NA,19.5894,NA,NA,13.9575,NA,NA,14.7689,NA,NA,11.077,NA,NA,21.2062,NA,NA,1430,Sociodemographic
+age_25to44_pct,% aged 25–44,NA,NA,32.0209,NA,NA,10.9201,NA,NA,29.8107,NA,NA,25.7321,NA,NA,36.9246,NA,NA,1430,Sociodemographic
+age_45to64_pct,% aged 45–64,NA,NA,20.1443,NA,NA,7.3905,NA,NA,20.9587,NA,NA,16.0272,NA,NA,25.0644,NA,NA,1430,Sociodemographic
+age_65plus_pct,% aged 65+,NA,NA,9.752,NA,NA,7.0877,NA,NA,8.5196,NA,NA,4.9138,NA,NA,12.8037,NA,NA,1430,Sociodemographic
+age_under15_pct,% aged under 15,NA,NA,16.2221,NA,NA,8.8077,NA,NA,16.7897,NA,NA,8.8121,NA,NA,23.1061,NA,NA,1430,Sociodemographic
+bus_Coach_pct,% commuting: bus/coach,8.8293,8.6574,9.0925,6.9101,8.0275,7.3709,6.7898,6.4085,6.7912,4.2173,3.5088,4.1428,10.7043,10.8231,11.6279,814,65020,1430,Sociodemographic
+cars_one_pct,% households: 1 car,34.8052,42.4521,39.2874,11.828,8.781,8.978,35.7676,42.735,39.3443,25.5156,37.0079,33.1854,43.5604,48.1481,45.13,814,65020,1430,Sociodemographic
+cars_twoPlus_pct,% households: 2+ cars,11.2154,30.5577,17.9272,9.666,17.1043,12.1467,8.3333,28.5714,15.5172,4.0816,16.9492,8.5106,15.7046,42.6385,24.6263,814,65020,1430,Sociodemographic
+workAthome_pct,% working from home,4.465,3.7969,3.5089,5.2149,4.1254,4.1083,2.3461,2.4272,1.9938,1.1394,1.1952,1.0363,5.5492,4.7619,4.1156,814,65020,1430,Sociodemographic
+log1p_business_retail_per_km2,Retail businesses (per km²),NA,NA,2.9054,NA,NA,0.8759,NA,NA,2.9383,NA,NA,2.2975,NA,NA,3.538,NA,NA,1430,Urban geography
+log1p_dist_citycentre,Distance to city centre (m),NA,NA,8.5261,NA,NA,0.5802,NA,NA,8.5671,NA,NA,8.2037,NA,NA,8.9388,NA,NA,1430,Urban geography
+log1p_pop_density,Population density (persons/km²),NA,NA,8.8142,NA,NA,0.8728,NA,NA,8.9285,NA,NA,8.3799,NA,NA,9.3793,NA,NA,1430,Urban geography
