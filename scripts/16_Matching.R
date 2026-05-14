@@ -814,11 +814,7 @@ weight_diagnostics <- function(s2_result, analysis_label) {
 }
 
 wd_A <- weight_diagnostics(s2_A, "A_excl_zero")
-
-s2_A$primary_data <- s2_A$primary_data %>% mutate(weights = pmin(weights, 5))
-s2_A_restricted$primary_data <- s2_A_restricted$primary_data %>%
-  mutate(weights = pmin(weights, 5))
-
+# no caping needed
 # =============================================================================
 # — BASELINE INJURY LEVEL STRATIFICATION
 # =============================================================================
@@ -906,8 +902,7 @@ print(balance_tests_summary, n = Inf)
 stopifnot(
   "A: treated weights == 1"     = all(matched_A_treated$weights == 1),
   "A: no NA control weights"    = !anyNA(matched_A_controls$weights),
-  "A: no duplicate treated OAs" = !anyDuplicated(matched_A_treated$OA),
-  "A: max control weight <= 5"  = max(matched_A_controls$weights) <= 5
+  "A: no duplicate treated OAs" = !anyDuplicated(matched_A_treated$OA)
 )
 cat("All integrity checks passed.\n\n")
 

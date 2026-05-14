@@ -731,7 +731,7 @@ p_w1 <- ggplot(ctrl_A, aes(x = weights, fill = country)) +
   scale_fill_manual(values = c(England = COL_ENGLAND, Scotland = COL_SCOTLAND)) +
   scale_x_continuous(limits = c(0, 5.5)) +
   labs(
-    title    = "Control OA Weight Distribution (capped at 5)",
+    title    = "Control OA Weight Distribution",
     subtitle = paste0("Nominal N = ", nrow(ctrl_A),
                       " | Effective N = ", eff_n_overall,
                       " | Efficiency = ",
@@ -774,6 +774,18 @@ p_weights <- (p_w1 | p_w2 | p_w3) +
   )
 save_fig(p_weights, "fig06_weight_diagnostics.png", width = 16, height = 6)
 cat("  Saved: fig06_weight_diagnostics.png\n\n")
+
+
+
+
+control_reuse <- matched_A %>%
+  filter(treat_indicator == 0) %>%
+  count(OA, name = "times_used") %>%
+  count(times_used, name = "n_controls") %>%
+  mutate(pct = round(100 * n_controls / sum(n_controls), 1))
+
+
+
 
 # =============================================================================
 # SECTION 12 — MAHALANOBIS DISTANCE PLOTS
