@@ -1,32 +1,32 @@
 variable,label,smd
-log1p_dist_citycentre,Distance to city centre (m),-1.402
-Walk_pct,% commuting: walk,1.375
-workAthome_pct,% working from home,1.21
-age_15to24_pct,% aged 15–24,1.115
-cars_one_pct,% households: 1 car,-1.099
-age_under15_pct,% aged under 15,-1.093
-cars_twoPlus_pct,% households: 2+ cars,-0.914
-Train_pct,% commuting: train,0.89
-log1p_business_retail_per_km2,Retail businesses (per km²),0.852
-IMD,Index of Multiple Deprivation,-0.81
-Underground_train_tram_pct,% commuting: underground/tram,0.801
-age_45to64_pct,% aged 45–64,-0.783
-Other_pct,% commuting: other mode,0.771
-age_65plus_pct,% aged 65+,-0.616
-Asian_pct,% Asian,-0.575
-White_pct,% White,0.456
-bus_Coach_pct,% commuting: bus/coach,0.413
-pct_minor_road,% Minor road,-0.408
-log1p_pop_density,Population density (persons/km²),-0.27
-Drive_Car_pct,% commuting: drive car,-0.27
-Black_pct,% Black,-0.249
-Bicycle_pct,% commuting: bicycle,0.227
-Taxi_pct,% commuting: taxi,-0.211
-Mixed_pct,% Mixed ethnicity,0.113
-pct_A_road,% A-road,0.111
-log1p_road_density_m_km2,Road density (m/km²),-0.101
-log_area_km2,Area (km²),-0.078
-pct_B_road,% B-road,0.077
-log1p_road_length_km,Road length (km),0.063
-Passenger_Car_pct,% commuting: car passenger,-0.027
-age_25to44_pct,% aged 25–44,0.025
+pct_minor_road,% Minor road,-0.986
+pct_B_road,% B-road,0.902
+cars_twoPlus_pct,% households: 2+ cars,-0.757
+Passenger_Car_pct,% commuting: car passenger,-0.642
+Underground_train_tram_pct,% commuting: underground/tram,0.594
+Mixed_pct,% Mixed ethnicity,0.499
+Walk_pct,% commuting: walk,0.496
+Asian_pct,% Asian,-0.484
+Other_pct,% commuting: other mode,0.377
+IMD,Index of Multiple Deprivation,-0.327
+Drive_Car_pct,% commuting: drive car,-0.311
+cars_one_pct,% households: 1 car,-0.31
+workAthome_pct,% working from home,0.284
+Black_pct,% Black,0.282
+Train_pct,% commuting: train,0.257
+pct_A_road,% A-road,0.241
+Bicycle_pct,% commuting: bicycle,-0.127
+White_pct,% White,0.109
+bus_Coach_pct,% commuting: bus/coach,0.055
+Taxi_pct,% commuting: taxi,-0.029
+log1p_road_length_km,Road length (km),NA
+log1p_road_density_m_km2,Road density (m/km²),NA
+log_area_km2,Area (km²),NA
+log1p_dist_citycentre,Distance to city centre (m),NA
+log1p_pop_density,Population density (persons/km²),NA
+log1p_business_retail_per_km2,Retail businesses (per km²),NA
+age_under15_pct,% aged under 15,NA
+age_15to24_pct,% aged 15–24,NA
+age_25to44_pct,% aged 25–44,NA
+age_45to64_pct,% aged 45–64,NA
+age_65plus_pct,% aged 65+,NA

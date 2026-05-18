@@ -1,30 +1,30 @@
 variable,label,stage,skew_raw,skew_winsor,skew_log1p,max_med_ratio,log_applied
-Underground_train_tram_pct,% commuting: underground/tram,Stage 1,7.81,4.88,2.79,42857142857.1,FALSE
-mean_cyc_KSI_pkm,Mean: cycling KSI/km,Stage 2 level,23.84,4.12,4.07,1294909304,TRUE
-pct_B_road,% B-road,Stage 1,4.84,3.8,2.57,100000000000,FALSE
-mean_car_KSI_pkm,Mean: car KSI/km,Stage 2 level,99.11,3.68,3.63,6063390625.9,TRUE
-mean_other_KSI_pkm,Mean: other KSI/km,Stage 2 level,106.68,3.66,3.62,6063390625.9,TRUE
-mean_ped_KSI_pkm,Mean: pedestrian KSI/km,Stage 2 level,85.45,3.58,3.5,6802851122.9,TRUE
-mean_other_slight_pkm,Mean: other slight/km,Stage 2 level,188.24,3.55,3.44,24253562503.6,TRUE
-mean_cyc_slight_pkm,Mean: cycling slight/km,Stage 2 level,144.66,3.51,3.37,18190171877.7,TRUE
-mean_ped_slight_pkm,Mean: pedestrian slight/km,Stage 2 level,40.6,3.31,3.15,8455140947.7,TRUE
-mean_car_slight_pkm,Mean: car slight/km,Stage 2 level,89.88,2.73,2.4,36380343755.4,TRUE
-Other_pct,% commuting: other mode,Stage 1,5.11,2.66,1.34,33333333333.3,FALSE
-mean_total_pkm,Mean: total injuries/km,Stage 2 level,138.37,2.66,2.11,2019.4,TRUE
-Asian_pct,% Asian,Stage 1,2.7,2.57,0.19,19.7,FALSE
-pct_A_road,% A-road,Stage 1,3.03,2.55,1.39,100000000000,FALSE
-pct_minor_road,% Minor road,Stage 1,-2.46,-2.46,-4.85,1,FALSE
-Black_pct,% Black,Stage 1,3.39,2.37,0.47,45,FALSE
-Train_pct,% commuting: train,Stage 1,3.08,2.33,0.59,51.6,FALSE
-Bicycle_pct,% commuting: bicycle,Stage 1,3.59,2.32,0.46,25.6,FALSE
-Taxi_pct,% commuting: taxi,Stage 1,5.29,2.05,1.15,33333333333.3,FALSE
-Walk_pct,% commuting: walk,Stage 1,2.28,1.97,0.15,12.1,FALSE
-bus_Coach_pct,% commuting: bus/coach,Stage 1,2.16,1.9,-0.07,15.3,FALSE
-workAthome_pct,% working from home,Stage 1,2.36,1.89,0.3,23.7,FALSE
-White_pct,% White,Stage 1,-1.76,-1.73,-3.22,1.2,FALSE
-Mixed_pct,% Mixed ethnicity,Stage 1,1.39,0.96,-0.31,13.5,FALSE
-Passenger_Car_pct,% commuting: car passenger,Stage 1,1.53,0.88,-0.78,13.7,FALSE
-IMD,Index of Multiple Deprivation,Stage 1,0.81,0.78,-0.31,4,FALSE
-cars_twoPlus_pct,% households: 2+ cars,Stage 1,0.46,0.43,-0.98,3.5,FALSE
-cars_one_pct,% households: 1 car,Stage 1,-0.15,-0.18,-0.87,2.1,FALSE
-Drive_Car_pct,% commuting: drive car,Stage 1,0.02,-0.01,-0.97,2.6,FALSE
+Underground_train_tram_pct,% commuting: underground/tram,Stage 1,7.64,4.37,2.56,27179487179.5,FALSE
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,Stage 2 level,15.47,3.75,3.71,1142560304.1,TRUE
+pct_B_road,% B-road,Stage 1,4.37,3.49,2.36,100000000000,FALSE
+mean_car_KSI_pkm,Mean: car KSI/km,Stage 2 level,117.64,3.37,3.32,6063390625.9,TRUE
+mean_other_KSI_pkm,Mean: other KSI/km,Stage 2 level,134.09,3.31,3.28,6063390625.9,TRUE
+mean_cyc_slight_pkm,Mean: cycling slight/km,Stage 2 level,159.2,3.27,3.13,18190171877.7,TRUE
+mean_other_slight_pkm,Mean: other slight/km,Stage 2 level,194.14,3.27,3.16,24253562503.6,TRUE
+mean_ped_KSI_pkm,Mean: pedestrian KSI/km,Stage 2 level,10.4,3.14,3.08,1116924977.7,TRUE
+mean_ped_slight_pkm,Mean: pedestrian slight/km,Stage 2 level,50.62,3,2.85,8455140947.7,TRUE
+Bicycle_pct,% commuting: bicycle,Stage 1,4.13,2.62,0.56,26.3,FALSE
+mean_car_slight_pkm,Mean: car slight/km,Stage 2 level,102.26,2.55,2.23,1875.3,TRUE
+mean_total_pkm,Mean: total injuries/km,Stage 2 level,151.4,2.5,1.98,1548.9,TRUE
+Asian_pct,% Asian,Stage 1,2.54,2.45,0.26,19.9,FALSE
+pct_minor_road,% Minor road,Stage 1,-2.44,-2.44,-5.66,1,FALSE
+Black_pct,% Black,Stage 1,3.37,2.38,0.44,40.7,FALSE
+pct_A_road,% A-road,Stage 1,2.79,2.31,1.24,100000000000,FALSE
+Train_pct,% commuting: train,Stage 1,2.94,2.27,0.6,35.9,FALSE
+Walk_pct,% commuting: walk,Stage 1,2.31,1.81,0.14,11.5,FALSE
+White_pct,% White,Stage 1,-1.64,-1.62,-3.05,1.1,FALSE
+Taxi_pct,% commuting: taxi,Stage 1,2.11,1.57,0.88,28,FALSE
+workAthome_pct,% working from home,Stage 1,2.09,1.54,0.11,19.9,FALSE
+Other_pct,% commuting: other mode,Stage 1,1.81,1.31,0.75,19,FALSE
+Mixed_pct,% Mixed ethnicity,Stage 1,1.43,0.95,-0.35,12.4,FALSE
+bus_Coach_pct,% commuting: bus/coach,Stage 1,0.97,0.84,-0.5,6.2,FALSE
+IMD,Index of Multiple Deprivation,Stage 1,0.77,0.74,-0.33,3.9,FALSE
+Passenger_Car_pct,% commuting: car passenger,Stage 1,0.67,0.46,-0.54,5.2,FALSE
+cars_twoPlus_pct,% households: 2+ cars,Stage 1,0.39,0.37,-0.86,2.9,FALSE
+cars_one_pct,% households: 1 car,Stage 1,-0.28,-0.26,-0.86,1.9,FALSE
+Drive_Car_pct,% commuting: drive car,Stage 1,-0.12,-0.13,-1.04,2.1,FALSE

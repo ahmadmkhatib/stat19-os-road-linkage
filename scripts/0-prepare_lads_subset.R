@@ -167,9 +167,17 @@ scotland <- read_excel(scotland_pop_path) %>%
 # Remove cities with LEZ -- handled separately in the next script
 scotland$LAD24NM
 
-scotland<- scotland %>%
+scotland <- scotland %>%
   filter(!LAD24NM %in% c(
-    "Aberdeen, Milltimber, and Peterculter", "Edinburgh", "Greater Glasgow"
+    "Aberdeen, Milltimber, and Peterculter", "Edinburgh", "Greater Glasgow",
+    "Dundee"   # Dundee implemented an LEZ — exclude from control pool
+  )) %>%
+  # Replace NRS settlement codes (S200xxxxx) with proper LAD24CD codes (S12xxxxx)
+  # so that downstream joins against LAD boundary files work correctly
+  mutate(LAD24CD = case_when(
+    LAD24NM == "Motherwell and Wishaw" ~ "S12000044",  # North Lanarkshire
+    LAD24NM == "Falkirk"              ~ "S12000019",   # Falkirk
+    TRUE                              ~ LAD24CD
   ))
 # ---------------
 # Combined

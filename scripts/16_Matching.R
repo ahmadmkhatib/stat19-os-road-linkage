@@ -769,52 +769,27 @@ s2_A$primary_data %>% filter(treat_indicator == 1) %>%
             n_over_50 = sum(mdist > 50), n_over_100 = sum(mdist > 100)) %>% print()
 
 # =============================================================================
-# — WEIGHT DIAGNOSTICS + CAP
+# — WEIGHT DIAGNOSTICS
 # =============================================================================
 
 weight_diagnostics <- function(s2_result, analysis_label) {
-  controls     <- s2_result$primary_data %>% filter(treat_indicator == 0)
-  treated_rows <- s2_result$primary_data %>% filter(treat_indicator == 1)
-  trend_vars_here <- intersect(names(s2_result$primary_data), stage2_trends)
-  
+  controls <- s2_result$primary_data %>% filter(treat_indicator == 0)
+
   cat("\n--- Weight diagnostics:", analysis_label, "---\n")
   print(quantile(controls$weights, probs = c(0, 0.25, 0.5, 0.75, 0.90, 0.95, 0.99, 1)))
-  
+
   eff_n <- sum(controls$weights)^2 / sum(controls$weights^2)
   cat("\nEffective N:", round(eff_n, 1), "vs nominal N:", nrow(controls),
       "| Efficiency:", round(eff_n / nrow(controls), 3), "\n")
-  
+
   controls %>% group_by(country) %>%
     summarise(n = n(), mean_w = round(mean(weights), 2),
               max_w = round(max(weights), 2),
               eff_n = round(sum(weights)^2 / sum(weights^2), 1), .groups = "drop") %>%
     print()
-  
-  caps <- c(5, 10, 20, Inf)
-  cap_results <- map_df(caps, function(cap) {
-    capped    <- controls %>% mutate(w_cap = pmin(weights, cap))
-    eff_n_cap <- sum(capped$w_cap)^2 / sum(capped$w_cap^2)
-    trend_smds <- map_dbl(trend_vars_here, function(v) {
-      t_mean    <- mean(treated_rows[[v]], na.rm = TRUE)
-      c_mean    <- weighted.mean(controls[[v]], w = capped$w_cap, na.rm = TRUE)
-      pooled_sd <- sqrt((var(treated_rows[[v]], na.rm = TRUE) +
-                           var(controls[[v]], na.rm = TRUE)) / 2)
-      if (pooled_sd == 0) return(0)
-      abs(t_mean - c_mean) / pooled_sd
-    })
-    tibble(weight_cap    = if_else(is.infinite(cap), "No cap", paste0("Cap ", cap)),
-           n_controls    = nrow(controls),
-           effective_n   = round(eff_n_cap, 1),
-           efficiency    = round(eff_n_cap / nrow(controls), 3),
-           max_trend_smd = round(max(trend_smds), 4),
-           pct_at_cap    = round(100 * mean(controls$weights >= cap), 2))
-  })
-  cat("\nWeight cap sensitivity:\n"); print(cap_results)
-  invisible(cap_results)
 }
 
 wd_A <- weight_diagnostics(s2_A, "A_excl_zero")
-# no caping needed
 # =============================================================================
 # — BASELINE INJURY LEVEL STRATIFICATION
 # =============================================================================
