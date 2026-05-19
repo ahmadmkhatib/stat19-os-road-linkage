@@ -607,8 +607,20 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   run_balance_tests(m_s2, trend_vars = trend_vars,
                     label = paste0("S2_", label))
 
+  # Extract treated→control OA pairs (used by scripts 17 and 18)
+  mm_pairs    <- m_s2$match.matrix
+  treated_oas <- s2_raw$OA[as.integer(rownames(mm_pairs))]
+  pairs <- map_df(seq_len(nrow(mm_pairs)), function(i) {
+    t_oa  <- treated_oas[i]
+    c_idx <- as.integer(mm_pairs[i, ])
+    c_idx <- c_idx[!is.na(c_idx)]
+    if (length(c_idx) == 0) return(tibble())
+    tibble(treated_OA = t_oa, control_OA = s2_raw$OA[c_idx])
+  })
+
   list(matched_data = matched_data, isolated_OAs = isolated_OAs,
-       matchit_s2 = m_s2, dist_s2 = dist_s2, country = label)
+       matchit_s2 = m_s2, dist_s2 = dist_s2, country = label,
+       pairs = pairs)
 }
 
 # =============================================================================
@@ -715,6 +727,13 @@ saveRDS(isolated_combined,
 saveRDS(bind_rows(balance_test_log),
         here("data", "processed", "OA_balance_tests_mixed.rds"))
 
+pairs_mixed <- bind_rows(
+  result_england$pairs  %>% mutate(country = "England"),
+  result_scotland$pairs %>% mutate(country = "Scotland")
+)
+saveRDS(pairs_mixed,
+        here("data", "processed", "OA_matching_pairs_mixed.rds"))
+
 cat("\n=== OUTPUTS SAVED ===\n")
 cat("  OA_matched_full_mixed.rds          — combined England + Scotland\n")
 cat("  OA_matched_full_mixed_England.rds  — England (other-city controls)\n")
@@ -724,4 +743,5 @@ cat("  OA_matched_donors_mixed.rds\n")
 cat("  OA_common_support_flags_mixed.rds\n")
 cat("  OA_ratio_selection_mixed.rds\n")
 cat("  OA_balance_tests_mixed.rds\n")
+cat("  OA_matching_pairs_mixed.rds\n")
 cat("  fig08_ratio_selection_by_country.png\n")
