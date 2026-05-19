@@ -1,0 +1,5 @@
+Approach,n_treated,n_controls,effective_N,mean_smd_trends,max_smd_trends,mean_smd_all,n_trends_over_10,trend_balance_pass
+16b — England only,613,1182,694,0.0177,0.0388,0.138,0,PASS ✓
+16c — England subset,613,874,514,0.0162,0.0362,0.131,0,PASS ✓
+16c — Scotland subset,201,127,97,0.0492,0.1261,0.2452,2,FAIL ✗
+16c — Combined (Eng + Scot),814,1001,607,NA,NA,NA,NA,NA

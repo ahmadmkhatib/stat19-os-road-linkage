@@ -12,22 +12,19 @@
 #   shiny::runApp("scripts/18_interactive_matching_map.R")
 #
 # INPUTS (data/processed/):
-#   OA_matched_full_A.rds      — full matched dataset (treated + controls + covariates)
-#   OA_matched_treated_A.rds   — treated OA IDs, weights, stratum
-#   OA_matched_donors_A.rds    — control OA IDs, weights
-#   OA_matching_census.rds     — full pool (LAD codes/names, country, etc.)
-#   OA_matching_pairs_A.rds    — treated→control pairs (auto-generated on first run)
+#   OA_matched_full_mixed.rds      — full matched dataset (treated + controls + covariates)
+#   OA_matched_treated_mixed.rds   — treated OA IDs, weights, stratum
+#   OA_matched_donors_mixed.rds    — control OA IDs, weights
+#   OA_matching_census.rds         — full pool (LAD codes/names, country, etc.)
+#   OA_matching_pairs_mixed.rds    — exact treated→control pairs (saved by script 16)
+#
+# SOURCE: 16_Matching_England_othercityControlsScotland_mix.R
+#   England: other-city controls only
+#   Scotland: other-city + same-city controls
 #
 # INPUTS (data/spatial/):
 #   OA_boundaries_GB.gpkg
 #   LAD_boundaries_GB.gpkg
-#
-# NOTE ON PAIRS:
-#   The original matchit match.matrix was not saved in script 16. This script
-#   reconstructs treated→control pairs by re-applying Mahalanobis distance on
-#   Stage 2 covariates (same variables, treated-only covariance, country-exact).
-#   Result is cached to OA_matching_pairs_A.rds and reused on future runs.
-#   To get exact original pairs: add saveRDS(s2_A$dist_s2, ...) to script 16.
 # =============================================================================
 
 suppressPackageStartupMessages({
@@ -55,9 +52,9 @@ cat("================================================================\n\n")
 
 cat("[1/5] Loading processed data...\n")
 
-matched_A  <- readRDS(here("data", "processed", "OA_matched_full_A.rds"))
-treated_A  <- readRDS(here("data", "processed", "OA_matched_treated_A.rds"))
-controls_A <- readRDS(here("data", "processed", "OA_matched_donors_A.rds"))
+matched_A  <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
+treated_A  <- readRDS(here("data", "processed", "OA_matched_treated_mixed.rds"))
+controls_A <- readRDS(here("data", "processed", "OA_matched_donors_mixed.rds"))
 full_data  <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
 # Helper: add country from LAD24CD prefix if not already present
@@ -96,19 +93,22 @@ cat("  Control OAs :", nrow(controls_A), "\n\n")
 
 cat("[2/5] Matching pairs...\n")
 
-pairs_path <- here("data", "processed", "OA_matching_pairs_A.rds")
+pairs_path <- here("data", "processed", "OA_matching_pairs_mixed.rds")
 
 if (file.exists(pairs_path)) {
 
   pairs_A <- readRDS(pairs_path)
-  cat("  Loaded cached pairs:", nrow(pairs_A), "treated-control assignments\n")
+  cat("  Loaded exact pairs from script 16:", nrow(pairs_A),
+      "treated-control assignments\n")
 
 } else {
 
-  cat("  No cached file found — reconstructing from Stage 2 covariates.\n")
-  cat("  (Runs once; result saved to OA_matching_pairs_A.rds)\n\n")
+  # Fallback: reconstruct approximate pairs if the file is missing.
+  # This should not normally occur — re-run script 16 to regenerate.
+  cat("  WARNING: OA_matching_pairs_mixed.rds not found.\n")
+  cat("  Re-run 16_Matching_England_othercityControlsScotland_mix.R to generate it.\n")
+  cat("  Falling back to Mahalanobis reconstruction (approximate)...\n\n")
 
-  # Stage 2 variable names — mirror script 16
   s2_trends <- c(
     "trend_car_KSI_pkm",   "trend_car_slight_pkm",
     "trend_cyc_KSI_pkm",   "trend_cyc_slight_pkm",
@@ -126,18 +126,15 @@ if (file.exists(pairs_path)) {
   s2_vars <- intersect(c(s2_trends, s2_levels_log), names(matched_A))
 
   if (length(s2_vars) < 3)
-    stop("Too few Stage 2 variables found in OA_matched_full_A.rds (",
-         length(s2_vars), "). Check that script 16 produced the expected output.")
+    stop("Too few Stage 2 variables found in OA_matched_full_mixed.rds (",
+         length(s2_vars), "). Re-run script 16.")
 
   cat("  Stage 2 vars available:", length(s2_vars), "/",
       length(c(s2_trends, s2_levels_log)), "\n")
 
-  # Estimate matching ratio K from saved weights
-  # With replace=TRUE: sum(control weights) ≈ n_treated * ratio
   K <- max(1L, min(round(sum(controls_A$weights) / nrow(treated_A)), 10L))
   cat("  Estimated ratio K =", K, "\n\n")
 
-  # Extract covariate matrices (complete cases only)
   treated_rows <- matched_A |>
     filter(treat_indicator == 1) |>
     select(OA, country, all_of(s2_vars)) |>
@@ -151,9 +148,8 @@ if (file.exists(pairs_path)) {
   cat("  Treated (complete):", nrow(treated_rows),
       "| Controls (complete):", nrow(control_rows), "\n")
 
-  # Treated-only covariance (matches script 16 Stage 2)
   S     <- cov(as.matrix(treated_rows[, s2_vars]), use = "pairwise.complete.obs")
-  S     <- S + diag(1e-8 * max(diag(S), na.rm = TRUE), ncol(S))   # regularise
+  S     <- S + diag(1e-8 * max(diag(S), na.rm = TRUE), ncol(S))
   S_inv <- tryCatch(solve(S), error = function(e) {
     message("  Covariance singular — using pseudo-inverse (MASS::ginv)")
     MASS::ginv(S)
@@ -167,33 +163,23 @@ if (file.exists(pairs_path)) {
   step <- max(1L, floor(n_t / 10L))
 
   pairs_A <- purrr::map_df(seq_len(n_t), function(i) {
-
     if (i %% step == 0)
       cat(sprintf("    %d / %d (%.0f%%)\n", i, n_t, 100 * i / n_t))
-
     t_id      <- treated_rows$OA[i]
     t_country <- treated_rows$country[i]
     t_vec     <- t_mat[i, ]
-
-    # Country-exact: restrict controls to same country
-    c_idx <- which(control_rows$country == t_country)
+    c_idx     <- which(control_rows$country == t_country)
     if (length(c_idx) == 0L) return(tibble())
-
-    # Mahalanobis distances via quadratic form
-    D    <- sweep(c_mat[c_idx, , drop = FALSE], 2, t_vec, "-")
-    dist <- rowSums((D %*% S_inv) * D)
-
+    D     <- sweep(c_mat[c_idx, , drop = FALSE], 2, t_vec, "-")
+    dist  <- rowSums((D %*% S_inv) * D)
     k_here <- min(K, length(c_idx))
-    top    <- order(dist)[seq_len(k_here)]
-
-    tibble(
-      treated_OA = t_id,
-      control_OA = control_rows$OA[c_idx[top]],
-      mdist      = round(dist[top], 4)
-    )
+    top   <- order(dist)[seq_len(k_here)]
+    tibble(treated_OA = t_id,
+           control_OA = control_rows$OA[c_idx[top]],
+           mdist      = round(dist[top], 4))
   })
 
-  cat("  Pairs reconstructed:", nrow(pairs_A), "\n")
+  cat("  Pairs reconstructed (approximate):", nrow(pairs_A), "\n")
   saveRDS(pairs_A, pairs_path)
   cat("  Cached to:", pairs_path, "\n\n")
 }
@@ -454,8 +440,9 @@ ui <- page_sidebar(
     ),
 
     p(class = "text-muted mt-2", style = "font-size:0.75rem;",
-      "Analysis A | Two-stage Mahalanobis matching",
-      br(), "Pairs: ", if (file.exists(pairs_path)) "loaded from cache" else "reconstructed",
+      "Mixed analysis | Two-stage Mahalanobis matching",
+      br(), "England: other-city controls | Scotland: other-city + same-city",
+      br(), "Pairs: ", if (file.exists(pairs_path)) "exact (from script 16)" else "reconstructed (approx)",
       br(), paste0("Treated n=", nrow(treated_A), " | Controls n=", nrow(controls_A)))
   ),
 

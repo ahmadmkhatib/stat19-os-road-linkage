@@ -4,8 +4,6 @@
 # Output:  data/processed/roads_filtered.rds
 # ==========================================================
 
-### HELLO ###
-
 library(sf)
 library(tidyverse)
 library(stringr)
@@ -59,7 +57,6 @@ selected_lads <- c(
   filter(LAD24CD %in% selected_lads)
   
   LADs_sub <- LADs_sub %>% filter(!grepl("^W", LAD24CD))
-  
   
   
   ### save the LADs sub 

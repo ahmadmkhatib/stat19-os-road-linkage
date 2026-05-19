@@ -16,6 +16,11 @@ injuries <- readRDS(here("data", "processed", "injuries_final.rds"))
 roads    <- readRDS( here("data", "processed", "roads_filtered.rds"))
 names(roads)
 
+table(injuries$LAD24NM)
+injuries %>%
+  filter(str_starts(LAD24CD, "S")) %>%
+  distinct(LAD24CD, LAD24NM) %>%
+  arrange(LAD24NM)
 # ----------------------------------------------------------
 # Split Roads by Class
 # --------------------------------------------------------
@@ -141,6 +146,12 @@ matched %>%
     max_dist = max(dist_any)
   )
 
+table(matched$LAD24NM)
+
+matched %>%
+  filter(str_starts(LAD24CD, "S")) %>%
+  distinct(LAD24CD, LAD24NM) %>%
+  arrange(LAD24NM)
 
 saveRDS(matched, here("data", "processed", "injuries_matched.rds"))
 

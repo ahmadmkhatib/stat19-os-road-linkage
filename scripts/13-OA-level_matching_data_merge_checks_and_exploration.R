@@ -47,11 +47,8 @@ oa_sub <- st_read(
   here("data","processed","shp_files","OA_subset.shp"),
   quiet = TRUE
 ) %>%
-  st_transform(27700) %>%
+    st_transform(27700) %>%
   st_make_valid() %>%
-  here("data","processed","shp_files","OA_subset.shp"),
-  quiet = TRUE
-) %>%
   st_transform(27700) %>%
   st_make_valid() %>%
   mutate(

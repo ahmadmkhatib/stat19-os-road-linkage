@@ -580,9 +580,6 @@ missing_oas <- anti_join(
 )
 nrow(missing_oas)
 cat("OAs never in OA_injuries:", nrow(missing_oas), "\n")
-missing_oas %>%
-  left_join(oa_scheme_lookup, by = "OA") %>%
-  count(treated_OA, control_group2_OA)
 
 # Are any of these treated?
 missing_oas %>%

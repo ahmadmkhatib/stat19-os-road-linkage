@@ -7,15 +7,29 @@ library(tidyverse)
 library(lubridate)
 library(here)
 
-# ------------------------------------------------------------
-# Load matched injuries_with_oa data
-# ------------------------------------------------------------
-
+#
 injuries_with_oa <- read_rds(here("data", "processed", "injuries_with_oa.rds"))
 
-# 
-#  Checks
-# ----------------------------------------
+
+
+names(injuries_with_oa)
+
+injuries_with_oa %>%
+  summarise(
+    missing_lat = sum(is.na(LAT)),
+    missing_lon = sum(is.na(LONG))
+  )
+
+injuries_with_oa %>%
+  filter(is.na(LAT) | is.na(LONG))
+
+
+
+injuries_with_oa_sf <- injuries_with_oa %>%
+  st_as_sf(coords = c("BNG_E", "BNG_N"), crs = 27700, remove = FALSE)
+
+
+
 
 cat("Total injuries_with_oa:", nrow(injuries_with_oa), "\n")
 
@@ -25,11 +39,11 @@ cat("Duplicate injury_id count:", dup_count, "\n")
 
 
 # Check if any geometries are empty
-empty_geom <- sum(st_is_empty(injuries_with_oa))
+empty_geom <- sum(st_is_empty(injuries_with_oa_sf))
 cat("Empty geometries:", empty_geom, "\n")
 
 # Check invalid geometries
-invalid_geom <- sum(!st_is_valid(injuries_with_oa))
+invalid_geom <- sum(!st_is_valid(injuries_with_oa_sf))
 cat("Invalid geometries:", invalid_geom, "\n")
 
 # CRS check
@@ -42,7 +56,7 @@ cat("CRS (EPSG):", st_crs(injuries_with_oa)$epsg, "\n")
 oa_summary <- injuries_with_oa %>%
   summarise(
     total = n(),
-    missing_oa = sum(is.na(OA_CODE)),
+    missing_oa = sum(is.na(OA)),
     pct_missing = 100 * missing_oa / total
   )
 

@@ -151,18 +151,37 @@ cities_with_LAD <- st_join(
 
 scotland <- read_excel(scotland_pop_path) %>%
   filter(Sex == "All") %>%
-    select(
+  select(
     `Settlement name`,
     `Settlement code`,
     population = `All ages`
-      ) %>%
-  rename(
-    `BUA_name` = `Settlement name`,
-    LAD24NM    = `Settlement name`,
-    LAD24CD    = `Settlement code`
   ) %>%
-  filter(population >= 100000) %>% 
-  mutate(country = "Scotland")
+  
+  # first create new columns
+  mutate(
+    BUA_name = `Settlement name`,
+    LAD24NM  = `Settlement name`,
+    LAD24CD  = `Settlement code`
+  ) %>%
+  
+  filter(population >= 100000) %>%
+  
+  mutate(
+    country = "Scotland",
+    
+    # harmonise names for coordinate matching
+    BUA_name = case_when(
+      BUA_name == "Greater Glasgow" ~ "Glasgow",
+      BUA_name == "Motherwell and Wishaw" ~ "Motherwell",
+      TRUE ~ BUA_name
+    )
+  ) %>%
+  
+  left_join(
+    cities %>%
+      select(city, lat, lng),
+    by = c("BUA_name" = "city")
+  )
 
 # Remove cities with LEZ -- handled separately in the next script
 scotland$LAD24NM
@@ -175,8 +194,8 @@ scotland <- scotland %>%
   # Replace NRS settlement codes (S200xxxxx) with proper LAD24CD codes (S12xxxxx)
   # so that downstream joins against LAD boundary files work correctly
   mutate(LAD24CD = case_when(
-    LAD24NM == "Motherwell and Wishaw" ~ "S12000044",  # North Lanarkshire
-    LAD24NM == "Falkirk"              ~ "S12000019",   # Falkirk
+    LAD24NM == "Motherwell and Wishaw" ~ "S12000050",  # North Lanarkshire
+    LAD24NM == "Falkirk"              ~ "S12000014",   # Falkirk
     TRUE                              ~ LAD24CD
   ))
 # ---------------

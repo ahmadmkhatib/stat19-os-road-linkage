@@ -3,11 +3,16 @@
 # OA-Level Two-Stage Mahalanobis Distance Matching 
 #
 # INPUTS (from data/processed/):
-#   OA_matched_full_A.rds          — full matched dataset,
-#   OA_matched_treated_A.rds       — treated OAs + weights + stratum
-#   OA_matched_donors_A.rds        — control OAs + weights
-#   OA_common_support_flags.rds    — structurally isolated OA flags
-#   OA_matching_census.rds         — full original dataset (unmatched pool)
+#   OA_matched_full_mixed.rds          — full matched dataset (England + Scotland)
+#   OA_matched_treated_mixed.rds       — treated OAs + weights + stratum
+#   OA_matched_donors_mixed.rds        — control OAs + weights
+#   OA_common_support_flags_mixed.rds  — structurally isolated OA flags
+#   OA_matching_pairs_mixed.rds        — treated→control OA pairs
+#   OA_matching_census.rds             — full original dataset (unmatched pool)
+#
+# SOURCE: 16_Matching_England_othercityControlsScotland_mix.R
+#   England: other-city controls only
+#   Scotland: other-city + same-city controls (see script 16 header)
 #
 # SPATIAL INPUTS (Section 16 — maps):
 #   data/spatial/OA_boundaries_GB.gpkg
@@ -83,12 +88,12 @@ save_fig <- function(p, filename, width = 14, height = 10, dpi = 300) {
 # LOAD DATA
 # =============================================================================
 
-matched_A  <- readRDS(here("data", "processed", "OA_matched_full_A.rds"))
-treated_A  <- readRDS(here("data", "processed", "OA_matched_treated_A.rds"))
-controls_A <- readRDS(here("data", "processed", "OA_matched_donors_A.rds"))
-csupport   <- readRDS(here("data", "processed", "OA_common_support_flags.rds"))
+matched_A  <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
+treated_A  <- readRDS(here("data", "processed", "OA_matched_treated_mixed.rds"))
+controls_A <- readRDS(here("data", "processed", "OA_matched_donors_mixed.rds"))
+csupport   <- readRDS(here("data", "processed", "OA_common_support_flags_mixed.rds"))
+pairs_mixed <- readRDS(here("data", "processed", "OA_matching_pairs_mixed.rds"))
 full_data  <- readRDS(here("data", "processed", "OA_matching_census.rds"))
-s2_A       <- readRDS(here("data", "processed", "OA_s2_A.rds"))
 
 cat("  Treated =", sum(matched_A$treat_indicator == 1),
     "| Controls =", sum(matched_A$treat_indicator == 0), "\n\n")
@@ -413,7 +418,7 @@ cat("  Saved: 05_stratum_characteristics.csv\n\n")
 
 cat("=== Section 6: Common support — isolated OA characteristics ===\n")
 
-isolated_ids <- csupport$treated_OA[csupport$analysis == "A"]
+isolated_ids <- csupport$treated_OA
 
 matched_A_treated <- matched_A %>% filter(treat_indicator == 1)
 
@@ -841,7 +846,8 @@ cat("  Saved: fig07_mahalanobis_distance.png\n\n")
 
 cat("=== Section 12b: SMD by Mahalanobis distance quartile ===\n")
 
-# Assign each treated OA to a distance quartile
+# Assign each treated OA to a distance quartile based on Stage 2 Mahalanobis
+# distance (stored in matched_A from script 16)
 quartile_labels <- c("Q1\n(best matched)", "Q2", "Q3", "Q4\n(worst matched)")
 
 treated_quartiles <- matched_A |>
@@ -850,25 +856,21 @@ treated_quartiles <- matched_A |>
          dist_quartile_label = factor(quartile_labels[dist_quartile],
                                       levels = quartile_labels))
 
-# Build treated -> control linkage from match matrix
-mm_s2 <- s2_A$matchit_obj$match.matrix
-
-pair_list <- map_df(seq_len(nrow(mm_s2)), function(i) {
-  t_row <- as.integer(rownames(mm_s2)[i])
-  c_rows <- as.integer(mm_s2[i, ])
-  c_rows <- c_rows[!is.na(c_rows)]
-  q      <- treated_quartiles$dist_quartile[
-    match(t_row, which(matched_A$treat_indicator == 1))]
-  q_lbl  <- treated_quartiles$dist_quartile_label[
-    match(t_row, which(matched_A$treat_indicator == 1))]
-  tibble(row_idx             = c(t_row, c_rows),
-         dist_quartile       = q,
-         dist_quartile_label = q_lbl)
-})
+# Build treated→control linkage using saved OA-code pairs
+# (pairs_mixed loaded at top of script from OA_matching_pairs_mixed.rds)
+pair_list <- pairs_mixed |>
+  left_join(
+    treated_quartiles |> select(OA, dist_quartile, dist_quartile_label),
+    by = c("treated_OA" = "OA")
+  ) |>
+  filter(!is.na(dist_quartile)) |>
+  pivot_longer(c(treated_OA, control_OA),
+               names_to = "role", values_to = "OA") |>
+  select(OA, dist_quartile, dist_quartile_label) |>
+  distinct()
 
 matched_with_q <- matched_A |>
-  mutate(row_idx = row_number()) |>
-  inner_join(pair_list, by = "row_idx", relationship = "many-to-many") |>
+  inner_join(pair_list, by = "OA", relationship = "many-to-many") |>
   filter(!is.na(dist_quartile))
 
 # Variables to assess — Stage 2 trends + key Stage 1 structural vars

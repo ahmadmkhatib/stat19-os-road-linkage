@@ -123,6 +123,13 @@ st_write(injuries_with_oa,
          delete_layer = TRUE)
 
 
+table(injuries_with_oa$LAD24NM)
+
+
+
+
+
+
 ### save OA combined England and Scot
 write_rds(
   oa,
