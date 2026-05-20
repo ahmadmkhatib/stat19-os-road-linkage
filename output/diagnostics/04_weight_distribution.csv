@@ -1,2 +1,4 @@
-group,n_controls,mean_weight,median_weight,sd_weight,p90_weight,p95_weight,max_weight,eff_N,efficiency,n_at_cap,pct_at_cap
-Overall,1182,1,0.643,0.838,1.928,1.928,13.498,694.3,0.587,3,0.3
+country,n_controls,mean_weight,median_weight,sd_weight,p90_weight,p95_weight,max_weight,eff_N,efficiency,n_at_cap,pct_at_cap
+England,874,1,0.713,0.837,1.426,2.139,14.971,514.4,0.589,2,0.2
+Scotland,125,1,0.622,0.601,1.866,1.866,3.731,92,0.736,0,0
+Overall,999,1,0.713,0.811,1.426,2.139,14.971,603.1,0.604,2,0.2
