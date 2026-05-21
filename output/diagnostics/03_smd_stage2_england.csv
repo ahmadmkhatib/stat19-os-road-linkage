@@ -1,0 +1,19 @@
+variable,label,smd_preS2,smd_postS2,var_type,balanced
+trend_car_KSI_pkm,Trend: car KSI/km,NA,-0.0029,Trend,TRUE
+trend_car_slight_pkm,Trend: car slight/km,NA,-0.0058,Trend,TRUE
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,NA,0.0698,Trend,TRUE
+trend_cyc_slight_pkm,Trend: cycling slight/km,NA,-0.0143,Trend,TRUE
+trend_ped_KSI_pkm,Trend: pedestrian KSI/km,NA,-0.0017,Trend,TRUE
+trend_ped_slight_pkm,Trend: pedestrian slight/km,NA,-0.0274,Trend,TRUE
+trend_other_KSI_pkm,Trend: other KSI/km,NA,-0.0076,Trend,TRUE
+trend_other_slight_pkm,Trend: other slight/km,NA,-0.0308,Trend,TRUE
+trend_total_pkm,Trend: total injuries/km,NA,-0.0154,Trend,TRUE
+mean_car_KSI_pkm,Mean: car KSI/km,NA,0.1341,Level,FALSE
+mean_car_slight_pkm,Mean: car slight/km,NA,0.2643,Level,FALSE
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,NA,0.0405,Level,TRUE
+mean_cyc_slight_pkm,Mean: cycling slight/km,NA,0.1292,Level,FALSE
+mean_ped_KSI_pkm,Mean: pedestrian KSI/km,NA,0.137,Level,FALSE
+mean_ped_slight_pkm,Mean: pedestrian slight/km,NA,0.2386,Level,FALSE
+mean_other_KSI_pkm,Mean: other KSI/km,NA,0.0552,Level,TRUE
+mean_other_slight_pkm,Mean: other slight/km,NA,0.1289,Level,FALSE
+mean_total_pkm,Mean: total injuries/km,NA,0.3717,Level,FALSE

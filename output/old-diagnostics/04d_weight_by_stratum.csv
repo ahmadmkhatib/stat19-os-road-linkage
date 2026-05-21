@@ -1,0 +1,5 @@
+baseline_injury_stratum,n_ctrl_obs,mean_weight,max_weight,kish_ess,kish_ess_pct,top5_share_pct
+1,371,2.7,14.971,100.7,27.1,7.5
+2,352,1.193,3.731,270.6,76.9,4.3
+3,352,1.273,4.277,261.9,74.4,4.5
+4,352,1.382,4.277,253.1,71.9,4.4

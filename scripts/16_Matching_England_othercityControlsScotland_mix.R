@@ -50,6 +50,9 @@ library(ggrepel)
 library(tidyverse)
 library(patchwork)
 
+set.seed(222)   #  governs all MatchIt nearest-neighbour calls
+
+
 select <- dplyr::select
 filter <- dplyr::filter
 
@@ -526,7 +529,6 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   # Common support
   pool_idx <- c(as.integer(rownames(mm_s1)), ctrl_idx)
   S_s1 <- cov(data_clean[pool_idx, s1v], use = "pairwise.complete.obs")
-
   dist_s1 <- map_df(seq_len(nrow(mm_s1)), function(i) {
     t_idx     <- as.integer(rownames(mm_s1)[i])
     trow      <- data_clean[t_idx, , drop = FALSE]
@@ -539,6 +541,30 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
                                  as.numeric(trow[s1v]), S_s1))
     })
   })
+  
+  # Flag isolated OAs by their minimum Stage 1 Mahalanobis distance to any
+  # control. No arbitrary percentile threshold: every treated OA gets its
+  # min_dist_s1 recorded and structurally_isolated = TRUE if it exceeds the
+  # median absolute deviation (MAD) rule  (> median + 3*MAD), a
+  # distribution-free outlier criterion that adapts to each country's pool.
+  min_dist <- dist_s1 %>%
+    group_by(treated_OA) %>%
+    summarise(min_dist_s1 = min(mdist), .groups = "drop")
+  
+  mad_threshold  <- median(min_dist$min_dist_s1) +
+    3 * mad(min_dist$min_dist_s1, constant = 1)
+  
+  isolated_OAs <- min_dist %>%
+    mutate(
+      structurally_isolated = min_dist_s1 > mad_threshold,
+      flag_threshold        = round(mad_threshold, 4)
+    )
+  
+  cat(sprintf("  Isolated OAs (median + 3*MAD threshold = %.2f): %d / %d\n",
+              mad_threshold,
+              sum(isolated_OAs$structurally_isolated),
+              nrow(isolated_OAs)))
+  
 
   min_dist     <- dist_s1 %>% group_by(treated_OA) %>%
     summarise(min_dist_s1 = min(mdist), .groups = "drop")
@@ -726,6 +752,22 @@ saveRDS(isolated_combined,
         here("data", "processed", "OA_common_support_flags_mixed.rds"))
 saveRDS(bind_rows(balance_test_log),
         here("data", "processed", "OA_balance_tests_mixed.rds"))
+
+# --- Overall balance summary (Stage 1 & Stage 2) ----------------------------
+balance_summary <- bind_rows(balance_test_log) |>
+  mutate(stage = if_else(str_starts(label, "S1"), "Stage 1", "Stage 2")) |>
+  group_by(stage) |>
+  summarise(
+    mean_abs_smd_unmatched = mean(mean_smd_un,  na.rm = TRUE),
+    mean_abs_smd_matched   = mean(mean_smd_adj, na.rm = TRUE),
+    max_trend_smd          = max(max_trend_smd, na.rm = TRUE),
+    all_test_a_pass        = all(test_a_pass,   na.rm = TRUE),
+    all_test_b_pass        = all(test_b_pass,   na.rm = TRUE),
+    .groups = "drop"
+  )
+
+cat("\n=== OVERALL BALANCE SUMMARY ===\n")
+print(balance_summary)
 
 pairs_mixed <- bind_rows(
   result_england$pairs  %>% mutate(country = "England"),
