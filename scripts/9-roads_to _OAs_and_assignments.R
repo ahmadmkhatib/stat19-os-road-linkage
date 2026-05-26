@@ -23,6 +23,7 @@ roads <- readRDS(
   st_make_valid()
 
 glimpse(roads)
+mean(roads$length)
 
 # OA shpfile 
 oa_sub <- st_read(
@@ -162,6 +163,8 @@ saveRDS(
   OA_roads,
   here("data","processed","OA_roads.rds")
 )
+
+
 
 
 

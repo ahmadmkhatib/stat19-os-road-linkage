@@ -1,32 +1,32 @@
 variable,label,smd_unmatched,smd_after_S1,balanced_after_S1
-log1p_road_length_km,Road length (km),NA,0.0846,TRUE
-log1p_road_density_m_km2,Road density (m/km²),NA,0.0874,TRUE
-log_area_km2,Area (km²),NA,-0.0432,TRUE
-pct_A_road,% A-road,NA,0.1686,FALSE
-pct_B_road,% B-road,NA,0.0162,TRUE
-pct_minor_road,% Minor road,NA,-0.1474,FALSE
-log1p_dist_citycentre,Distance to city centre (m),NA,0.8223,FALSE
-log1p_pop_density,Population density (persons/km²),NA,0.0485,TRUE
-log1p_business_retail_per_km2,Retail businesses (per km²),NA,0.6179,FALSE
-IMD,Index of Multiple Deprivation,NA,0.1897,FALSE
-cars_one_pct,% households: 1 car,NA,-0.222,FALSE
-cars_twoPlus_pct,% households: 2+ cars,NA,-0.4241,FALSE
-Drive_Car_pct,% commuting: drive car,NA,-0.5944,FALSE
-Passenger_Car_pct,% commuting: car passenger,NA,-0.2642,FALSE
-Walk_pct,% commuting: walk,NA,0.3443,FALSE
-Bicycle_pct,% commuting: bicycle,NA,-0.276,FALSE
-bus_Coach_pct,% commuting: bus/coach,NA,-0.1431,FALSE
-Train_pct,% commuting: train,NA,0.2456,FALSE
-Underground_train_tram_pct,% commuting: underground/tram,NA,0.2033,FALSE
-Taxi_pct,% commuting: taxi,NA,0.0306,TRUE
-workAthome_pct,% working from home,NA,0.1231,FALSE
-Other_pct,% commuting: other mode,NA,0.0462,TRUE
-White_pct,% White,NA,-0.4845,FALSE
-Mixed_pct,% Mixed ethnicity,NA,0.1219,FALSE
-Asian_pct,% Asian,NA,0.4137,FALSE
-Black_pct,% Black,NA,0.1108,FALSE
-age_under15_pct,% aged under 15,NA,-0.1032,FALSE
-age_15to24_pct,% aged 15–24,NA,0.2512,FALSE
-age_25to44_pct,% aged 25–44,NA,0.2204,FALSE
-age_45to64_pct,% aged 45–64,NA,-0.4285,FALSE
-age_65plus_pct,% aged 65+,NA,-0.3765,FALSE
+log1p_road_length_km,Road length (km),-0.1056,0.0846,TRUE
+log1p_road_density_m_km2,Road density (m/km²),0.622,0.0874,TRUE
+log_area_km2,Area (km²),-0.5739,-0.0432,TRUE
+pct_A_road,% A-road,0.4487,0.1686,FALSE
+pct_B_road,% B-road,0.1454,0.0162,TRUE
+pct_minor_road,% Minor road,-0.4663,-0.1474,FALSE
+log1p_dist_citycentre,Distance to city centre (m),0.7629,0.8223,FALSE
+log1p_pop_density,Population density (persons/km²),0.6393,0.0485,TRUE
+log1p_business_retail_per_km2,Retail businesses (per km²),1.6924,0.6179,FALSE
+IMD,Index of Multiple Deprivation,0.7637,0.1897,FALSE
+cars_one_pct,% households: 1 car,-0.5244,-0.222,FALSE
+cars_twoPlus_pct,% households: 2+ cars,-1.3813,-0.4241,FALSE
+Drive_Car_pct,% commuting: drive car,-1.7011,-0.5944,FALSE
+Passenger_Car_pct,% commuting: car passenger,-0.5791,-0.2642,FALSE
+Walk_pct,% commuting: walk,1.1708,0.3443,FALSE
+Bicycle_pct,% commuting: bicycle,-0.3382,-0.276,FALSE
+bus_Coach_pct,% commuting: bus/coach,-0.068,-0.1431,FALSE
+Train_pct,% commuting: train,0.4022,0.2456,FALSE
+Underground_train_tram_pct,% commuting: underground/tram,0.1523,0.2033,FALSE
+Taxi_pct,% commuting: taxi,0.2997,0.0306,TRUE
+workAthome_pct,% working from home,-0.2006,0.1231,FALSE
+Other_pct,% commuting: other mode,0.2258,0.0462,TRUE
+White_pct,% White,-1.2775,-0.4845,FALSE
+Mixed_pct,% Mixed ethnicity,0.3796,0.1219,FALSE
+Asian_pct,% Asian,1.0121,0.4137,FALSE
+Black_pct,% Black,0.4888,0.1108,FALSE
+age_under15_pct,% aged under 15,-0.2103,-0.1032,FALSE
+age_15to24_pct,% aged 15–24,0.828,0.2512,FALSE
+age_25to44_pct,% aged 25–44,0.6997,0.2204,FALSE
+age_45to64_pct,% aged 45–64,-1.2164,-0.4285,FALSE
+age_65plus_pct,% aged 65+,-1.0723,-0.3765,FALSE

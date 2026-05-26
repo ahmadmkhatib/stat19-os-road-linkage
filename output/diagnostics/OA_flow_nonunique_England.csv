@@ -1,0 +1,4 @@
+"country","stage","treated","control","total"
+"England","Before Stage 1",613,46218,46831
+"England","After Stage 1 / Before Stage 2",613,3187,3800
+"England","After Stage 2",613,874,1487

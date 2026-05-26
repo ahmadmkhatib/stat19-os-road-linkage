@@ -1,0 +1,4 @@
+"country","stage","treated","control","total"
+"Scotland","Before Stage 1",201,14655,14856
+"Scotland","After Stage 1 / Before Stage 2",201,676,877
+"Scotland","After Stage 2",201,125,326

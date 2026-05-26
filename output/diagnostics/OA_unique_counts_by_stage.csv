@@ -1,0 +1,7 @@
+"stage","unique_OAs","treated_unique_OAs","control_unique_OAs"
+"Stage 0: raw input",75275,1066,74209
+"Stage 1 filter: England",46831,613,46218
+"Stage 1 filter: Scotland",14856,201,14655
+"Stage 2 matched: England",1487,613,874
+"Stage 2 matched: Scotland",326,201,125
+"Stage 2 matched: Combined",1813,814,999

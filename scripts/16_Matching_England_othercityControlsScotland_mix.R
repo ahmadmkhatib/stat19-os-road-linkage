@@ -1,8 +1,8 @@
 # =============================================================================
-#Final matching code  OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING
+# matching code  OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING
 # =============================================================================
 #
-# PURPOSE:
+#
 #   Construct matched comparison groups for a DiD evaluation of CAZ/LEZ
 #   interventions using two-stage Mahalanobis Distance Matching.
 #
@@ -78,7 +78,7 @@ stage1_socdem   <- c(
   "Taxi_pct", "workAthome_pct", "Other_pct",
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
   "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
-  "age_45to64_pct", "age_65plus_pct"
+  "age_45to64_pct", "age_65to84_pct"
 )
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
@@ -215,7 +215,7 @@ prep_dataset <- function(data) {
       age_15to24_pct  = X15to19_pct  + X20to24_pct,
       age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
       age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
-      age_65plus_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct
+      age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct
     )
 }
 
@@ -279,6 +279,16 @@ s1_vars_england  <- check_vars(data_england_clean,  stage1_vars_log, "S1 England
 s2_vars_england  <- check_vars(data_england_clean,  stage2_vars_log, "S2 England")
 s1_vars_scotland <- check_vars(data_scotland_clean, stage1_vars_log, "S1 Scotland")
 s2_vars_scotland <- check_vars(data_scotland_clean, stage2_vars_log, "S2 Scotland")
+
+
+flow_counts <- tibble(
+  stage = character(),
+  treated_OAs = integer(),
+  control_OAs = integer()
+)
+
+
+
 
 # =============================================================================
 # BALANCE TEST FUNCTION
@@ -578,6 +588,13 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   cat("\n  Stage 1 balance:\n")
   run_balance_tests(m_s1, trend_vars = character(0),
                     label = paste0("S1_", label))
+  
+  
+  
+  ######
+  
+    ####################
+  
 
   # ---- STAGE 2 ---------------------------------------------------------------
   cat("\n--- Stage 2:", label, "---\n")
@@ -787,3 +804,6 @@ cat("  OA_ratio_selection_mixed.rds\n")
 cat("  OA_balance_tests_mixed.rds\n")
 cat("  OA_matching_pairs_mixed.rds\n")
 cat("  fig08_ratio_selection_by_country.png\n")
+
+
+
