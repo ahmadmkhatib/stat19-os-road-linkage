@@ -131,7 +131,10 @@ stage1_socdem <- c("IMD",
                    "Taxi_pct", "workAthome_pct", "Other_pct",
                    "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
                    "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
-                   "age_45to64_pct", "age_65plus_pct")
+                   "age_45to64_pct", "age_65to84_pct")
+
+
+
 stage1_vars   <- c(stage1_road, stage1_urban, stage1_socdem)
 
 stage2_trends <- c(
@@ -148,6 +151,25 @@ stage2_levels <- c(
   "mean_other_KSI_pkm", "mean_other_slight_pkm",
   "mean_total_pkm"
 )
+
+
+# Raw Stage 1 names — for descriptive tables only (human-readable scale)
+stage1_road_raw   <- c("road_length_km", "road_density_m_km2", "area_km2",
+                       "pct_A_road", "pct_B_road", "pct_minor_road")
+stage1_urban_raw  <- c("dist_citycentre", "pop_density", "business_retail_per_km2")
+stage1_socdem_raw <- c("IMD",
+                       "cars_one_pct", "cars_twoPlus_pct",
+                       "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
+                       "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
+                       "Taxi_pct", "workAthome_pct", "Other_pct",
+                       "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
+                       "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
+                       "age_45to64_pct", "age_65to84_pct")
+stage1_vars_raw <- c(stage1_road_raw, stage1_urban_raw, stage1_socdem_raw)
+
+all_desc_vars <- c(stage1_vars_raw, stage2_trends, stage2_levels)
+
+
 
 # Log-scale versions of level variables — these match what the matcher used
 stage2_levels_log <- paste0("log1p_", stage2_levels)
@@ -183,7 +205,7 @@ var_labels <- c(
   Passenger_Car_pct                    = "% commuting: car passenger",
   Walk_pct                             = "% commuting: walk",
   Bicycle_pct                          = "% commuting: bicycle",
-  bus_Coach_pct                        = "% commuting: bus/coach",
+  Bus_Coach_pct                        = "% commuting: bus/coach",
   Train_pct                            = "% commuting: train",
   Underground_train_tram_pct           = "% commuting: underground/tram",
   Taxi_pct                             = "% commuting: taxi",
@@ -197,11 +219,11 @@ var_labels <- c(
   age_15to24_pct                       = "% aged 15\u201324",
   age_25to44_pct                       = "% aged 25\u201344",
   age_45to64_pct                       = "% aged 45\u201364",
-  age_65plus_pct                       = "% aged 65+",
+  age_65to84_pct                       = "% aged 65\u201384",
   X4under_pct                          = "% aged under 5",
   X5to19_pct                           = "% aged 5\u201319",
   X20to24_pct                          = "% aged 20\u201324",
-  X65plus_pct                          = "% aged 65+",
+  X65to84_pct                          = "% aged 65\u201324",
   # Stage 2 — trends (raw scale)
   trend_car_KSI_pkm                    = "Trend: car KSI/km",
   trend_car_slight_pkm                 = "Trend: car slight/km",
@@ -256,7 +278,7 @@ add_log_vars <- function(df) {
     age_15to24_pct  = X15to19_pct  + X20to24_pct,
     age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
     age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
-    age_65plus_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct,
+    age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct,
     # Log1p-transformed injury levels — matching scale
     log1p_mean_car_KSI_pkm        = log1p(pmax(mean_car_KSI_pkm,        0)),
     log1p_mean_car_slight_pkm     = log1p(pmax(mean_car_slight_pkm,     0)),
@@ -414,8 +436,10 @@ cat("  Saved: 01_descriptive_table_combined.csv\n")
 
 # --- 2b: England -----------------------------------------------------------
 desc_table_eng <- bind_rows(
-  desc_stats(unmatched_eng %>% filter(treat_indicator == 1), all_desc_vars, "Treated"),
-  desc_stats(matched_eng   %>% filter(treat_indicator == 0), all_desc_vars, "Matched")
+  desc_stats(unmatched_eng_log %>% filter(treat_indicator == 1),
+             all_desc_vars, "Treated"),
+  desc_stats(matched_eng %>% filter(treat_indicator == 0),
+             all_desc_vars, "Matched")
 ) %>%
   pivot_wider(id_cols = c(variable, label), names_from = group,
               values_from = c(mean, sd, median), names_glue = "{group}_{.value}") %>%
@@ -434,8 +458,10 @@ cat("  Saved: 01_descriptive_table_england.csv\n")
 
 # --- 2c: Scotland ----------------------------------------------------------
 desc_table_sco <- bind_rows(
-  desc_stats(unmatched_sco %>% filter(treat_indicator == 1), all_desc_vars, "Treated"),
-  desc_stats(matched_sco   %>% filter(treat_indicator == 0), all_desc_vars, "Matched")
+  desc_stats(unmatched_sco_log %>% filter(treat_indicator == 1),
+             all_desc_vars, "Treated"),
+  desc_stats(matched_sco %>% filter(treat_indicator == 0),
+             all_desc_vars, "Matched")
 ) %>%
   pivot_wider(id_cols = c(variable, label), names_from = group,
               values_from = c(mean, sd, median), names_glue = "{group}_{.value}") %>%
@@ -622,7 +648,7 @@ stratum_table <- matched_A_treated %>%
     mean_Drive_Car_pct    = round(mean(Drive_Car_pct,      na.rm = TRUE), 1),
     mean_Walk_pct         = round(mean(Walk_pct,           na.rm = TRUE), 1),
     mean_cars_none_pct    = round(mean(cars_none_pct,      na.rm = TRUE), 1),
-    mean_X65plus_pct      = round(mean(X65plus_pct,        na.rm = TRUE), 1),
+    mean_X65to84_pct      = round(mean(age_65to84_pct,        na.rm = TRUE), 1),
     pct_England           = round(100 * mean(country == "England"),        1),
     pct_Scotland          = round(100 * mean(country == "Scotland"),       1),
     .groups               = "drop"
@@ -1023,8 +1049,6 @@ cat("  Mahalanobis dist    : fig07_mahalanobis_distance_by_country.png\n")
 cat("  Parallel trends     : fig14_parallel_trends_england/scotland.png\n")
 cat("================================================================\n")
 
-.
-3
 
 # Verify all matching-scale vars exist in unmatched_eng_log before running
 required_s1  <- stage1_vars          # already log-transformed names
