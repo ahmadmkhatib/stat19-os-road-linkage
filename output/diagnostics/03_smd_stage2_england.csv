@@ -1,19 +1,19 @@
-variable,label,smd_preS2,smd_postS2,var_type,balanced
-trend_car_KSI_pkm,Trend: car KSI/km,0.0252,-0.0029,Trend,TRUE
-trend_car_slight_pkm,Trend: car slight/km,-0.0795,-0.0058,Trend,TRUE
-trend_cyc_KSI_pkm,Trend: cycling KSI/km,0.0912,0.0698,Trend,TRUE
-trend_cyc_slight_pkm,Trend: cycling slight/km,-0.0583,-0.0143,Trend,TRUE
-trend_ped_KSI_pkm,Trend: pedestrian KSI/km,-0.0308,-0.0017,Trend,TRUE
-trend_ped_slight_pkm,Trend: pedestrian slight/km,-0.0215,-0.0274,Trend,TRUE
-trend_other_KSI_pkm,Trend: other KSI/km,0.0366,-0.0076,Trend,TRUE
-trend_other_slight_pkm,Trend: other slight/km,-0.0304,-0.0308,Trend,TRUE
-trend_total_pkm,Trend: total injuries/km,-0.0682,-0.0154,Trend,TRUE
-mean_car_KSI_pkm,Mean: car KSI/km,0.2023,0.1341,Level,FALSE
-mean_car_slight_pkm,Mean: car slight/km,0.3901,0.2643,Level,FALSE
-mean_cyc_KSI_pkm,Mean: cycling KSI/km,0.2011,0.0405,Level,TRUE
-mean_cyc_slight_pkm,Mean: cycling slight/km,0.3413,0.1292,Level,FALSE
-mean_ped_KSI_pkm,Mean: pedestrian KSI/km,0.4496,0.137,Level,FALSE
-mean_ped_slight_pkm,Mean: pedestrian slight/km,0.5122,0.2386,Level,FALSE
-mean_other_KSI_pkm,Mean: other KSI/km,0.111,0.0552,Level,TRUE
-mean_other_slight_pkm,Mean: other slight/km,0.2036,0.1289,Level,FALSE
-mean_total_pkm,Mean: total injuries/km,0.565,0.3717,Level,FALSE
+variable,label,smd_preS2,smd_postS2,var_type,balanced,note
+trend_car_KSI_pkm,Trend: car KSI/km,0.0252,-0.0029,Trend,TRUE,raw scale
+trend_car_slight_pkm,Trend: car slight/km,-0.0795,-0.0058,Trend,TRUE,raw scale
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,0.0912,0.0698,Trend,TRUE,raw scale
+trend_cyc_slight_pkm,Trend: cycling slight/km,-0.0583,-0.0143,Trend,TRUE,raw scale
+trend_ped_KSI_pkm,Trend: pedestrian KSI/km,-0.0308,-0.0017,Trend,TRUE,raw scale
+trend_ped_slight_pkm,Trend: pedestrian slight/km,-0.0215,-0.0274,Trend,TRUE,raw scale
+trend_other_KSI_pkm,Trend: other KSI/km,0.0366,-0.0076,Trend,TRUE,raw scale
+trend_other_slight_pkm,Trend: other slight/km,-0.0304,-0.0308,Trend,TRUE,raw scale
+trend_total_pkm,Trend: total injuries/km,-0.0682,-0.0154,Trend,TRUE,raw scale
+log1p_mean_car_KSI_pkm,Mean: car KSI/km (log),0.2429,0.1336,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_car_slight_pkm,Mean: car slight/km (log),0.6375,0.2549,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_cyc_KSI_pkm,Mean: cycling KSI/km (log),0.2088,0.0403,Level (log),TRUE,log1p scale — matches optimisation scale
+log1p_mean_cyc_slight_pkm,Mean: cycling slight/km (log),0.4694,0.1269,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_ped_KSI_pkm,Mean: pedestrian KSI/km (log),0.4712,0.1356,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_ped_slight_pkm,Mean: pedestrian slight/km (log),0.6425,0.2371,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_other_KSI_pkm,Mean: other KSI/km (log),0.1487,0.053900000000000003,Level (log),TRUE,log1p scale — matches optimisation scale
+log1p_mean_other_slight_pkm,Mean: other slight/km (log),0.3817,0.1291,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_total_pkm,Mean: total injuries/km (log),0.9498,0.3639,Level (log),FALSE,log1p scale — matches optimisation scale

@@ -15,7 +15,7 @@ Drive_Car_pct,% commuting: drive car,-1.7011,-0.5944,FALSE
 Passenger_Car_pct,% commuting: car passenger,-0.5791,-0.2642,FALSE
 Walk_pct,% commuting: walk,1.1708,0.3443,FALSE
 Bicycle_pct,% commuting: bicycle,-0.3382,-0.276,FALSE
-bus_Coach_pct,% commuting: bus/coach,-0.068,-0.1431,FALSE
+bus_Coach_pct,bus_Coach_pct,-0.068,-0.1431,FALSE
 Train_pct,% commuting: train,0.4022,0.2456,FALSE
 Underground_train_tram_pct,% commuting: underground/tram,0.1523,0.2033,FALSE
 Taxi_pct,% commuting: taxi,0.2997,0.0306,TRUE
@@ -29,4 +29,4 @@ age_under15_pct,% aged under 15,-0.2103,-0.1032,FALSE
 age_15to24_pct,% aged 15–24,0.828,0.2512,FALSE
 age_25to44_pct,% aged 25–44,0.6997,0.2204,FALSE
 age_45to64_pct,% aged 45–64,-1.2164,-0.4285,FALSE
-age_65plus_pct,% aged 65+,-1.0723,-0.3765,FALSE
+age_65to84_pct,% aged 65–84,-1.0723,-0.3765,FALSE

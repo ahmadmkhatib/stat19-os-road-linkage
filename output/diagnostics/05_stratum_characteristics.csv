@@ -1,5 +1,5 @@
-Stratum,n,mean_total_pkm,sd_total_pkm,median_total_pkm,mean_road_length_km,mean_road_density,mean_pct_A_road,mean_pct_minor,mean_pop_density,mean_dist_citycentre,mean_IMD,mean_Drive_Car_pct,mean_Walk_pct,mean_cars_none_pct,mean_X65plus_pct,pct_England,pct_Scotland
-1,204,0.07741,NA,0.07741,0.857,23204,6.3,92.2,11020,8707,36,21.8,17.2,45.1,10.1,81.9,18.1
-2,203,0.21621,NA,0.21621,1.1,21676,12.4,84.8,10262,8223,36.6,19.8,19.9,52.3,8.1,73.4,26.6
-3,203,0.41765,NA,0.41765,1.275,22399,13.2,80.6,9717,7780,34.1,17.7,22,57.6,6.4,73.4,26.6
-4,204,0.81665,NA,0.81665,1.135,20192,19.5,74.1,12805,7005,35.6,16.5,23.6,61.2,5.1,72.5,27.5
+Stratum,n,mean_total_pkm,sd_total_pkm,median_total_pkm,mean_road_length_km,mean_road_density,mean_pct_A_road,mean_pct_minor,mean_pop_density,mean_dist_citycentre,mean_IMD,mean_Drive_Car_pct,mean_Walk_pct,mean_cars_none_pct,mean_X65to84_pct,pct_England,pct_Scotland
+1,204,0.07741,NA,0.07741,0.857,23204,6.3,92.2,11020,8707,36,21.8,17.2,45.1,8.8,81.9,18.1
+2,203,0.21621,NA,0.21621,1.1,21676,12.4,84.8,10262,8223,36.6,19.8,19.9,52.3,7.1,73.4,26.6
+3,203,0.41765,NA,0.41765,1.275,22399,13.2,80.6,9717,7780,34.1,17.7,22,57.6,5.6,73.4,26.6
+4,204,0.81665,NA,0.81665,1.135,20192,19.5,74.1,12805,7005,35.6,16.5,23.6,61.2,4.6,72.5,27.5

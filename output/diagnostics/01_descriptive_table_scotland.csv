@@ -9,10 +9,9 @@ Demographic & road characteristics,% White,73.4493,83.7668,12.4598,11.9815,74.72
 Demographic & road characteristics,% aged 15–24,43.2385,19.1065,21.4563,12.4391,40.3509,14.6667
 Demographic & road characteristics,% aged 25–44,34.4104,33.4817,13.0821,12.1456,35.1648,31.6667
 Demographic & road characteristics,% aged 45–64,12.7349,22.6764,9.1359,7.9754,10.8434,22.6994
-Demographic & road characteristics,% aged 65+,5.2133,12.2342,6.298,8.6155,3.4826,10.5882
+Demographic & road characteristics,% aged 65–84,5.2133,12.2342,6.298,8.6155,3.4826,10.5882
 Demographic & road characteristics,% aged under 15,4.4488,10.1468,4.6619,6.4167,3.125,9.9291
 Demographic & road characteristics,% commuting: bicycle,2.7265,2.8321,3.2979,3.0907,1.7857,2.1277
-Demographic & road characteristics,% commuting: bus/coach,17.0797,20.427,8.3942,11.1106,15.8537,19.5652
 Demographic & road characteristics,% commuting: car passenger,2.1834,3.9911,2.3204,3.1676,1.7857,3.6364
 Demographic & road characteristics,% commuting: drive car,18.2392,35.2332,7.9019,12.9424,17.757,34.2105
 Demographic & road characteristics,% commuting: other mode,1.5789,0.8945,1.9914,1.3675,0.9615,0
@@ -30,6 +29,7 @@ Demographic & road characteristics,Population density (persons/km²),9.0536,8.65
 Demographic & road characteristics,Retail businesses (per km²),3.9662,2.7543,0.6114,0.8532,4.2354,2.8876
 Demographic & road characteristics,Road density (m/km²),9.9114,9.7346,0.463,0.5288,9.9764,9.8498
 Demographic & road characteristics,Road length (km),0.3891,0.3767,0.4159,0.3974,0.2299,0.2508
+Demographic & road characteristics,bus_Coach_pct,17.0797,20.427,8.3942,11.1106,15.8537,19.5652
 Injury levels,Mean: car KSI/km,0.0213,0.0047,0.0888,0.0183,0,0
 Injury levels,Mean: car slight/km,0.1289,0.0761,0.2777,0.1167,0,0.0253
 Injury levels,Mean: cycling KSI/km,0.0201,0.0076,0.055,0.0218,0,0
