@@ -1,3 +1,4 @@
+
 # =============================================================================
 # MATCHING QUALITY BY SCHEME — 11-CITY COMPARISON
 #
@@ -164,10 +165,6 @@ var_labels <- c(
   log1p_mean_total_pkm          = "Mean: total (log)"
 )
 
-# =============================================================================
-# LOAD DATA
-# =============================================================================
-
 matched_full <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
 full_data    <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
@@ -303,159 +300,378 @@ smd_for_scheme <- function(scheme_name, vars = all_match_vars) {
 }
 
 # =============================================================================
-# COUNTRY-LEVEL LOVE PLOTS (SEPARATE GRIDS)
+# COMPUTE SMD FOR ALL SCHEMES
 # =============================================================================
 
-cat("=== Country-level love plots (separate grids) ===\n")
+cat("Computing SMDs for all schemes...\n")
+smd_all <- map_df(schemes, function(s) {
+  cat("  →", s, "\n")
+  smd_for_scheme(s, vars = stage2_trends)
+})
+cat("\n")
 
-# join country info safely
-smd_all_country <- smd_all %>%
-  left_join(
-    matched_full %>% distinct(scheme, country),
-    by = "scheme"
-  )
+# =============================================================================
+# PLOT 1 — PER-SCHEME LOVE PLOTS (one PNG per scheme)
+# =============================================================================
 
-make_country_love_plot <- function(df, country_name) {
-  
-  plot_data <- df %>%
-    filter(country == country_name) %>%
+cat("=== Per-scheme love plots ===\n")
+
+make_love_plot_scheme <- function(smd_df, scheme_name) {
+  plot_data <- smd_df %>%
     filter(!is.na(smd_before), !is.na(smd_after)) %>%
+    mutate(label = factor(label, levels = label[order(abs(smd_before))])) %>%
+    pivot_longer(c(smd_before, smd_after),
+                 names_to = "timing", values_to = "smd") %>%
     mutate(
-      label = factor(label, levels = unique(label[order(abs(smd_before))]))
-    ) %>%
-    pivot_longer(
-      cols = c(smd_before, smd_after),
-      names_to = "timing",
-      values_to = "smd"
-    ) %>%
-    mutate(
-      timing = if_else(timing == "smd_before",
-                       "Before matching",
-                       "After matching"),
-      timing = factor(timing,
-                      levels = c("Before matching", "After matching"))
+      timing = if_else(timing == "smd_before", "Before matching", "After matching"),
+      timing = factor(timing, levels = c("Before matching", "After matching"))
     )
   
+  n_treated  <- sum(matched_full$scheme == scheme_name &
+                      matched_full$treat_indicator == 1)
+  n_controls <- sum(matched_full$scheme == scheme_name &
+                      matched_full$treat_indicator == 0)
+  
   ggplot(plot_data,
-         aes(x = abs(smd), y = label,
-             colour = timing, shape = timing)) +
-    
+         aes(x = abs(smd), y = label, colour = timing, shape = timing)) +
     geom_vline(xintercept = 0.10, linetype = "dashed",
                colour = "#999999", linewidth = 0.5) +
-    
-    geom_line(aes(group = label),
-              colour = "#DDDDDD", linewidth = 0.4) +
-    
-    geom_point(size = 2.8) +
-    
-    facet_wrap(~scheme, scales = "free_y", ncol = 3) +
-    
-    scale_colour_manual(values = c(
-      "Before matching" = "#E74C3C",
-      "After matching"  = "#2ECC71"
-    )) +
-    
-    scale_shape_manual(values = c(16, 17)) +
-    
+    geom_vline(xintercept = 0, colour = "#DDDDDD", linewidth = 0.3) +
+    geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.4) +
+    geom_point(size = 3.5) +
+    scale_colour_manual(
+      values = c("Before matching" = "#E74C3C",
+                 "After matching"  = "#2ECC71")) +
+    scale_shape_manual(
+      values = c("Before matching" = 16, "After matching" = 17)) +
+    scale_x_continuous(limits = c(0, NA),
+                       expand = expansion(mult = c(0, 0.05))) +
     labs(
-      title = paste0("Injury trend balance — ", country_name),
-      subtitle = "Each panel = one scheme",
-      x = "|SMD|",
-      y = NULL,
-      colour = NULL,
-      shape = NULL,
-      caption = "Dashed line = 0.10 threshold"
+      title    = paste0("Injury trend balance — ", scheme_name),
+      subtitle = paste0("Treated OAs: ", n_treated,
+                        " | Matched controls: ", n_controls),
+      x        = "|SMD|", y = NULL,
+      colour   = NULL, shape = NULL,
+      caption  = "Dashed = 0.10 threshold  |  ● Before matching  ▲ After matching"
     ) +
-    
+    theme_diag() +
+    theme(legend.position = "bottom",
+          axis.text.y     = element_text(size = 11),
+          axis.text.x     = element_text(size = 11))
+}
+
+# Diagnose NA coverage before plotting
+na_check <- smd_all %>%
+  group_by(scheme) %>%
+  summarise(
+    n_vars        = n(),
+    n_na_before   = sum(is.na(smd_before)),
+    n_na_after    = sum(is.na(smd_after)),
+    n_plottable   = sum(!is.na(smd_before) & !is.na(smd_after)),
+    .groups       = "drop"
+  )
+cat("SMD NA diagnostic:\n")
+print(na_check, n = Inf)
+cat("\n")
+
+# Schemes where treated OAs were not found in unmatched_pool will have
+# smd_before = NA for all variables — flag them clearly
+problem_schemes <- na_check %>% filter(n_plottable == 0) %>% pull(scheme)
+if (length(problem_schemes) > 0) {
+  cat("WARNING: the following schemes have zero plottable variables\n")
+  cat("  (treated OAs not matched to unmatched_pool — check OA identifiers):\n")
+  cat(" ", paste(problem_schemes, collapse = ", "), "\n\n")
+}
+
+# Derive country per scheme from matched_full (treated rows only, no NAs)
+scheme_country <- matched_full %>%
+  filter(treat_indicator == 1, !is.na(scheme), !is.na(country)) %>%
+  distinct(scheme, country) %>%
+  mutate(country = case_when(
+    str_detect(tolower(country), "scot")     ~ "Scotland",
+    str_detect(tolower(country), "eng|wal")  ~ "England",
+    TRUE                                     ~ country
+  )) %>%
+  filter(!is.na(country))
+
+cat("Scheme-country mapping:\n")
+print(as.data.frame(scheme_country))
+cat("\n")
+
+missing_country <- setdiff(schemes, scheme_country$scheme)
+if (length(missing_country) > 0)
+  cat("WARNING: no country found for schemes:", paste(missing_country, collapse = ", "), "\n\n")
+
+# Shared y-axis order: variables sorted by mean |SMD| before, across all schemes
+var_order <- smd_all %>%
+  filter(!is.na(smd_before)) %>%
+  mutate(label = coalesce(var_labels[variable], variable)) %>%
+  group_by(label) %>%
+  summarise(mean_before = mean(abs(smd_before), na.rm = TRUE), .groups = "drop") %>%
+  arrange(mean_before) %>%
+  pull(label)
+
+make_love_grid <- function(country_name) {
+  country_schemes <- scheme_country %>%
+    filter(country == country_name) %>%
+    pull(scheme)
+  
+  # Sample size label for each scheme strip
+  size_labels <- matched_full %>%
+    filter(scheme %in% country_schemes) %>%
+    group_by(scheme) %>%
+    summarise(n_t = sum(treat_indicator == 1),
+              n_c = sum(treat_indicator == 0), .groups = "drop") %>%
+    mutate(scheme_lab = paste0(scheme, "\nT=", n_t, "  C=", n_c))
+  
+  plot_data <- smd_all %>%
+    filter(scheme %in% country_schemes,
+           !is.na(smd_before), !is.na(smd_after)) %>%
+    mutate(label = coalesce(var_labels[variable], variable),
+           label = factor(label, levels = var_order)) %>%
+    left_join(size_labels, by = "scheme") %>%
+    pivot_longer(c(smd_before, smd_after),
+                 names_to = "timing", values_to = "smd") %>%
+    mutate(
+      timing = if_else(timing == "smd_before", "Before matching", "After matching"),
+      timing = factor(timing, levels = c("Before matching", "After matching"))
+    )
+  
+  n_schemes <- length(country_schemes)
+  
+  ggplot(plot_data,
+         aes(x = abs(smd), y = label, colour = timing, shape = timing)) +
+    geom_vline(xintercept = 0.10, linetype = "dashed",
+               colour = "#999999", linewidth = 0.5) +
+    geom_vline(xintercept = 0, colour = "#DDDDDD", linewidth = 0.3) +
+    geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.4) +
+    geom_point(size = 3.5) +
+    scale_colour_manual(
+      values = c("Before matching" = "#E74C3C",
+                 "After matching"  = "#2ECC71")) +
+    scale_shape_manual(
+      values = c("Before matching" = 16, "After matching" = 17)) +
+    scale_x_continuous(limits = c(0, NA),
+                       expand = expansion(mult = c(0, 0.06))) +
+    facet_wrap(~scheme_lab, nrow = 1) +
+    labs(
+      title    = paste0("Injury trend balance \u2014 ", country_name, " schemes"),
+      subtitle = "T = treated OAs  |  C = matched controls  |  shared y-axis across all panels",
+      x = "|SMD|", y = NULL,
+      colour = NULL, shape = NULL,
+      caption = "Dashed = 0.10 threshold  \u25cf Before matching  \u25b2 After matching"
+    ) +
     theme_diag() +
     theme(
       legend.position = "bottom",
-      axis.text.y = element_text(size = 8),
-      strip.text = element_text(face = "bold")
+      axis.text.y     = element_text(size = 10),
+      axis.text.x     = element_text(size = 9),
+      strip.text      = element_text(size = 10, face = "bold"),
+      panel.spacing.x = unit(0.8, "lines")
     )
 }
 
-# =========================
-# RUN FOR EACH COUNTRY
-# =========================
+p_eng <- make_love_grid("England")
+p_sco <- make_love_grid("Scotland")
 
-countries <- c("England", "Scotland")
+n_eng <- sum(scheme_country$country == "England")
+n_sco <- sum(scheme_country$country == "Scotland")
 
-for (ctry in countries) {
+save_fig(p_eng, "fig_love_england_schemes.png",
+         width = max(10, n_eng * 2.8), height = 9)
+save_fig(p_sco, "fig_love_scotland_schemes.png",
+         width = max(10, n_sco * 2.8), height = 9)
+cat("\n")
+
+# --- Individual per-scheme love plots ----------------------------------------
+cat("=== Individual per-scheme love plots ===\n")
+
+for (s in schemes) {
+  smd_scheme <- smd_all %>% filter(scheme == s)
   
-  cat("  →", ctry, "\n")
+  if (nrow(smd_scheme %>% filter(!is.na(smd_before), !is.na(smd_after))) == 0) {
+    cat("  SKIP (no plottable data):", s, "\n")
+    next
+  }
   
-  p <- make_country_love_plot(smd_all_country, ctry)
+  ctry <- scheme_country %>% filter(scheme == s) %>% pull(country)
+  ctry <- if (length(ctry) == 0) "" else ctry
   
-  fname <- paste0(
-    "fig_love_", tolower(ctry), "_schemes_grid.png"
-  )
+  plot_data <- smd_scheme %>%
+    filter(!is.na(smd_before), !is.na(smd_after)) %>%
+    mutate(label = coalesce(var_labels[variable], variable),
+           label = factor(label, levels = var_order)) %>%
+    pivot_longer(c(smd_before, smd_after),
+                 names_to = "timing", values_to = "smd") %>%
+    mutate(
+      timing = if_else(timing == "smd_before", "Before matching", "After matching"),
+      timing = factor(timing, levels = c("Before matching", "After matching"))
+    )
   
-  save_fig(p, fname, width = 14, height = 9)
+  n_t <- sum(matched_full$scheme == s & matched_full$treat_indicator == 1)
+  n_c <- sum(matched_full$scheme == s & matched_full$treat_indicator == 0)
+  
+  p <- ggplot(plot_data,
+              aes(x = abs(smd), y = label, colour = timing, shape = timing)) +
+    geom_vline(xintercept = 0.10, linetype = "dashed",
+               colour = "#999999", linewidth = 0.5) +
+    geom_vline(xintercept = 0, colour = "#DDDDDD", linewidth = 0.3) +
+    geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.4) +
+    geom_point(size = 3.5) +
+    scale_colour_manual(
+      values = c("Before matching" = "#E74C3C",
+                 "After matching"  = "#2ECC71")) +
+    scale_shape_manual(
+      values = c("Before matching" = 16, "After matching" = 17)) +
+    scale_x_continuous(limits = c(0, NA),
+                       expand = expansion(mult = c(0, 0.06))) +
+    labs(
+      title    = paste0("Injury trend balance \u2014 ", s,
+                        if (nchar(ctry) > 0) paste0(" (", ctry, ")") else ""),
+      subtitle = paste0("Treated OAs: ", n_t, "  |  Matched controls: ", n_c),
+      x = "|SMD|", y = NULL,
+      colour = NULL, shape = NULL,
+      caption = "Dashed = 0.10 threshold  \u25cf Before matching  \u25b2 After matching"
+    ) +
+    theme_diag() +
+    theme(legend.position = "bottom",
+          axis.text.y     = element_text(size = 11),
+          axis.text.x     = element_text(size = 10))
+  
+  fname <- paste0("fig_love_", gsub("[^a-zA-Z0-9]", "_", s), ".png")
+  save_fig(p, fname, width = 8, height = 7)
 }
+cat("\n")
+
 # =============================================================================
-# PLOT 2 — SMD SUMMARY HEATMAP (schemes × variable groups)
-#
-# Rows    = variable groups (5)
-# Columns = schemes (11)
-# Fill    = mean |SMD| after matching
-# Outline = mean |SMD| before (shown as text, top-right corner of cell)
+# =============================================================================
+# PLOT 2 — SMD HEATMAP: separate plots for England and Scotland
+# Rows = trend variables, Columns = schemes, Fill = |SMD| after matching
 # =============================================================================
 
-cat("=== SMD summary heatmap ===\n")
+cat("=== SMD summary heatmaps (England + Scotland) ===\n")
 
-heatmap_data <- smd_all %>%
-  filter(variable %in% stage2_trends) %>%
-  mutate(
-    label = coalesce(var_labels[variable], variable),
-    scheme = factor(scheme, levels = schemes)
-  ) %>%
-  group_by(scheme, label) %>%
-  summarise(
-    mean_smd_after  = mean(abs(smd_after),  na.rm = TRUE),
-    mean_smd_before = mean(abs(smd_before), na.rm = TRUE),
-    .groups = "drop"
-  )
-
-# Colour breaks for fill
 smd_breaks  <- c(0, 0.05, 0.10, 0.15, 0.20, Inf)
-smd_labels  <- c("<0.05", "0.05–0.10", "0.10–0.15", "0.15–0.20", ">0.20")
+smd_labels  <- c("<0.05", "0.05-0.10", "0.10-0.15", "0.15-0.20", ">0.20")
 smd_colours <- c("#1a9850", "#91cf60", "#fee08b", "#fc8d59", "#d73027")
 
-heatmap_data <- heatmap_data %>%
-  mutate(
-    smd_band   = cut(mean_smd_after, breaks = smd_breaks,
-                     labels = smd_labels, right = FALSE, include.lowest = TRUE),
-    cell_label = sprintf("%.3f", mean_smd_after)
-  )
+make_heatmap <- function(country_name) {
+  country_schemes <- scheme_country %>%
+    filter(country == country_name) %>%
+    pull(scheme)
+  
+  hdat <- smd_all %>%
+    filter(variable %in% stage2_trends,
+           scheme %in% country_schemes) %>%
+    mutate(
+      label  = coalesce(var_labels[variable], variable),
+      scheme = factor(scheme, levels = sort(country_schemes)),
+      label  = factor(label, levels = rev(var_order))
+    ) %>%
+    group_by(scheme, label) %>%
+    summarise(
+      smd_after  = mean(abs(smd_after),  na.rm = TRUE),
+      smd_before = mean(abs(smd_before), na.rm = TRUE),
+      .groups    = "drop"
+    ) %>%
+    mutate(
+      smd_band   = cut(smd_after, breaks = smd_breaks,
+                       labels = smd_labels, right = FALSE, include.lowest = TRUE),
+      cell_label = sprintf("%.3f", smd_after)
+    )
+  
+  ggplot(hdat, aes(x = scheme, y = label, fill = smd_band)) +
+    geom_tile(colour = "white", linewidth = 0.8) +
+    geom_text(aes(label = cell_label), size = 3, colour = "#222222") +
+    scale_fill_manual(
+      values = setNames(smd_colours, smd_labels),
+      name   = "|SMD| after matching",
+      drop   = FALSE
+    ) +
+    scale_x_discrete(guide = guide_axis(angle = 35)) +
+    labs(
+      title    = paste0("Injury trend balance \u2014 ", country_name),
+      subtitle = "Each cell = |SMD| after matching",
+      x = NULL, y = NULL,
+      caption  = "Green < 0.05  \u00b7  yellow 0.05-0.10  \u00b7  orange 0.10-0.15  \u00b7  red > 0.20"
+    ) +
+    theme_diag(base_size = 12) +
+    theme(
+      panel.grid       = element_blank(),
+      panel.border     = element_blank(),
+      axis.text.x      = element_text(size = 11, face = "bold"),
+      axis.text.y      = element_text(size = 10),
+      legend.position  = "bottom",
+      legend.key.width = unit(1.2, "cm")
+    )
+}
 
-p_heatmap <- ggplot(heatmap_data,
-                    aes(x = scheme, y = fct_rev(label), fill = smd_band)) +
-  geom_tile(colour = "white", linewidth = 0.8) +
-  geom_text(aes(label = cell_label), size = 2.8, colour = "#222222") +
-  scale_fill_manual(
-    values = setNames(smd_colours, smd_labels),
-    name   = "|SMD| after matching",
-    drop   = FALSE
-  ) +
-  scale_x_discrete(guide = guide_axis(angle = 35)) +
-  labs(
-    title    = "Injury trend balance across schemes — |SMD| after matching",
-    subtitle = "Each cell = one trend variable for one scheme",
-    x = NULL, y = NULL,
-    caption  = "Green < 0.05 · yellow 0.05–0.10 · orange 0.10–0.15 · red > 0.20"
-  ) +
-  theme_diag(base_size = 12) +
-  theme(
-    panel.grid      = element_blank(),
-    panel.border    = element_blank(),
-    axis.text.x     = element_text(size = 10, face = "bold"),
-    axis.text.y     = element_text(size = 10),
-    legend.position = "bottom",
-    legend.key.width = unit(1.2, "cm")
-  )
+p_heat_eng <- make_heatmap("England")
+p_heat_sco <- make_heatmap("Scotland")
 
-save_fig(p_heatmap, "fig_scheme_smd_heatmap.png", width = 16, height = 7)
+n_eng <- sum(scheme_country$country == "England")
+n_sco <- sum(scheme_country$country == "Scotland")
+
+save_fig(p_heat_eng, "fig_heatmap_england.png",
+         width = max(8, n_eng * 1.6 + 4), height = 7)
+save_fig(p_heat_sco, "fig_heatmap_scotland.png",
+         width = max(8, n_sco * 1.6 + 4), height = 7)
+cat("\n")
+
+# --- Individual per-scheme heatmaps ------------------------------------------
+cat("=== Individual per-scheme heatmaps ===\n")
+
+for (s in schemes) {
+  hdat_s <- smd_all %>%
+    filter(variable %in% stage2_trends, scheme == s,
+           !is.na(smd_after)) %>%
+    mutate(
+      label  = coalesce(var_labels[variable], variable),
+      label  = factor(label, levels = rev(var_order))
+    ) %>%
+    mutate(
+      smd_band   = cut(abs(smd_after), breaks = smd_breaks,
+                       labels = smd_labels, right = FALSE, include.lowest = TRUE),
+      cell_label = sprintf("%.3f", abs(smd_after))
+    )
+  
+  if (nrow(hdat_s) == 0) {
+    cat("  SKIP (no data):", s, "\n")
+    next
+  }
+  
+  ctry <- scheme_country %>% filter(scheme == s) %>% pull(country)
+  ctry <- if (length(ctry) == 0) "" else ctry
+  
+  p_h <- ggplot(hdat_s, aes(x = "After matching", y = label, fill = smd_band)) +
+    geom_tile(colour = "white", linewidth = 0.8) +
+    geom_text(aes(label = cell_label), size = 3.5, colour = "#222222") +
+    scale_fill_manual(
+      values = setNames(smd_colours, smd_labels),
+      name   = "|SMD| after matching",
+      drop   = FALSE
+    ) +
+    labs(
+      title    = paste0("Injury trend balance \u2014 ", s,
+                        if (nchar(ctry) > 0) paste0(" (", ctry, ")") else ""),
+      subtitle = "Each cell = |SMD| after matching for one trend variable",
+      x = NULL, y = NULL,
+      caption  = "Green < 0.05  \u00b7  yellow 0.05-0.10  \u00b7  orange 0.10-0.15  \u00b7  red > 0.20"
+    ) +
+    theme_diag(base_size = 12) +
+    theme(
+      panel.grid       = element_blank(),
+      panel.border     = element_blank(),
+      axis.text.x      = element_blank(),
+      axis.ticks.x     = element_blank(),
+      axis.text.y      = element_text(size = 11),
+      legend.position  = "bottom",
+      legend.key.width = unit(1.2, "cm")
+    )
+  
+  fname <- paste0("fig_heatmap_", gsub("[^a-zA-Z0-9]", "_", s), ".png")
+  save_fig(p_h, fname, width = 5, height = 7)
+}
 cat("\n")
 
 # =============================================================================
@@ -733,5 +949,678 @@ cat("  Per-scheme love plots : fig_scheme_<name>_love.png (one per scheme)\n")
 cat("  SMD heatmap           : fig_scheme_smd_heatmap.png\n")
 cat("  Weight diagnostics    : fig_scheme_weights.png\n")
 cat("  Mahalanobis distance  : fig_scheme_mdist.png\n")
+cat("================================================================\n")
+
+
+#### GALSGOW 
+
+# How many unique controls does Glasgow actually have?
+matched_full %>%
+  filter(scheme == "Glasgow", treat_indicator == 0) %>%
+  summarise(
+    n_controls      = n(),
+    n_unique        = n_distinct(OA),
+    mean_weight     = mean(weights),
+    max_weight      = max(weights),
+    pct_at_cap      = mean(weights >= 5) * 100
+  )
+
+# Which control OAs are doing all the heavy lifting?
+matched_full %>%
+  filter(scheme == "Glasgow", treat_indicator == 0) %>%
+  arrange(desc(weights)) %>%
+  select(OA, weights, trend_total_pkm, trend_car_KSI_pkm) %>%
+  head(10)
+
+# What is the Mahalanobis distance distribution for Glasgow treated OAs?
+matched_full %>%
+  filter(scheme == "Glasgow", treat_indicator == 1) %>%
+  summarise(
+    median_mdist = median(mdist, na.rm = TRUE),
+    p90_mdist    = quantile(mdist, 0.9, na.rm = TRUE),
+    max_mdist    = max(mdist, na.rm = TRUE)
+  )
+
+###  10% of Glasgow's treated OAs have extremely poor matches
+
+# Which treated OAs have terrible matches?
+glasgow_treated <- matched_full %>%
+  filter(scheme == "Glasgow", treat_indicator == 1) %>%
+  arrange(desc(mdist)) %>%
+  select(OA, mdist, trend_total_pkm, trend_car_KSI_pkm, 
+         trend_cyc_KSI_pkm, trend_cyc_slight_pkm, trend_ped_slight_pkm)
+
+head(glasgow_treated, 15)
+
+# How many are above common distance thresholds?
+glasgow_treated %>%
+  summarise(
+    pct_gt5  = mean(mdist > 5)  * 100,
+    pct_gt10 = mean(mdist > 10) * 100,
+    pct_gt20 = mean(mdist > 20) * 100,
+    n_gt5    = sum(mdist > 5),
+    n_gt10   = sum(mdist > 10),
+    n_gt20   = sum(mdist > 20)
+  )
+
+# Compare trend distributions: well-matched vs poorly-matched treated OAs
+matched_full %>%
+  filter(scheme == "Glasgow", treat_indicator == 1) %>%
+  mutate(match_quality = if_else(mdist > 10, "Poor (mdist > 10)", "Good (mdist <= 10)")) %>%
+  group_by(match_quality) %>%
+  summarise(
+    n                    = n(),
+    mean_trend_total     = mean(trend_total_pkm,     na.rm = TRUE),
+    mean_trend_cyc_KSI   = mean(trend_cyc_KSI_pkm,   na.rm = TRUE),
+    mean_trend_ped_slight = mean(trend_ped_slight_pkm, na.rm = TRUE),
+    mean_trend_car_KSI   = mean(trend_car_KSI_pkm,   na.rm = TRUE),
+    .groups = "drop"
+  )
+
+############################
+
+# Schemes flagged from heatmap: Dundee, Glasgow, Sheffield, Bristol
+# (Aberdeen and Newcastle have scattered orange cells — included for completeness)
+
+# Scheme colours 
+SCHEME_COLS <- c(
+  Dundee    = "#D85A30",
+  Glasgow   = "#9B59B6",
+  Sheffield = "#E67E22",
+  Bristol   = "#2E6FAB",
+  Aberdeen  = "#1ABC9C",
+  Newcastle = "#E74C3C"
+)
+
+# Propagate scheme to controls 
+if (any(matched_full$scheme %in% c("Control", NA), na.rm = TRUE)) {
+  pairs <- readRDS(here("data", "processed", "OA_matching_pairs_mixed.rds"))
+  treated_col <- names(pairs)[str_detect(tolower(names(pairs)), "treat")][1]
+  control_col <- names(pairs)[str_detect(tolower(names(pairs)), "control|donor")][1]
+  treated_scheme <- matched_full %>%
+    filter(treat_indicator == 1) %>%
+    select(OA, scheme)
+  ctrl_lookup <- pairs %>%
+    select(treated_OA = all_of(treated_col), control_OA = all_of(control_col)) %>%
+    left_join(treated_scheme, by = c("treated_OA" = "OA")) %>%
+    select(OA = control_OA, scheme_from_treated = scheme) %>%
+    distinct(OA, .keep_all = TRUE)
+  matched_full <- matched_full %>%
+    left_join(ctrl_lookup, by = "OA") %>%
+    mutate(scheme = case_when(
+      treat_indicator == 1        ~ scheme,
+      !is.na(scheme_from_treated) ~ scheme_from_treated,
+      TRUE                        ~ scheme
+    )) %>%
+    select(-scheme_from_treated)
+}
+
+
+# Flagged schemes — edit this vector if you want to add/remove
+flagged <- c("Dundee", "Glasgow", "Sheffield", "Bristol", "Aberdeen", "Newcastle")
+
+compute_smd <- function(data, var) {
+  t <- data[[var]][data$treat_indicator == 1]
+  c <- data[[var]][data$treat_indicator == 0]
+  t <- t[!is.na(t)]; c <- c[!is.na(c)]
+  if (length(t) < 2 || length(c) < 2) return(NA_real_)
+  pooled_sd <- sqrt((var(t) + var(c)) / 2)
+  if (pooled_sd == 0) return(0)
+  (mean(t) - mean(c)) / pooled_sd
+}
+
+# =============================================================================
+# TABLE 1 — MDIST SUMMARY PER FLAGGED SCHEME
+# =============================================================================
+
+cat("=== Mahalanobis distance summary ===\n")
+
+mdist_summary <- matched_full %>%
+  filter(scheme %in% flagged, treat_indicator == 1, !is.na(mdist)) %>%
+  group_by(scheme) %>%
+  summarise(
+    n_treated    = n(),
+    median_mdist = round(median(mdist),              2),
+    mean_mdist   = round(mean(mdist),                2),
+    p75_mdist    = round(quantile(mdist, 0.75),      2),
+    p90_mdist    = round(quantile(mdist, 0.90),      2),
+    p95_mdist    = round(quantile(mdist, 0.95),      2),
+    max_mdist    = round(max(mdist),                 2),
+    n_gt5        = sum(mdist > 5),
+    n_gt10       = sum(mdist > 10),
+    n_gt15       = sum(mdist > 15),
+    n_gt20       = sum(mdist > 20),
+    pct_gt5      = round(mean(mdist > 5)  * 100, 1),
+    pct_gt10     = round(mean(mdist > 10) * 100, 1),
+    pct_gt15     = round(mean(mdist > 15) * 100, 1),
+    pct_gt20     = round(mean(mdist > 20) * 100, 1),
+    .groups      = "drop"
+  )
+
+print(as.data.frame(mdist_summary))
+write_csv(mdist_summary, file.path(outdir, "19_mdist_summary_table.csv"))
+cat("  Saved: 19_mdist_summary_table.csv\n\n")
+
+# =============================================================================
+# TABLE 2 — CALIPER IMPACT: N DROPPED + MEAN |SMD| AT EACH THRESHOLD
+# =============================================================================
+
+cat("=== Caliper impact table ===\n")
+
+calipers <- c(5, 10, 15, 20, 25)
+
+caliper_impact <- map_df(flagged, function(s) {
+  base_df <- matched_full %>% filter(scheme == s)
+  map_df(calipers, function(cap) {
+    calipered <- base_df %>%
+      filter(treat_indicator == 0 |
+               (treat_indicator == 1 & (is.na(mdist) | mdist <= cap)))
+    n_dropped  <- sum(base_df$treat_indicator == 1) -
+      sum(calipered$treat_indicator == 1)
+    pct_dropped <- round(100 * n_dropped / sum(base_df$treat_indicator == 1), 1)
+    mean_smd   <- mean(map_dbl(stage2_trends, ~abs(compute_smd(calipered, .x))),
+                       na.rm = TRUE)
+    max_smd    <- max(map_dbl(stage2_trends,  ~abs(compute_smd(calipered, .x))),
+                      na.rm = TRUE)
+    tibble(scheme      = s,
+           caliper     = cap,
+           n_treated   = sum(calipered$treat_indicator == 1),
+           n_dropped   = n_dropped,
+           pct_dropped = pct_dropped,
+           mean_smd_after = round(mean_smd, 3),
+           max_smd_after  = round(max_smd,  3))
+  })
+})
+
+# Add uncalipered baseline (caliper = Inf)
+baseline <- map_df(flagged, function(s) {
+  df <- matched_full %>% filter(scheme == s)
+  tibble(
+    scheme      = s,
+    caliper     = Inf,
+    n_treated   = sum(df$treat_indicator == 1),
+    n_dropped   = 0L,
+    pct_dropped = 0,
+    mean_smd_after = round(mean(map_dbl(stage2_trends,
+                                        ~abs(compute_smd(df, .x))), na.rm = TRUE), 3),
+    max_smd_after  = round(max(map_dbl(stage2_trends,
+                                       ~abs(compute_smd(df, .x))), na.rm = TRUE), 3)
+  )
+})
+
+caliper_impact_full <- bind_rows(baseline, caliper_impact) %>%
+  arrange(scheme, caliper)
+
+print(as.data.frame(caliper_impact_full))
+write_csv(caliper_impact_full,
+          file.path(outdir, "19_caliper_impact_table.csv"))
+cat("  Saved: 19_caliper_impact_table.csv\n\n")
+
+# =============================================================================
+# PLOT 1 — ECDF OF MDIST, ALL FLAGGED SCHEMES
+# =============================================================================
+
+cat("=== Plot 1: ECDF ===\n")
+
+mdist_data <- matched_full %>%
+  filter(scheme %in% flagged, treat_indicator == 1, !is.na(mdist)) %>%
+  mutate(scheme = factor(scheme, levels = flagged))
+
+# Add reference lines at key calipers
+ref_lines <- tibble(
+  xint    = c(5, 10, 15, 20),
+  ltype   = c("dotted", "dashed", "dashed", "dotdash"),
+  colour  = c("#AAAAAA", "#E67E22", "#E74C3C", "#8B0000"),
+  label   = c("5", "10", "15", "20")
+)
+
+p_ecdf <- ggplot(mdist_data, aes(x = mdist, colour = scheme)) +
+  stat_ecdf(linewidth = 1.1, geom = "step") +
+  geom_vline(data = ref_lines,
+             aes(xintercept = xint),
+             linetype  = ref_lines$ltype,
+             colour    = ref_lines$colour,
+             linewidth = 0.6) +
+  annotate("text", x = ref_lines$xint + 0.4, y = 0.08,
+           label = ref_lines$label, size = 3.2,
+           colour = ref_lines$colour, hjust = 0) +
+  scale_colour_manual(values = SCHEME_COLS, name = "Scheme") +
+  coord_cartesian(xlim = c(0, 40)) +
+  labs(
+    title    = "ECDF of Stage 2 Mahalanobis distance — flagged schemes",
+    subtitle = "Treated OAs only  |  steeper = more OAs with poor matches",
+    x        = "Mahalanobis distance",
+    y        = "Cumulative proportion of treated OAs",
+    caption  = "Vertical lines: candidate caliper thresholds at 5, 10, 15, 20"
+  ) +
+  theme_diag() +
+  theme(legend.position = "bottom")
+
+save_fig(p_ecdf, "fig_mdist_ecdf_problematic.png", width = 12, height = 7)
+
+# =============================================================================
+# PLOT 2 — CALIPER IMPACT: MEAN |SMD| vs % TREATED OAs DROPPED
+#
+# Each scheme gets a curve: x = % dropped, y = mean |SMD| after
+# Ideal = bottom-left (low drop, low SMD)
+# =============================================================================
+
+cat("=== Plot 2: Caliper trade-off ===\n")
+
+caliper_plot_data <- caliper_impact_full %>%
+  filter(is.finite(caliper)) %>%
+  mutate(
+    scheme  = factor(scheme, levels = flagged),
+    caliper = factor(caliper)
+  )
+
+# Also add the no-caliper point
+no_caliper <- caliper_impact_full %>%
+  filter(!is.finite(caliper)) %>%
+  mutate(scheme = factor(scheme, levels = flagged))
+
+p_tradeoff <- ggplot(caliper_impact_full %>%
+                       mutate(caliper_lab = if_else(is.finite(caliper),
+                                                    as.character(caliper), "None"),
+                              scheme = factor(scheme, levels = flagged)),
+                     aes(x = pct_dropped, y = mean_smd_after,
+                         colour = scheme, group = scheme)) +
+  geom_path(linewidth = 0.8, alpha = 0.7) +
+  geom_point(aes(shape = caliper_lab), size = 3.5) +
+  geom_hline(yintercept = 0.10, linetype = "dashed",
+             colour = "#999999", linewidth = 0.5) +
+  scale_colour_manual(values = SCHEME_COLS, name = "Scheme") +
+  scale_shape_manual(
+    values = c("None" = 4, "5" = 15, "10" = 16, "15" = 17, "20" = 18, "25" = 19),
+    name   = "Caliper"
+  ) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Caliper threshold trade-off: balance vs sample retention",
+    subtitle = "Each point = one caliper value  |  path moves left to right as caliper tightens",
+    x        = "% treated OAs dropped",
+    y        = "Mean |SMD| after caliper (across 9 trend variables)",
+    caption  = "Dashed line = 0.10 balance threshold  |  X = no caliper applied"
+  ) +
+  theme_diag() +
+  theme(legend.position = "bottom")
+
+save_fig(p_tradeoff, "fig_mdist_caliper_tradeoff.png", width = 12, height = 8)
+
+# =============================================================================
+# PLOT 3 — PER-VARIABLE SMD BEFORE/AFTER CALIPER (facet by scheme)
+#
+# Shows which specific trend variables are fixed by calipers
+# Uses caliper = 15 as the illustrative threshold — change if needed
+# =============================================================================
+
+cat("=== Plot 3: Per-variable SMD at caliper = 15 ===\n")
+
+ILLUSTRATIVE_CALIPER <- 15
+
+var_labels_trend <- c(
+  trend_car_KSI_pkm      = "Car KSI",
+  trend_car_slight_pkm   = "Car slight",
+  trend_cyc_KSI_pkm      = "Cycling KSI",
+  trend_cyc_slight_pkm   = "Cycling slight",
+  trend_ped_KSI_pkm      = "Ped KSI",
+  trend_ped_slight_pkm   = "Ped slight",
+  trend_other_KSI_pkm    = "Other KSI",
+  trend_other_slight_pkm = "Other slight",
+  trend_total_pkm        = "Total"
+)
+
+smd_comparison <- map_df(flagged, function(s) {
+  full_df      <- matched_full %>% filter(scheme == s)
+  calipered_df <- full_df %>%
+    filter(treat_indicator == 0 |
+             (treat_indicator == 1 & (is.na(mdist) | mdist <= ILLUSTRATIVE_CALIPER)))
+  
+  map_df(stage2_trends, function(v) {
+    tibble(
+      scheme     = s,
+      variable   = v,
+      label      = coalesce(var_labels_trend[v], v),
+      smd_full   = abs(compute_smd(full_df,      v)),
+      smd_caliper = abs(compute_smd(calipered_df, v)),
+      n_full      = sum(full_df$treat_indicator      == 1),
+      n_calipered = sum(calipered_df$treat_indicator == 1)
+    )
+  })
+}) %>%
+  mutate(scheme = factor(scheme, levels = flagged),
+         label  = factor(label,  levels = rev(var_labels_trend)))
+
+smd_long <- smd_comparison %>%
+  pivot_longer(c(smd_full, smd_caliper),
+               names_to = "version", values_to = "smd") %>%
+  mutate(
+    version = if_else(version == "smd_full",
+                      "No caliper", paste0("Caliper \u2264 ", ILLUSTRATIVE_CALIPER)),
+    version = factor(version,
+                     levels = c("No caliper",
+                                paste0("Caliper \u2264 ", ILLUSTRATIVE_CALIPER)))
+  )
+
+# Strip label with sample sizes
+strip_labels <- smd_comparison %>%
+  distinct(scheme, n_full, n_calipered) %>%
+  mutate(strip = paste0(scheme, "\n(", n_calipered, "/", n_full, " retained)"))
+strip_map <- setNames(strip_labels$strip, strip_labels$scheme)
+
+smd_long <- smd_long %>%
+  mutate(scheme_lab = strip_map[as.character(scheme)],
+         scheme_lab = factor(scheme_lab, levels = strip_map))
+
+p_var_smd <- ggplot(smd_long,
+                    aes(x = smd, y = label,
+                        colour = version, shape = version)) +
+  geom_vline(xintercept = 0.10, linetype = "dashed",
+             colour = "#999999", linewidth = 0.5) +
+  geom_vline(xintercept = 0, colour = "#EEEEEE", linewidth = 0.3) +
+  geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.5) +
+  geom_point(size = 3.5) +
+  scale_colour_manual(
+    values = setNames(
+      c("#E74C3C", "#2ECC71"),
+      c("No caliper", paste0("Caliper \u2264 ", ILLUSTRATIVE_CALIPER))
+    ),
+    name = NULL
+  ) +
+  scale_shape_manual(
+    values = setNames(
+      c(16, 17),
+      c("No caliper", paste0("Caliper \u2264 ", ILLUSTRATIVE_CALIPER))
+    ),
+    name = NULL
+  ) +
+  scale_x_continuous(limits = c(0, NA),
+                     expand = expansion(mult = c(0, 0.06))) +
+  facet_wrap(~scheme_lab, nrow = 1) +
+  labs(
+    title    = paste0("Per-variable |SMD|: no caliper vs caliper \u2264 ",
+                      ILLUSTRATIVE_CALIPER, " — flagged schemes"),
+    subtitle = "Strip label shows OAs retained after caliper  |  shared y-axis",
+    x = "|SMD|", y = NULL,
+    caption  = "Dashed = 0.10 threshold  \u25cf No caliper  \u25b2 Calipered"
+  ) +
+  theme_diag() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y     = element_text(size = 10),
+    axis.text.x     = element_text(size = 9),
+    strip.text      = element_text(size = 9, face = "bold"),
+    panel.spacing.x = unit(0.8, "lines")
+  )
+
+save_fig(p_var_smd, "fig_mdist_caliper_smd_comparison.png",
+         width = max(14, length(flagged) * 2.8), height = 8)
+
+# =============================================================================
+# PLOT 4 — MDIST VS WORST TREND VARIABLE (scatter, facet by scheme)
+# Identifies structurally unusual OAs driving imbalance
+# =============================================================================
+
+cat("=== Plot 4: Distance vs trend scatter ===\n")
+
+# Use trend_total_pkm as x — most consistently problematic across flagged schemes
+scatter_data <- matched_full %>%
+  filter(scheme %in% flagged, treat_indicator == 1, !is.na(mdist)) %>%
+  mutate(
+    scheme      = factor(scheme, levels = flagged),
+    above_15    = mdist > ILLUSTRATIVE_CALIPER,
+    label_point = if_else(mdist > 20, OA, NA_character_)
+  )
+
+p_scatter <- ggplot(scatter_data,
+                    aes(x = trend_total_pkm, y = mdist,
+                        colour = above_15)) +
+  geom_hline(yintercept = ILLUSTRATIVE_CALIPER, linetype = "dashed",
+             colour = "#E74C3C", linewidth = 0.5) +
+  geom_hline(yintercept = 10, linetype = "dotted",
+             colour = "#E67E22", linewidth = 0.4) +
+  geom_point(alpha = 0.75, size = 2) +
+  ggrepel::geom_text_repel(aes(label = label_point),
+                           size = 2.5, max.overlaps = 10,
+                           colour = "#333333") +
+  scale_colour_manual(
+    values = c("FALSE" = "#2E6FAB", "TRUE" = "#E74C3C"),
+    labels = c(paste0("mdist \u2264 ", ILLUSTRATIVE_CALIPER),
+               paste0("mdist > ",  ILLUSTRATIVE_CALIPER)),
+    name   = NULL
+  ) +
+  facet_wrap(~scheme, nrow = 2, scales = "free_x") +
+  labs(
+    title    = "Stage 2 Mahalanobis distance vs total injury trend — flagged schemes",
+    subtitle = "OAs with mdist > 20 labelled by OA code",
+    x        = "Pre-treatment total injury trend (slope)",
+    y        = "Mahalanobis distance",
+    caption  = paste0("Red dashed = caliper at ", ILLUSTRATIVE_CALIPER,
+                      "  |  Orange dotted = caliper at 10")
+  ) +
+  theme_diag() +
+  theme(legend.position = "bottom",
+        strip.text      = element_text(size = 11))
+
+save_fig(p_scatter, "fig_mdist_scatter_flagged.png", width = 14, height = 10)
+
+# =============================================================================
+# CONSOLE SUMMARY
+# =============================================================================
+
+cat("\n================================================================\n")
+cat("DISTANCE DIAGNOSTIC SUMMARY — FLAGGED SCHEMES\n")
+cat("================================================================\n\n")
+
+cat("At caliper = 15:\n")
+caliper_impact_full %>%
+  filter(caliper %in% c(Inf, 15)) %>%
+  mutate(caliper = if_else(is.infinite(caliper), "None", as.character(caliper))) %>%
+  select(scheme, caliper, n_treated, pct_dropped, mean_smd_after, max_smd_after) %>%
+  arrange(scheme, caliper) %>%
+  print(n = Inf)
+
+cat("\nOutputs saved to:", outdir, "\n")
+cat("  19_mdist_summary_table.csv\n")
+cat("  19_caliper_impact_table.csv\n")
+cat("  fig_mdist_ecdf_problematic.png\n")
+cat("  fig_mdist_caliper_tradeoff.png\n")
+cat("  fig_mdist_caliper_smd_comparison.png\n")
+cat("  fig_mdist_scatter_flagged.png\n")
+cat("================================================================\n")
+
+# =============================================================================
+# PLOT 5 — PARALLEL TRENDS BY SCHEME
+#
+# Panel A: Semi-annual pre-treatment time series (treated vs matched control),
+#          faceted by scheme, ordered by mean |SMD| across 9 trend variables.
+# Panel B: Ranking bar chart of mean |SMD| with quality colour bands.
+#
+# OUTPUTS:
+#   fig_parallel_trends_timeseries.png
+#   fig_parallel_trends_ranking.png
+# =============================================================================
+
+cat("\n================================================================\n")
+cat("PARALLEL TRENDS DIAGNOSTIC BY SCHEME\n")
+cat("================================================================\n\n")
+
+library(zoo)
+
+# --- 1. Build pre-treatment OA-quarter panel for matched sample ---------------
+
+oa_q <- readRDS(here("data", "processed", "OA_injuries_quarterly.rds")) %>%
+  mutate(quarter_year = as.yearqtr(quarter_year))
+
+scheme_starts <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%
+  distinct(scheme, caz_start_q) %>%
+  filter(!is.na(scheme))
+
+oa_panel <- oa_q %>%
+  inner_join(
+    matched_full %>%
+      select(OA, treat_indicator, weights, scheme, country),
+    by = "OA"
+  ) %>%
+  left_join(scheme_starts, by = "scheme")
+
+oa_pre <- oa_panel %>%
+  filter(quarter_year < caz_start_q)
+
+cat("Pre-treatment OA-quarter rows:", nrow(oa_pre), "\n\n")
+
+# --- 2. Ranking metric: mean |SMD| across 9 trend variables ------------------
+
+trend_rank <- smd_all %>%
+  filter(variable %in% stage2_trends) %>%
+  group_by(scheme) %>%
+  summarise(
+    mean_abs_smd = mean(abs(smd_after), na.rm = TRUE),
+    max_abs_smd  = max(abs(smd_after), na.rm = TRUE),
+    n_above_010  = sum(abs(smd_after) >= 0.10, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    matched_full %>%
+      filter(treat_indicator == 1) %>%
+      distinct(scheme, country),
+    by = "scheme"
+  ) %>%
+  arrange(mean_abs_smd) %>%
+  mutate(rank = row_number())
+
+cat("Parallel trends ranking (by mean |SMD| of trend variables):\n")
+print(as.data.frame(trend_rank), row.names = FALSE)
+cat("\n")
+
+# --- 3. Semi-annual aggregation for time-series plot --------------------------
+
+oa_pre_semi <- oa_pre %>%
+  mutate(
+    half_year = paste0(
+      lubridate::year(as.Date(quarter_year)),
+      if_else(as.numeric(format(as.Date(quarter_year), "%m")) <= 6, " H1", " H2")
+    )
+  ) %>%
+  group_by(scheme, half_year, treat_indicator) %>%
+  summarise(
+    wtd_mean_inj = weighted.mean(total_injuries, w = weights, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    group = if_else(treat_indicator == 1, "Treated", "Matched control"),
+    half_date = as.Date(paste0(
+      str_extract(half_year, "\\d{4}"), "-",
+      if_else(str_detect(half_year, "H1"), "03", "09"), "-01"
+    ))
+  )
+
+facet_info <- trend_rank %>%
+  select(scheme, rank, country, mean_abs_smd) %>%
+  mutate(
+    facet_label = paste0(rank, ". ", scheme, " (", country, ")"),
+    facet_label = fct_reorder(facet_label, rank)
+  )
+
+plot_semi <- oa_pre_semi %>%
+  left_join(facet_info, by = "scheme") %>%
+  left_join(scheme_starts, by = "scheme") %>%
+  mutate(group = factor(group, levels = c("Treated", "Matched control")))
+
+vline_semi <- facet_info %>%
+  left_join(scheme_starts, by = "scheme") %>%
+  mutate(start_date = as.Date(caz_start_q))
+
+# --- 4. Figure A: pre-treatment time series -----------------------------------
+
+p_pt_timeseries <- ggplot(
+  plot_semi,
+  aes(x = half_date, y = wtd_mean_inj, colour = group, linetype = group)
+) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.5, alpha = 0.7) +
+  geom_vline(
+    data = vline_semi,
+    aes(xintercept = start_date),
+    linetype = "dotted", colour = "#888888", linewidth = 0.5
+  ) +
+  scale_colour_manual(
+    values = c("Treated" = "#D85A30", "Matched control" = "#2E6FAB")
+  ) +
+  scale_linetype_manual(
+    values = c("Treated" = "solid", "Matched control" = "longdash")
+  ) +
+  facet_wrap(~facet_label, ncol = 3, scales = "free_y") +
+  labs(
+    title    = "Pre-treatment injury trends by scheme",
+    subtitle = paste0(
+      "Semi-annual weighted mean total injuries per OA | ",
+      "ranked by mean |SMD| across 9 trend variables (1 = best)"
+    ),
+    x = NULL, y = "Weighted mean injuries per OA",
+    colour = NULL, linetype = NULL,
+    caption = "Dotted vertical line = scheme start date | Ranking based on post-matching mean |SMD| of 9 pre-treatment injury trend slopes"
+  ) +
+  theme_diag() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
+    strip.text      = element_text(size = 9, face = "bold"),
+    panel.spacing   = unit(0.6, "lines")
+  )
+
+save_fig(p_pt_timeseries, "fig_parallel_trends_timeseries.png",
+         width = 16, height = 14)
+
+# --- 5. Figure B: ranking bar chart -------------------------------------------
+
+quality_breaks <- c(0, 0.05, 0.10, 0.15, Inf)
+quality_labels <- c("Excellent (<0.05)", "Acceptable (0.05\u20130.10)",
+                     "Marginal (0.10\u20130.15)", "Poor (>0.15)")
+quality_colours <- c(
+  "Excellent (<0.05)"            = "#1a9850",
+  "Acceptable (0.05\u20130.10)"  = "#91cf60",
+  "Marginal (0.10\u20130.15)"    = "#fc8d59",
+  "Poor (>0.15)"                 = "#d73027"
+)
+
+rank_bar_data <- trend_rank %>%
+  mutate(
+    quality = cut(mean_abs_smd, breaks = quality_breaks,
+                  labels = quality_labels, right = FALSE, include.lowest = TRUE),
+    scheme_lab = paste0(scheme, " (", country, ")"),
+    scheme_lab = fct_reorder(scheme_lab, -mean_abs_smd)
+  )
+
+p_pt_ranking <- ggplot(
+  rank_bar_data,
+  aes(y = scheme_lab, x = mean_abs_smd, fill = quality)
+) +
+  geom_col(width = 0.7, alpha = 0.9) +
+  geom_vline(xintercept = 0.10, linetype = "dashed",
+             colour = "#555555", linewidth = 0.5) +
+  geom_text(aes(label = sprintf("%.3f", mean_abs_smd)),
+            hjust = -0.15, size = 3.2, colour = "#333333", fontface = "bold") +
+  scale_fill_manual(values = quality_colours, name = "Balance quality", drop = FALSE) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(
+    title    = "Parallel trends assumption: scheme ranking",
+    subtitle = "Mean |SMD| across 9 pre-treatment injury trend variables (lower = better)",
+    x = "Mean |SMD| after matching", y = NULL,
+    caption  = "Dashed line = |SMD| = 0.10 conventional threshold"
+  ) +
+  theme_diag() +
+  theme(
+    legend.position    = "bottom",
+    axis.text.y        = element_text(size = 10, face = "bold"),
+    panel.grid.major.y = element_blank()
+  )
+
+save_fig(p_pt_ranking, "fig_parallel_trends_ranking.png",
+         width = 10, height = 7)
+
+cat("\nParallel trends outputs saved:\n")
+cat("  fig_parallel_trends_timeseries.png\n")
+cat("  fig_parallel_trends_ranking.png\n")
 cat("================================================================\n")
 

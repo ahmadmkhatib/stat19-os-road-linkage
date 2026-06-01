@@ -90,9 +90,7 @@ save_fig <- function(p, filename, width = 14, height = 10, dpi = 300) {
   message("Saved: ", filename)
 }
 
-# =============================================================================
-# LOAD DATA
-# =============================================================================
+
 
 matched_A        <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
 matched_eng      <- readRDS(here("data", "processed", "OA_matched_full_mixed_England.rds"))
@@ -871,48 +869,120 @@ cat("  Saved: fig06_weight_diagnostics_by_country.png\n\n")
 
 # =============================================================================
 # SECTION 12 — MAHALANOBIS DISTANCE PLOTS (by country)
-# mdist is computed in the matching script and joined onto matched_data.
-# If absent (older .rds files), section is skipped with a warning.
+#
+# mdist reflects Stage 2 matching on 18 variables (9 injury trends + 9 injury
+# levels). Diagnostics here focus on the TREND component of match quality —
+# specifically whether the distance distribution is consistent with good
+# pre-treatment trend balance, which is the key assumption for DiD estimation.
+#
+# Reference distribution: with 9 trend variables, distances from trend-only
+# matching would follow chi-squared(9) (95th pct ≈ 17). The composite 18-var
+# distance is larger, so d = 20 is used as a conservative flagging threshold.
+#
+# If mdist absent (older .rds files), section is skipped with a warning.
 # =============================================================================
 
-cat("=== Section 12: Mahalanobis distance plots ===\n")
+cat("=== Section 12: Mahalanobis distance plots (trend-focus) ===\n")
 
 if ("mdist" %in% names(matched_eng) && "mdist" %in% names(matched_sco)) {
   
-  mdist_eng <- matched_eng %>% filter(treat_indicator == 1, !is.na(mdist)) %>%
+  mdist_eng <- matched_eng %>%
+    filter(treat_indicator == 1, !is.na(mdist)) %>%
     select(OA, mdist, country)
-  mdist_sco <- matched_sco %>% filter(treat_indicator == 1, !is.na(mdist)) %>%
+  mdist_sco <- matched_sco %>%
+    filter(treat_indicator == 1, !is.na(mdist)) %>%
     select(OA, mdist, country)
   mdist_all <- bind_rows(mdist_eng, mdist_sco)
   
+  # --- summary stats for caption annotation ---
+  n_total   <- nrow(mdist_all)
+  n_gt20    <- sum(mdist_all$mdist > 20)
+  pct_gt20  <- round(100 * n_gt20 / n_total, 1)
+  pct_lt5   <- round(100 * mean(mdist_all$mdist <= 5),  1)
+  pct_lt10  <- round(100 * mean(mdist_all$mdist <= 10), 1)
+  pct_lt20  <- round(100 * mean(mdist_all$mdist <= 20), 1)
+  
+  n_gt20_eng <- sum(mdist_eng$mdist > 20)
+  n_gt20_sco <- sum(mdist_sco$mdist > 20)
+  pct_gt20_eng <- round(100 * n_gt20_eng / nrow(mdist_eng), 1)
+  pct_gt20_sco <- round(100 * n_gt20_sco / nrow(mdist_sco), 1)
+  
+  cat(sprintf("  Distance summary (trend-focused interpretation):\n"))
+  cat(sprintf("    Median: %.1f  |  Mean: %.1f\n",
+              median(mdist_all$mdist), mean(mdist_all$mdist)))
+  cat(sprintf("    %% <= 5:  %.1f%%  |  %% <= 10: %.1f%%  |  %% <= 20: %.1f%%\n",
+              pct_lt5, pct_lt10, pct_lt20))
+  cat(sprintf("    OAs with d > 20: %d (%.1f%%)  —  England: %d (%.1f%%)  Scotland: %d (%.1f%%)\n\n",
+              n_gt20, pct_gt20, n_gt20_eng, pct_gt20_eng, n_gt20_sco, pct_gt20_sco))
+  
+  # Subtitle note explaining what the distance covers and why trends are the focus
+  ecdf_subtitle <- paste0(
+    "Distance reflects matching on 9 injury trends + 9 injury levels  |  ",
+    "trend balance is the key DiD assumption\n",
+    "Scotland's smaller control pool produces systematically larger distances"
+  )
+  
   p_mdist_ecdf <- ggplot(mdist_all, aes(x = mdist, colour = country)) +
     stat_ecdf(linewidth = 1.1) +
+    # Reference lines: d=5 (good), d=10 (acceptable), d=20 (flagging threshold)
     geom_vline(xintercept = c(5, 10, 20),
-               linetype  = c("dashed", "dotted", "dotdash"),
-               colour    = c("#888888", "#CC3333", "#8B0000"),
-               linewidth = 0.5) +
+               linetype   = c("dashed", "dotted", "dotdash"),
+               colour     = c("#888888", "#CC3333", "#8B0000"),
+               linewidth  = 0.5) +
+    annotate("text", x = c(5.3, 10.3, 20.3), y = c(0.12, 0.12, 0.12),
+             label  = c("d=5", "d=10", "d=20 flag"),
+             colour = c("#888888", "#CC3333", "#8B0000"),
+             size   = 3.2, hjust = 0) +
     scale_colour_manual(values = c(England = COL_ENGLAND, Scotland = COL_SCOTLAND)) +
-    coord_cartesian(xlim = c(0, 30)) +
+    coord_cartesian(xlim = c(0, 35)) +
     labs(
       title    = "ECDF of Stage 2 Mahalanobis Distance \u2014 Treated OAs by Country",
-      subtitle = "Scotland's thinner control pool produces larger distances on average",
-      x = "Stage 2 Mahalanobis distance", y = "Cumulative proportion",
+      subtitle = ecdf_subtitle,
+      x        = "Stage 2 Mahalanobis distance (9 trends + 9 levels)",
+      y        = "Cumulative proportion of treated OAs",
       colour   = "Country",
-      caption  = paste0("England n=", nrow(mdist_eng),
-                        " | Scotland n=", nrow(mdist_sco))
+      caption  = paste0(
+        "England n=", nrow(mdist_eng), " | Scotland n=", nrow(mdist_sco),
+        "  |  OAs with d > 20: England ", n_gt20_eng, " (", pct_gt20_eng, "%)",
+        ", Scotland ", n_gt20_sco, " (", pct_gt20_sco, "%)"
+      )
     ) +
-    theme_diag() + theme(legend.position = "bottom")
+    theme_diag() +
+    theme(legend.position = "bottom")
   
   p_mdist_hist <- ggplot(mdist_all, aes(x = mdist, fill = country)) +
     geom_histogram(bins = 40, alpha = 0.75, position = "identity") +
+    geom_vline(xintercept = 20, linetype = "dotdash",
+               colour = "#8B0000", linewidth = 0.5) +
     scale_fill_manual(values = c(England = COL_ENGLAND, Scotland = COL_SCOTLAND)) +
     coord_cartesian(xlim = c(0, 35)) +
     facet_wrap(~country, scales = "free_y") +
-    labs(title = "Stage 2 Distance Distribution by Country",
-         x = "Mahalanobis distance", y = "Count", fill = NULL) +
-    theme_diag() + theme(legend.position = "none")
+    labs(
+      title   = "Stage 2 Distance Distribution by Country",
+      subtitle = "England shows clean right-skew; Scotland has a secondary tail reflecting thin control pool",
+      x       = "Mahalanobis distance (9 trends + 9 levels)",
+      y       = "Count",
+      fill    = NULL,
+      caption = "Dark red line = d=20 flagging threshold"
+    ) +
+    theme_diag() +
+    theme(legend.position = "none")
   
-  p_mdist <- p_mdist_ecdf / p_mdist_hist + plot_layout(heights = c(1.3, 1))
+  p_mdist <- p_mdist_ecdf / p_mdist_hist +
+    plot_layout(heights = c(1.3, 1)) +
+    plot_annotation(
+      caption = paste0(
+        "Note: Mahalanobis distance computed on 18 Stage 2 variables ",
+        "(9 pre-treatment injury trends + 9 mean injury levels). ",
+        "Trend variables — covering car, cycling, pedestrian and other KSI and slight injuries ",
+        "per km — are the primary focus as they underpin the parallel trends assumption for DiD estimation."
+      ),
+      theme = theme(
+        plot.caption = element_text(size = 9, colour = "#666666",
+                                    hjust = 0, margin = margin(t = 8))
+      )
+    )
+  
   save_fig(p_mdist, "fig07_mahalanobis_distance_by_country.png",
            width = 12, height = 11)
   cat("  Saved: fig07_mahalanobis_distance_by_country.png\n\n")
@@ -921,7 +991,6 @@ if ("mdist" %in% names(matched_eng) && "mdist" %in% names(matched_sco)) {
   cat("  WARNING: mdist column not found in matched data — Section 12 skipped.\n")
   cat("  Re-run matching script to regenerate .rds files with mdist included.\n\n")
 }
-
 # =============================================================================
 # SECTION 15 — ENGLAND vs SCOTLAND COMPARISON TABLE
 # =============================================================================
