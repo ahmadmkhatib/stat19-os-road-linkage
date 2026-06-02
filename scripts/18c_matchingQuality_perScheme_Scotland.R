@@ -1,16 +1,16 @@
 
 # =============================================================================
-# MATCHING QUALITY BY SCHEME — ENGLAND
+# MATCHING QUALITY BY SCHEME — SCOTLAND
 #
 # INPUTS (from data/processed/):
 #   OA_matched_full_mixed.rds         — full matched dataset (all schemes)
 #   OA_matching_census.rds            — full unmatched pool
 #
 # Scheme identifier: column `scheme` in matched data
-# This script filters to English schemes only.
-# See 18c_matchingQuality_perScheme_Scotland.R for Scotland.
+# This script filters to Scottish schemes only.
+# See 18b_matchesQalityPerScheme.R for England.
 #
-# OUTPUTS (to output/diagnostics/scheme_comparison/england/):
+# OUTPUTS (to output/diagnostics/scheme_comparison/scotland/):
 #   Per-scheme love plots, SMD heatmap, weight panel, Mahalanobis distance,
 #   flagged schemes analysis, parallel trends diagnostics
 #
@@ -25,7 +25,7 @@ library(scales)
 select <- dplyr::select
 filter <- dplyr::filter
 
-outdir <- here("output", "diagnostics", "scheme_comparison", "england")
+outdir <- here("output", "diagnostics", "scheme_comparison", "scotland")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 # =============================================================================
@@ -248,13 +248,13 @@ unmatched_pool <- full_data %>%
   ) %>%
   add_log_vars()
 
-# --- FILTER TO ENGLAND ONLY ---
-cat("Filtering to England...\n")
-matched_full   <- matched_full   %>% filter(country == "England")
-unmatched_pool <- unmatched_pool %>% filter(country == "England")
+# --- FILTER TO SCOTLAND ONLY ---
+cat("Filtering to Scotland...\n")
+matched_full   <- matched_full   %>% filter(country == "Scotland")
+unmatched_pool <- unmatched_pool %>% filter(country == "Scotland")
 
 schemes <- sort(unique(matched_full$scheme))
-cat("English schemes:", paste(schemes, collapse = ", "), "\n")
+cat("Scottish schemes:", paste(schemes, collapse = ", "), "\n")
 cat("N schemes:", length(schemes), "\n\n")
 
 # Assign colours
@@ -460,7 +460,7 @@ make_love_grid <- function(country_name) {
                        expand = expansion(mult = c(0, 0.06))) +
     facet_wrap(~scheme_lab, nrow = 1) +
     labs(
-      title    = paste0("Injury Trend Balance Across Schemes\u2014 ", " schemes"),
+      title    = paste0("Injury trend balance \u2014 ", country_name, " schemes"),
       subtitle = "T = treated OAs  |  C = matched controls  |  shared y-axis across all panels",
       x = "|SMD|", y = NULL,
       colour = NULL, shape = NULL,
@@ -476,12 +476,12 @@ make_love_grid <- function(country_name) {
     )
 }
 
-p_eng <- make_love_grid("England")
+p_sco <- make_love_grid("Scotland")
 
-n_eng <- sum(scheme_country$country == "England")
+n_sco <- sum(scheme_country$country == "Scotland")
 
-save_fig(p_eng, "fig_love_england_schemes.png",
-         width = max(10, n_eng * 2.8), height = 9)
+save_fig(p_sco, "fig_love_scotland_schemes.png",
+         width = max(10, n_sco * 2.8), height = 9)
 cat("\n")
 
 # --- Individual per-scheme love plots ----------------------------------------
@@ -607,12 +607,12 @@ make_heatmap <- function(country_name) {
     )
 }
 
-p_heat_eng <- make_heatmap("England")
+p_heat_sco <- make_heatmap("Scotland")
 
-n_eng <- sum(scheme_country$country == "England")
+n_sco <- sum(scheme_country$country == "Scotland")
 
-save_fig(p_heat_eng, "fig_heatmap_england.png",
-         width = max(8, n_eng * 1.6 + 4), height = 7)
+save_fig(p_heat_sco, "fig_heatmap_scotland.png",
+         width = max(8, n_sco * 1.6 + 4), height = 7)
 cat("\n")
 
 # --- Individual per-scheme heatmaps ------------------------------------------
@@ -777,7 +777,7 @@ pD <- ggplot(size_tbl %>% pivot_longer(c(Treated, Controls),
 
 p_weights <- (pA | pB) / (pC | pD) +
   plot_annotation(
-    title    = "Weight & sample-size diagnostics — England",
+    title    = "Weight & sample-size diagnostics — Scotland",
     subtitle = "All figures based on post-capping weights (cap = 5)",
     theme    = theme(
       plot.title    = element_text(size = 14, face = "bold", colour = "#1A2E5A"),
@@ -886,7 +886,7 @@ if ("mdist" %in% names(matched_full)) {
   
   p_mdist <- (pM_A | pM_B) / (pM_C | pM_D) +
     plot_annotation(
-      title    = "Mahalanobis distance diagnostics — England",
+      title    = "Mahalanobis distance diagnostics — Scotland",
       subtitle = "Lower distance = better match quality; based on treated OAs only",
       theme    = theme(
         plot.title      = element_text(size = 14, face = "bold", colour = "#1A2E5A"),
@@ -907,7 +907,7 @@ if ("mdist" %in% names(matched_full)) {
 # =============================================================================
 
 cat("\n================================================================\n")
-cat("SCHEME COMPARISON SUMMARY — ENGLAND\n")
+cat("SCHEME COMPARISON SUMMARY — SCOTLAND\n")
 cat("================================================================\n\n")
 
 summary_tbl <- smd_all %>%
@@ -950,18 +950,19 @@ cat("================================================================\n")
 
 
 # =============================================================================
-# FLAGGED SCHEMES — ENGLAND
+# FLAGGED SCHEMES — SCOTLAND
 #
-# English schemes with residual imbalance: Sheffield, Bristol, Newcastle
+# Scottish schemes with residual imbalance: Dundee, Glasgow, Aberdeen
+# (Edinburgh is the only well-balanced Scottish scheme)
 # =============================================================================
 
 FLAGGED_COLS <- c(
-  Sheffield = "#E67E22",
-  Bristol   = "#2E6FAB",
-  Newcastle = "#E74C3C"
+  Dundee   = "#D85A30",
+  Glasgow  = "#9B59B6",
+  Aberdeen = "#1ABC9C"
 )
 
-flagged <- c("Sheffield", "Bristol", "Newcastle")
+flagged <- c("Dundee", "Glasgow", "Aberdeen")
 
 compute_smd <- function(data, var) {
   t <- data[[var]][data$treat_indicator == 1]
@@ -1091,7 +1092,7 @@ p_ecdf <- ggplot(mdist_data, aes(x = mdist, colour = scheme)) +
   scale_colour_manual(values = FLAGGED_COLS, name = "Scheme") +
   coord_cartesian(xlim = c(0, 40)) +
   labs(
-    title    = "ECDF of Stage 2 Mahalanobis distance — flagged English schemes",
+    title    = "ECDF of Stage 2 Mahalanobis distance — flagged Scottish schemes",
     subtitle = "Treated OAs only  |  steeper = more OAs with poor matches",
     x        = "Mahalanobis distance",
     y        = "Cumulative proportion of treated OAs",
@@ -1140,7 +1141,7 @@ p_tradeoff <- ggplot(caliper_impact_full %>%
   ) +
   scale_x_continuous(labels = function(x) paste0(x, "%")) +
   labs(
-    title    = "Caliper threshold trade-off — flagged English schemes",
+    title    = "Caliper threshold trade-off — flagged Scottish schemes",
     subtitle = "Each point = one caliper value  |  path moves left to right as caliper tightens",
     x        = "% treated OAs dropped",
     y        = "Mean |SMD| after caliper (across 9 trend variables)",
@@ -1243,7 +1244,7 @@ p_var_smd <- ggplot(smd_long,
   facet_wrap(~scheme_lab, nrow = 1) +
   labs(
     title    = paste0("Per-variable |SMD|: no caliper vs caliper \u2264 ",
-                      ILLUSTRATIVE_CALIPER, " — flagged English schemes"),
+                      ILLUSTRATIVE_CALIPER, " — flagged Scottish schemes"),
     subtitle = "Strip label shows OAs retained after caliper  |  shared y-axis",
     x = "|SMD|", y = NULL,
     caption  = "Dashed = 0.10 threshold  \u25cf No caliper  \u25b2 Calipered"
@@ -1295,7 +1296,7 @@ p_scatter <- ggplot(scatter_data,
   ) +
   facet_wrap(~scheme, nrow = 2, scales = "free_x") +
   labs(
-    title    = "Stage 2 Mahalanobis distance vs total injury trend — flagged English schemes",
+    title    = "Stage 2 Mahalanobis distance vs total injury trend — flagged Scottish schemes",
     subtitle = "OAs with mdist > 20 labelled by OA code",
     x        = "Pre-treatment total injury trend (slope)",
     y        = "Mahalanobis distance",
@@ -1313,7 +1314,7 @@ save_fig(p_scatter, "fig_mdist_scatter_flagged.png", width = 14, height = 10)
 # =============================================================================
 
 cat("\n================================================================\n")
-cat("DISTANCE DIAGNOSTIC SUMMARY — FLAGGED ENGLISH SCHEMES\n")
+cat("DISTANCE DIAGNOSTIC SUMMARY — FLAGGED SCOTTISH SCHEMES\n")
 cat("================================================================\n\n")
 
 cat("At caliper = 15:\n")
@@ -1346,7 +1347,7 @@ cat("================================================================\n")
 # =============================================================================
 
 cat("\n================================================================\n")
-cat("PARALLEL TRENDS DIAGNOSTIC — ENGLAND\n")
+cat("PARALLEL TRENDS DIAGNOSTIC — SCOTLAND\n")
 cat("================================================================\n\n")
 
 library(zoo)
@@ -1458,7 +1459,7 @@ p_pt_timeseries <- ggplot(
   ) +
   facet_wrap(~facet_label, ncol = 3, scales = "free_y") +
   labs(
-    title    = "Pre-treatment injury trends — England",
+    title    = "Pre-treatment injury trends — Scotland",
     subtitle = paste0(
       "Semi-annual weighted mean injuries per km of road per OA | ",
       "ranked by mean |SMD| across 9 trend variables (1 = best)"
@@ -1509,7 +1510,7 @@ p_pt_ranking <- ggplot(
   scale_fill_manual(values = quality_colours, name = "Balance quality", drop = FALSE) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
   labs(
-    title    = "Parallel trends assumption: scheme ranking — England",
+    title    = "Parallel trends assumption: scheme ranking — Scotland",
     subtitle = "Mean |SMD| across 9 pre-treatment injury trend variables (lower = better)",
     x = "Mean |SMD| after matching", y = NULL,
     caption  = "Dashed line = |SMD| = 0.10 conventional threshold"
@@ -1595,7 +1596,7 @@ p_traj_ranking <- ggplot(
   scale_fill_manual(values = traj_colours, name = "Trajectory alignment", drop = FALSE) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
   labs(
-    title    = "Parallel trends assumption: trajectory alignment — England",
+    title    = "Parallel trends assumption: trajectory alignment — Scotland",
     subtitle = "Normalised mean absolute gap between treated and control per-km injury trajectories (lower = better)",
     x = "Normalised trajectory gap", y = NULL,
     caption = paste0(

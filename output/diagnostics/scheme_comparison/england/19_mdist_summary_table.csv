@@ -1,0 +1,4 @@
+scheme,n_treated,median_mdist,mean_mdist,p75_mdist,p90_mdist,p95_mdist,max_mdist,n_gt5,n_gt10,n_gt15,n_gt20,pct_gt5,pct_gt10,pct_gt15,pct_gt20
+Bristol,48,6.34,8.35,10.69,16.64,25.85,35.13,27,14,6,4,56.2,29.2,12.5,8.3
+Newcastle,27,4.67,5.71,8.73,11.37,11.84,17.72,13,5,1,0,48.1,18.5,3.7,0
+Sheffield,41,6.74,7.55,9.46,11.93,18.05,43.54,24,10,4,1,58.5,24.4,9.8,2.4

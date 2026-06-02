@@ -209,3 +209,153 @@ main_map
 
 ggsave(here("outputs","CAZ_LEZ_map.png"),
        main_map, width = 16, height = 13, dpi = 300, bg = "white")
+
+
+
+
+########## ENGLAND ONLY ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~###########################################
+england_box <- st_as_sfc(st_bbox(c(
+  xmin = -200000, xmax = 700000,
+  ymin = -100000, ymax = 550000
+), crs = target_crs))
+
+england <- st_intersection(uk, england_box)
+
+# ── Clean CAZ ────────────────────────────────────────────────────────────────
+caz <- caz_raw %>%
+  rename(zone_name = scheme) %>%
+  group_by(zone_name) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_make_valid()
+
+# ── KEEP ONLY ENGLAND SCHEMES (SAFE FILTER) ─────────────────────────────────
+england_schemes <- c(
+  "Bath",
+  "Birmingham",
+  "Bradford",
+  "Bristol",
+  "Newcastle",
+  "Portsmouth",
+  "Sheffield"
+)
+
+caz_england_sf <- caz %>%
+  filter(zone_name %in% england_schemes)
+
+# ── Centroids ────────────────────────────────────────────────────────────────
+caz_centroids <- caz_england_sf %>%
+  st_centroid() %>%
+  mutate(
+    cx = st_coordinates(.)[,1],
+    cy = st_coordinates(.)[,2]
+  ) %>%
+  st_drop_geometry()
+
+# ── Simple manual label positions (stable, no dropping cities) ──────────────
+label_x_left <- st_bbox(england)["xmin"] - 90000
+
+caz_labels <- caz_centroids %>%
+  arrange(desc(cy)) %>%
+  mutate(
+    label_x = label_x_left,
+    label_y = seq(
+      from = st_bbox(england)["ymax"] - 20000,
+      to   = st_bbox(england)["ymin"] + 20000,
+      length.out = n()
+    ),
+    line_end_x = label_x_left + 15000
+  )
+
+# ── MAIN MAP ────────────────────────────────────────────────────────────────
+England_map <- ggplot() +
+  
+  # England background
+  geom_sf(data = england,
+          fill = "#f5f0e8",
+          colour = "grey30",
+          linewidth = 0.5) +
+  
+  # OA layer
+  geom_sf(data = oa_sub,
+          fill = "#d4e6f1",
+          colour = NA,
+          alpha = 0.5) +
+  
+  # CAZ zones (England only)
+  geom_sf(data = caz_england_sf,
+          fill = "#E63946",
+          colour = "#9B1D20",
+          linewidth = 0.5,
+          alpha = 0.9) +
+  
+  # leader lines
+  geom_segment(
+    data = caz_labels,
+    aes(x = cx, y = cy, xend = line_end_x, yend = label_y),
+    colour = "grey50",
+    linewidth = 0.3
+  ) +
+  
+  # points
+  geom_point(
+    data = caz_labels,
+    aes(x = cx, y = cy),
+    shape = 21,
+    fill = "#E63946",
+    colour = "#9B1D20",
+    size = 2.2
+  ) +
+  
+  # labels
+  geom_text(
+    data = caz_labels,
+    aes(x = label_x, y = label_y, label = zone_name),
+    hjust = 0,
+    size = 4.5,
+    colour = "grey10"
+  ) +
+  
+  # England label only
+  annotate("text",
+           x = 380000,
+           y = 300000,
+           label = "England",
+           size = 6,
+           colour = "grey40",
+           fontface = "italic") +
+  
+  coord_sf(
+    crs = target_crs,
+    xlim = c(st_bbox(england)["xmin"] - 10000,
+             st_bbox(england)["xmax"] + 50000),
+    ylim = c(st_bbox(england)["ymin"] - 10000,
+             st_bbox(england)["ymax"] + 10000),
+    expand = FALSE
+  ) +
+  
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_line(colour = "grey92", linewidth = 0.3),
+    panel.background = element_rect(fill = "#eaf4fb", colour = NA),
+    plot.background = element_rect(fill = "white", colour = NA)
+  ) +
+  
+  labs(
+    title = "Clean Air Zones (CAZ) ",
+    subtitle = "England",
+    x = NULL, y = NULL
+  )
+
+England_map
+
+# ── SAVE ─────────────────────────────────────────────────────────────────────
+ggsave(
+  here("outputs","England_map.png"),
+  England_map,
+  width = 14,
+  height = 11,
+  dpi = 300,
+  bg = "white"
+)
