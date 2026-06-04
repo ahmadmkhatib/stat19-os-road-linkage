@@ -168,6 +168,8 @@ var_labels <- c(
 matched_full <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
 full_data    <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
+table(matched_full$weights)
+
 # Controls have no scheme — propagate from their matched treated OA via pairs file.
 # OA_matching_pairs_mixed.rds links each control OA back to its treated OA.
 if (any(matched_full$scheme %in% c("Control", NA))) {
@@ -1399,26 +1401,17 @@ cat("Parallel trends ranking (by mean |SMD| of trend variables):\n")
 print(as.data.frame(trend_rank), row.names = FALSE)
 cat("\n")
 
-# --- 3. Semi-annual aggregation for time-series plot --------------------------
+# --- 3. Quarterly aggregation for time-series plot ----------------------------
 
-oa_pre_semi <- oa_pre %>%
-  mutate(
-    half_year = paste0(
-      lubridate::year(as.Date(quarter_year)),
-      if_else(as.numeric(format(as.Date(quarter_year), "%m")) <= 6, " H1", " H2")
-    )
-  ) %>%
-  group_by(scheme, half_year, treat_indicator) %>%
+oa_pre_quarterly <- oa_pre %>%
+  group_by(scheme, quarter_year, treat_indicator) %>%
   summarise(
     wtd_mean_inj = weighted.mean(injuries_per_km, w = weights, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   mutate(
     group = if_else(treat_indicator == 1, "Treated", "Matched control"),
-    half_date = as.Date(paste0(
-      str_extract(half_year, "\\d{4}"), "-",
-      if_else(str_detect(half_year, "H1"), "03", "09"), "-01"
-    ))
+    q_date = as.Date(quarter_year)
   )
 
 facet_info <- trend_rank %>%
@@ -1428,25 +1421,25 @@ facet_info <- trend_rank %>%
     facet_label = fct_reorder(facet_label, rank)
   )
 
-plot_semi <- oa_pre_semi %>%
+plot_quarterly <- oa_pre_quarterly %>%
   left_join(facet_info, by = "scheme") %>%
   left_join(scheme_starts, by = "scheme") %>%
   mutate(group = factor(group, levels = c("Treated", "Matched control")))
 
-vline_semi <- facet_info %>%
+vline_quarterly <- facet_info %>%
   left_join(scheme_starts, by = "scheme") %>%
   mutate(start_date = as.Date(caz_start_q))
 
 # --- 4. Figure A: pre-treatment time series -----------------------------------
 
 p_pt_timeseries <- ggplot(
-  plot_semi,
-  aes(x = half_date, y = wtd_mean_inj, colour = group, linetype = group)
+  plot_quarterly,
+  aes(x = q_date, y = wtd_mean_inj, colour = group, linetype = group)
 ) +
   geom_line(linewidth = 0.9) +
   geom_point(size = 1.5, alpha = 0.7) +
   geom_vline(
-    data = vline_semi,
+    data = vline_quarterly,
     aes(xintercept = start_date),
     linetype = "dotted", colour = "#888888", linewidth = 0.5
   ) +
@@ -1460,7 +1453,7 @@ p_pt_timeseries <- ggplot(
   labs(
     title    = "Pre-treatment injury trends — England",
     subtitle = paste0(
-      "Semi-annual weighted mean injuries per km of road per OA | ",
+      "Quarterly weighted mean injuries per km of road per OA | ",
       "ranked by mean |SMD| across 9 trend variables (1 = best)"
     ),
     x = NULL, y = "Weighted mean injuries per km",
@@ -1527,11 +1520,11 @@ save_fig(p_pt_ranking, "fig_parallel_trends_ranking.png",
 # --- 6. Figure C: trajectory alignment ranking --------------------------------
 #
 # Metric: normalised mean absolute gap (NMAG) between treated and matched
-# control per-km injury trajectories across semi-annual time points.
+# control per-km injury trajectories across quarterly time points.
 #
-# For each scheme and half-year, we compute the weighted mean injuries per km
+# For each scheme and quarter, we compute the weighted mean injuries per km
 # for treated and control OAs separately, take the absolute difference, then
-# average these gaps across all pre-treatment half-years. The result is
+# average these gaps across all pre-treatment quarters. The result is
 # normalised by the pooled (treated + control) mean injury rate for that
 # scheme, making the metric comparable across schemes with different
 # baseline injury levels.
@@ -1547,8 +1540,8 @@ save_fig(p_pt_ranking, "fig_parallel_trends_ranking.png",
 # wobbles that slope summaries can average out.
 # --------------------------------------------------------------------------
 
-trajectory_gap <- oa_pre_semi %>%
-  select(scheme, half_year, group, wtd_mean_inj) %>%
+trajectory_gap <- oa_pre_quarterly %>%
+  select(scheme, quarter_year, group, wtd_mean_inj) %>%
   pivot_wider(names_from = group, values_from = wtd_mean_inj) %>%
   filter(!is.na(Treated), !is.na(`Matched control`)) %>%
   mutate(abs_gap = abs(Treated - `Matched control`)) %>%
@@ -1599,7 +1592,7 @@ p_traj_ranking <- ggplot(
     subtitle = "Normalised mean absolute gap between treated and control per-km injury trajectories (lower = better)",
     x = "Normalised trajectory gap", y = NULL,
     caption = paste0(
-      "Metric: mean |treated \u2212 control| across semi-annual per-km injury rates, ",
+      "Metric: mean |treated \u2212 control| across quarterly per-km injury rates, ",
       "divided by the pooled mean rate\n",
       "Dashed line = 0.25 threshold"
     )

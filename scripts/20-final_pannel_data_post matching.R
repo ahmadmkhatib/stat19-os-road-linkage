@@ -12,7 +12,7 @@
 # Inputs:
 #   road_panel_dataset/           (parquet, from panel construction script)
 #   road_attributes_OA.gpkg       (road-level attributes with OA assignment)
-#   OA_matched_full_mixed.rds     (matched OAs with weights, England + Scotland)
+#   OA_matched_full_mixed.rds     (matched OAs with weights, filtered to England)
 #   OA_matching_pairs_mixed.rds   (treated → control OA pairs)
 #   roads_caz_props.rds           (road-level CAZ proportions and timing)
 #
@@ -24,13 +24,10 @@
 #   quarter_year       : Quarter of observation
 #   OA                 : Output Area the road is assigned to
 #   treat_group        : 1 = ever-treated road (≥50% in CAZ/LEZ)
-#   control_group1     : 1 = same-city control road
-#   control_group2     : 1 = other-city control road
 #   post              : 1 if quarter >= caz_start_q and treat_group == 1
 #   scheme             : CAZ/LEZ scheme name
 #   caz_start_q        : Quarter CAZ/LEZ became operational
 #   oa_weight          : Matching weight from design-stage MDM (treated = 1)
-#   country            : England / Scotland
 #   road_class         : A / B / Motorway / minor
 #   length             : Road link length (metres)
 #   KSI_adj_All        : Total adjusted KSI injuries (all modes)
@@ -67,26 +64,29 @@ road_attrs <- st_read(
   st_drop_geometry() %>%
   select(identifier, OA, road_class, length)
 
-# Matched OA dataset — contains weights and country
+# Matched OA dataset (England only, per-scheme matching from script 16)
+# Controls already carry their scheme from per-scheme matching.
 matched_oas <- readRDS(
   here("data", "processed", "OA_matched_full_mixed.rds")
 ) %>%
-  select(OA, weights, treat_indicator, country, scheme,
+  select(OA, weights, treat_indicator, scheme,
          baseline_injury_stratum)
+
+matching_pairs <- readRDS(
+  here("data", "processed", "OA_matching_pairs_mixed.rds")
+)
 
 cat("Matched OAs:", nrow(matched_oas), "\n")
 cat("  Treated:", sum(matched_oas$treat_indicator == 1),
     "| Controls:", sum(matched_oas$treat_indicator == 0), "\n")
 
-# Treated → control pairs (for reference / heterogeneity analyses)
-matching_pairs <- readRDS(
-  here("data", "processed", "OA_matching_pairs_mixed.rds")
-)
+# CAZ proportions and timing at road level (England only)
+scottish_schemes <- c("Aberdeen", "Dundee", "Edinburgh", "Glasgow")
 
-# CAZ proportions and timing at road level
 road_caz_props <- readRDS(
   here("data", "processed", "roads_caz_props.rds")
 ) %>%
+  filter(!scheme %in% scottish_schemes) %>%
   select(identifier, scheme, prop_in_caz, caz_start_q) %>%
   mutate(caz_start_q = as.yearqtr(caz_start_q))
 
@@ -121,13 +121,39 @@ cat("  Roads: ", n_distinct(road_panel_matched$identifier), "\n")
 # Attach matching weights and OA-level metadata
 # ============================================================
 
+# Per-scheme matching: control OAs may appear in multiple schemes
+# (matched to different treated schemes). Include scheme in the join
+# so the panel has one entry per road × quarter × scheme.
+# Scheme-specific DiD subsets by scheme; pooled DiD should deduplicate.
+
 road_panel_matched <- road_panel_matched %>%
   left_join(
     matched_oas %>%
       select(OA, oa_weight = weights, treat_indicator,
-             country, baseline_injury_stratum),
-    by = "OA"
+             baseline_injury_stratum, oa_scheme = scheme),
+    by = "OA",
+    relationship = "many-to-many"
   )
+
+# For treated roads, keep their actual scheme (from road_caz_props).
+# For control roads, use the scheme from matching.
+road_panel_matched <- road_panel_matched %>%
+  mutate(
+    scheme = if_else(treat_indicator == 1, scheme, oa_scheme)
+  ) %>%
+  select(-oa_scheme)
+
+# Check duplication from multi-scheme controls
+n_panel_rows <- nrow(road_panel_matched)
+n_unique_roadqtr <- road_panel_matched %>%
+  distinct(identifier, quarter_year) %>%
+  nrow()
+cat("Panel rows:", n_panel_rows,
+    "| Unique road × quarter:", n_unique_roadqtr, "\n")
+if (n_panel_rows > n_unique_roadqtr) {
+  cat("  Note:", n_panel_rows - n_unique_roadqtr,
+      "duplicated rows from multi-scheme control OAs\n")
+}
 
 # Sanity: all rows should have a weight
 stopifnot(
@@ -139,7 +165,6 @@ stopifnot(
 # ============================================================
 # treat_group: road is inside a CAZ/LEZ (>=50% of length)
 # post:        treated road AND quarter >= scheme start
-# control_group1 / control_group2 carried from road_panel
 
 road_panel_matched <- road_panel_matched %>%
   mutate(
@@ -165,12 +190,9 @@ road_panel_matched <- road_panel_matched %>%
   )
 
 # ============================================================
-# Attach scheme and timing for control roads
+# Attach CAZ proportions
 # ============================================================
-# Control roads have no CAZ entry in roads_caz_props.
-# Attach scheme via their OA → matched treated OA relationship
-# so the scheme column is populated for treated roads only;
-# controls keep NA scheme (correct — they are never-treated).
+# Controls already carry scheme from per-scheme matching (script 16).
 
 road_panel_matched <- road_panel_matched %>%
   left_join(
@@ -197,8 +219,6 @@ road_panel_matched <- road_panel_matched %>%
     treat_group,
     post,
     rel_time,
-    control_group1,
-    control_group2,
     scheme,
     caz_start_q,
     prop_in_caz,
@@ -206,7 +226,6 @@ road_panel_matched <- road_panel_matched %>%
     # Matching metadata
     oa_weight,
     treat_indicator,
-    country,
     baseline_injury_stratum,
     
     # Road characteristics
@@ -225,6 +244,14 @@ road_panel_matched <- road_panel_matched %>%
   ) %>%
   rename_with(~ make.names(.x))
 
+
+##############
+road_panel_matched %>%
+  distinct(identifier, treat_group, scheme) %>%
+  count(treat_group)
+
+
+
 # ============================================================
 # Diagnostics
 # ============================================================
@@ -233,9 +260,8 @@ cat("\n=== POST-MATCHING PANEL DIAGNOSTICS ===\n")
 
 cat("\nTreatment group breakdown (road level):\n")
 road_panel_matched %>%
-  distinct(identifier, treat_group, control_group1,
-           control_group2, scheme, country) %>%
-  count(treat_group, control_group1, control_group2, country) %>%
+  distinct(identifier, treat_group, scheme) %>%
+  count(treat_group) %>%
   print()
 
 cat("\nScheme × treatment timing:\n")
@@ -245,10 +271,10 @@ road_panel_matched %>%
   arrange(caz_start_q) %>%
   print()
 
-cat("\nWeight distribution by country:\n")
+cat("\nWeight distribution by treatment status:\n")
 road_panel_matched %>%
-  distinct(OA, oa_weight, country, treat_indicator) %>%
-  group_by(country, treat_indicator) %>%
+  distinct(OA, oa_weight, treat_indicator) %>%
+  group_by(treat_indicator) %>%
   summarise(
     n_OAs      = n(),
     mean_wt    = round(mean(oa_weight), 3),

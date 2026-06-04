@@ -1,32 +1,24 @@
 # =============================================================================
-# PER-SCHEME OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING
+# POOLED MATCHING — OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING
 # =============================================================================
 #
-# Matches treated OAs to other-city controls SEPARATELY for each CAZ scheme.
-# This ensures within-scheme covariate balance rather than global balance
-# across all schemes simultaneously.
+# Matches treated OAs to other-city control OAs using:
+#   Stage 1: road network, urban form, and sociodemographic covariates
+#   Stage 2: POOLED total injury trend + level only (no mode-specific trends)
 #
-# CONTROL GROUP STRATEGY:
-#   Other-city controls only (control_group2):
-#   OAs from LADs that contain no treated zone. Same-city control OAs
-#   (control_group1) are excluded to prevent contamination from traffic
-#   displacement and CAZ spillover.
+# This is the simplified pooled matching for a DiD with total injuries
+# (any injury whatsoever) as the outcome.
 #
-# England only — Scotland excluded.
-#
-# For each scheme:
-#   1. Stage 1: match on road network, urban form, sociodemographic covariates
-#   2. Ratio selection on Stage 2 variables
-#   3. Stage 2: match on pre-treatment injury trends + levels
+# England only — no Scotland.
 #
 # OUTPUTS:
-#   OA_matched_full_mixed.rds           — combined matched dataset (all schemes)
-#   OA_matched_treated_mixed.rds        — treated OA IDs + weights + stratum
-#   OA_matched_donors_mixed.rds         — control OA IDs + weights
-#   OA_common_support_flags_mixed.rds   — structurally isolated OA flags
-#   OA_ratio_selection_mixed.rds        — ratio selection diagnostics per scheme
-#   OA_balance_tests_mixed.rds          — balance improvement test results
-#   OA_matching_pairs_mixed.rds         — treated → control OA pairs
+#   OA_matched_treated_pooled.rds
+#   OA_matched_donors_pooled.rds
+#   OA_matched_full_pooled.rds
+#   OA_common_support_flags_pooled.rds
+#   OA_ratio_selection_pooled.rds
+#   OA_balance_tests_pooled.rds
+#   OA_matching_pairs_pooled.rds
 #
 # =============================================================================
 
@@ -40,13 +32,14 @@ library(ggrepel)
 library(tidyverse)
 library(patchwork)
 
-set.seed(4291)
+set.seed(4718)
 
 select <- dplyr::select
 filter <- dplyr::filter
 
-dir.create(here("output", "diagnostics"), showWarnings = FALSE, recursive = TRUE)
-outdir <- here("output", "diagnostics")
+dir.create(here("output", "diagnostics", "pooled"),
+           showWarnings = FALSE, recursive = TRUE)
+outdir <- here("output", "diagnostics", "pooled")
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
@@ -54,6 +47,7 @@ OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds
 # VARIABLE DEFINITIONS
 # =============================================================================
 
+# Stage 1: same as original — road, urban, business, sociodemographic
 stage1_road     <- c("road_density_m_km2", "road_length_km",
                      "pct_A_road", "pct_B_road", "pct_minor_road")
 stage1_urban    <- c("dist_citycentre", "pop_density", "area_km2")
@@ -70,22 +64,12 @@ stage1_socdem   <- c(
 )
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
-stage2_trends <- c(
-  "trend_car_KSI_pkm",   "trend_car_slight_pkm",
-  "trend_cyc_KSI_pkm",   "trend_cyc_slight_pkm",
-  "trend_ped_KSI_pkm",   "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm",
-  "trend_total_pkm"
-)
-stage2_levels <- c(
-  "mean_car_KSI_pkm",   "mean_car_slight_pkm",
-  "mean_cyc_KSI_pkm",   "mean_cyc_slight_pkm",
-  "mean_ped_KSI_pkm",   "mean_ped_slight_pkm",
-  "mean_other_KSI_pkm", "mean_other_slight_pkm",
-  "mean_total_pkm"
-)
-stage2_vars <- c(stage2_trends, stage2_levels)
+# Stage 2: POOLED — total injury trend + level only
+stage2_trends <- c("trend_total_pkm")
+stage2_levels <- c("mean_total_pkm")
+stage2_vars   <- c(stage2_trends, stage2_levels)
 
+# Log transformations
 log_transform_s1        <- c("road_length_km", "pop_density", "dist_citycentre",
                              "road_density_m_km2", "business_retail_per_km2")
 log_nozero_s1           <- c("area_km2")
@@ -119,7 +103,7 @@ treated_lads <- OA_matching_dataset %>%
   distinct(LAD24CD) %>%
   pull(LAD24CD)
 
-# Full English dataset: treated + other-city controls
+# Other-city controls only — same-city OAs excluded to prevent contamination
 data_england <- OA_matching_dataset %>%
   filter(
     country           == "England",
@@ -133,17 +117,15 @@ data_england <- OA_matching_dataset %>%
 
 cat("=== ENGLAND dataset (other-city controls only) ===\n")
 cat("Treated:", sum(data_england$treat_indicator == 1),
-    "| Controls:", sum(data_england$treat_indicator == 0), "\n\n")
+    "| Controls:", sum(data_england$treat_indicator == 0), "\n")
+cat("Control-to-treated ratio:",
+    round(sum(data_england$treat_indicator == 0) /
+            sum(data_england$treat_indicator == 1), 1), "\n\n")
 
-# English schemes
-english_schemes <- data_england %>%
-  filter(treat_indicator == 1) %>%
-  distinct(scheme) %>%
-  pull(scheme) %>%
-  sort()
-
-cat("Schemes:", paste(english_schemes, collapse = ", "), "\n")
-cat("N schemes:", length(english_schemes), "\n\n")
+leak <- data_england %>%
+  filter(treat_indicator == 0, LAD24CD %in% treated_lads) %>%
+  nrow()
+cat("Same-city control leak (should be 0):", leak, "\n\n")
 
 # =============================================================================
 # AGE BAND AGGREGATION + WINSORISE + LOG-TRANSFORM
@@ -188,6 +170,11 @@ winsorise_and_log_s2 <- function(data, raw_vars, log_vars) {
   data
 }
 
+data_clean <- winsorise_and_log_s1(data_england, stage1_vars,
+                                   log_transform_s1, log_nozero_s1)
+data_clean <- winsorise_and_log_s2(data_clean, stage2_levels,
+                                   log_transform_s2_levels)
+
 check_vars <- function(data, vars, label) {
   missing <- setdiff(vars, names(data))
   if (length(missing) > 0)
@@ -202,6 +189,9 @@ check_vars <- function(data, vars, label) {
         paste(low, collapse = ", "), "\n")
   setdiff(intersect(vars, names(data)), low)
 }
+
+s1_vars <- check_vars(data_clean, stage1_vars_log, "S1 England")
+s2_vars <- check_vars(data_clean, stage2_vars_log, "S2 England")
 
 # =============================================================================
 # BALANCE TEST FUNCTION
@@ -253,8 +243,12 @@ run_balance_tests <- function(matchit_obj, trend_vars, label) {
 }
 
 # =============================================================================
-# RATIO SELECTION FUNCTION
+# RATIO SELECTION
 # =============================================================================
+
+cat(paste(rep("=", 60), collapse = ""), "\n")
+cat("RATIO SELECTION — POOLED MATCHING\n")
+cat(paste(rep("=", 60), collapse = ""), "\n")
 
 prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   s1v        <- check_vars(data_clean, s1_vars, paste("S1 ratio prep", label))
@@ -329,8 +323,38 @@ select_ratio <- function(data, s2_vars, trend_vars, label,
   list(optimal_ratio = best$ratio, ratio_results = ratio_results, label = label)
 }
 
+s2_prep <- prepare_s2_for_ratio(data_clean, s1_vars, s2_vars, "England")
+trend_vars_eng <- intersect(s2_vars, stage2_trends)
+ratio_result <- select_ratio(s2_prep$data, s2_prep$s2_vars,
+                             trend_vars_eng, "England (pooled)", 1:10)
+optimal_ratio <- ratio_result$optimal_ratio
+
+cat("\nOptimal ratio (pooled): 1:", optimal_ratio, "\n\n")
+
+saveRDS(ratio_result$ratio_results %>% mutate(matching = "pooled"),
+        here("data", "processed", "OA_ratio_selection_pooled.rds"))
+
+p_ratio <- ratio_result$ratio_results %>%
+  filter(!is.na(max_trend_smd)) %>%
+  ggplot(aes(x = ratio, y = max_trend_smd)) +
+  geom_line(linewidth = 0.9, colour = "#2E6FAB") +
+  geom_point(size = 3, colour = "#2E6FAB") +
+  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "#888888") +
+  geom_hline(yintercept = 0.05, linetype = "dotted", colour = "#555555") +
+  scale_x_continuous(breaks = 1:10) +
+  labs(
+    title    = "Ratio selection — pooled matching (total injuries only)",
+    subtitle = paste0("Optimal ratio: 1:", optimal_ratio),
+    x        = "Matching ratio (1:k)",
+    y        = "Maximum trend |SMD| after matching"
+  ) +
+  theme_minimal(base_size = 13)
+
+ggsave(file.path(outdir, "fig_ratio_selection_pooled.png"),
+       p_ratio, width = 10, height = 6, dpi = 300, bg = "white")
+
 # =============================================================================
-# MATCHING FUNCTION (unchanged from original)
+# MATCHING FUNCTION
 # =============================================================================
 
 run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
@@ -362,7 +386,7 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   cat("  Treated:", nrow(treated_s1),
       "| Unique controls in pool:", nrow(controls_s1), "\n")
 
-  # Common support — isolated OA detection
+  # Common support
   pool_idx <- c(as.integer(rownames(mm_s1)), ctrl_idx)
   S_s1 <- cov(data_clean[pool_idx, s1v], use = "pairwise.complete.obs")
   dist_s1 <- map_df(seq_len(nrow(mm_s1)), function(i) {
@@ -391,7 +415,7 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
       flag_threshold        = round(mad_threshold, 4)
     )
 
-  cat(sprintf("  Isolated OAs (median + 3*MAD = %.2f): %d / %d\n",
+  cat(sprintf("  Isolated OAs (median + 3*MAD threshold = %.2f): %d / %d\n",
               mad_threshold,
               sum(isolated_OAs$structurally_isolated),
               nrow(isolated_OAs)))
@@ -470,124 +494,23 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
 }
 
 # =============================================================================
-# PER-SCHEME MATCHING LOOP
+# RUN MATCHING
 # =============================================================================
 
-cat("\n")
-cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("PER-SCHEME MATCHING — ", length(english_schemes), " schemes\n")
-cat(paste(rep("=", 70), collapse = ""), "\n")
-
-# Control pool (shared across all schemes)
-control_pool <- data_england %>% filter(treat_indicator == 0)
-cat("\nShared control pool:", nrow(control_pool), "OAs\n")
-
-all_results      <- list()
-all_ratio_tables <- list()
-
-for (s in english_schemes) {
-  cat("\n", paste(rep("#", 60), collapse = ""), "\n")
-  cat("### SCHEME:", s, "###\n")
-  cat(paste(rep("#", 60), collapse = ""), "\n")
-
-  # Build scheme-specific dataset: this scheme's treated + full control pool
-  scheme_treated <- data_england %>%
-    filter(treat_indicator == 1, scheme == s)
-
-  scheme_data <- bind_rows(scheme_treated, control_pool)
-
-  cat("Treated OAs:", nrow(scheme_treated),
-      "| Control pool:", nrow(control_pool), "\n")
-
-  # Winsorise + log-transform for this scheme's data
-  scheme_clean <- winsorise_and_log_s1(scheme_data, stage1_vars,
-                                       log_transform_s1, log_nozero_s1)
-  scheme_clean <- winsorise_and_log_s2(scheme_clean, stage2_levels,
-                                       log_transform_s2_levels)
-
-  s1_vars_scheme <- check_vars(scheme_clean, stage1_vars_log,
-                               paste("S1", s))
-  s2_vars_scheme <- check_vars(scheme_clean, stage2_vars_log,
-                               paste("S2", s))
-
-  # Ratio selection for this scheme
-  s2_prep <- prepare_s2_for_ratio(scheme_clean, s1_vars_scheme,
-                                  s2_vars_scheme, s)
-  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends)
-
-  ratio_result <- select_ratio(
-    s2_prep$data, s2_prep$s2_vars,
-    trend_vars_scheme, s, 1:10
-  )
-  optimal_ratio <- ratio_result$optimal_ratio
-
-  all_ratio_tables[[s]] <- ratio_result$ratio_results %>%
-    mutate(scheme = s)
-
-  # Run matching
-  result <- run_matching(
-    data_clean = scheme_clean,
-    s1_vars    = s1_vars_scheme,
-    s2_vars    = s2_vars_scheme,
-    ratio      = optimal_ratio,
-    label      = s,
-    trend_vars = trend_vars_scheme
-  )
-
-  if (!is.null(result)) {
-    # Tag scheme on matched data
-    result$matched_data <- result$matched_data %>%
-      mutate(scheme = s)
-    result$pairs <- result$pairs %>%
-      mutate(scheme = s)
-    result$isolated_OAs <- result$isolated_OAs %>%
-      mutate(scheme = s)
-    all_results[[s]] <- result
-  } else {
-    cat("WARNING: Matching FAILED for scheme:", s, "\n")
-  }
-}
-
-# =============================================================================
-# COMBINE ACROSS SCHEMES
-# =============================================================================
-
-cat("\n")
-cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("COMBINING RESULTS ACROSS SCHEMES\n")
-cat(paste(rep("=", 70), collapse = ""), "\n\n")
-
-matched_full <- bind_rows(
-  map(all_results, ~ .x$matched_data)
+result <- run_matching(
+  data_clean  = data_clean,
+  s1_vars     = s1_vars,
+  s2_vars     = s2_vars,
+  ratio       = optimal_ratio,
+  label       = "England (pooled)",
+  trend_vars  = trend_vars_eng
 )
 
-# Control OAs may appear in multiple schemes (matched with replacement
-# across schemes). Each scheme's controls get their own weights.
+matched_full <- result$matched_data
 
-isolated_combined <- bind_rows(
-  map(all_results, ~ .x$isolated_OAs)
-)
-
-pairs_all <- bind_rows(
-  map(all_results, ~ .x$pairs)
-)
-
-# Per-scheme summary
-scheme_summary <- matched_full %>%
-  group_by(scheme) %>%
-  summarise(
-    n_treated  = sum(treat_indicator == 1),
-    n_controls = sum(treat_indicator == 0),
-    ratio      = round(n_controls / n_treated, 1),
-    .groups    = "drop"
-  )
-
-cat("Per-scheme matching results:\n")
-print(scheme_summary)
-cat("\nTotal treated:", sum(scheme_summary$n_treated),
-    "| Total control rows:", sum(scheme_summary$n_controls), "\n")
-cat("Unique control OAs:", n_distinct(
-  matched_full$OA[matched_full$treat_indicator == 0]), "\n\n")
+cat("\n=== FINAL MATCHED DATASET (POOLED) ===\n")
+cat("Treated:", sum(matched_full$treat_indicator == 1),
+    "| Controls:", sum(matched_full$treat_indicator == 0), "\n\n")
 
 # =============================================================================
 # BASELINE INJURY STRATIFICATION
@@ -610,16 +533,16 @@ matched_full <- matched_full %>%
   ))
 
 # =============================================================================
-# INTEGRITY CHECKS + SAVE
+# EXTRACT + INTEGRITY CHECKS + SAVE
 # =============================================================================
 
 matched_treated <- matched_full %>%
   filter(treat_indicator == 1) %>%
-  select(OA, weights, baseline_injury_stratum, scheme)
+  select(OA, weights, baseline_injury_stratum)
 
 matched_controls <- matched_full %>%
   filter(treat_indicator == 0) %>%
-  select(OA, weights, scheme)
+  select(OA, weights)
 
 stopifnot(
   "treated weights == 1"     = all(matched_treated$weights == 1),
@@ -629,45 +552,19 @@ stopifnot(
 cat("All integrity checks passed.\n")
 
 saveRDS(matched_treated,
-        here("data", "processed", "OA_matched_treated_mixed.rds"))
+        here("data", "processed", "OA_matched_treated_pooled.rds"))
 saveRDS(matched_controls,
-        here("data", "processed", "OA_matched_donors_mixed.rds"))
+        here("data", "processed", "OA_matched_donors_pooled.rds"))
 saveRDS(matched_full,
-        here("data", "processed", "OA_matched_full_mixed.rds"))
-saveRDS(isolated_combined,
-        here("data", "processed", "OA_common_support_flags_mixed.rds"))
+        here("data", "processed", "OA_matched_full_pooled.rds"))
+saveRDS(result$isolated_OAs,
+        here("data", "processed", "OA_common_support_flags_pooled.rds"))
 saveRDS(bind_rows(balance_test_log),
-        here("data", "processed", "OA_balance_tests_mixed.rds"))
-saveRDS(pairs_all,
-        here("data", "processed", "OA_matching_pairs_mixed.rds"))
+        here("data", "processed", "OA_balance_tests_pooled.rds"))
 
-# Ratio selection table
-ratio_combined <- bind_rows(all_ratio_tables)
-saveRDS(ratio_combined,
-        here("data", "processed", "OA_ratio_selection_mixed.rds"))
-
-# Ratio selection plot (per scheme)
-p_ratio <- ratio_combined %>%
-  filter(!is.na(max_trend_smd)) %>%
-  ggplot(aes(x = ratio, y = max_trend_smd,
-             colour = scheme, group = scheme)) +
-  geom_line(linewidth = 0.7) +
-  geom_point(size = 2) +
-  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "#888888") +
-  geom_hline(yintercept = 0.05, linetype = "dotted", colour = "#555555") +
-  scale_x_continuous(breaks = 1:10) +
-  labs(
-    title    = "Ratio selection — per-scheme matching",
-    subtitle = "Maximum trend |SMD| by matching ratio",
-    x        = "Matching ratio (1:k)",
-    y        = "Maximum trend |SMD| after matching",
-    colour   = "Scheme"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(legend.position = "bottom")
-
-ggsave(file.path(outdir, "fig08_ratio_selection_by_scheme.png"),
-       p_ratio, width = 13, height = 7, dpi = 300, bg = "white")
+pairs_pooled <- result$pairs
+saveRDS(pairs_pooled,
+        here("data", "processed", "OA_matching_pairs_pooled.rds"))
 
 # --- Overall balance summary ---
 balance_summary <- bind_rows(balance_test_log) %>%
@@ -682,24 +579,14 @@ balance_summary <- bind_rows(balance_test_log) %>%
     .groups = "drop"
   )
 
-cat("\n=== OVERALL BALANCE SUMMARY (across all schemes) ===\n")
+cat("\n=== OVERALL BALANCE SUMMARY ===\n")
 print(balance_summary)
 
-# Per-scheme Stage 2 balance
-s2_balance <- bind_rows(balance_test_log) %>%
-  filter(str_starts(label, "S2_")) %>%
-  mutate(scheme = str_remove(label, "^S2_"))
-
-cat("\n=== STAGE 2 BALANCE PER SCHEME ===\n")
-print(s2_balance %>% select(scheme, mean_smd_adj, max_trend_smd,
-                             test_a_pass, test_b_pass))
-
 cat("\n=== OUTPUTS SAVED ===\n")
-cat("  OA_matched_full_mixed.rds\n")
-cat("  OA_matched_treated_mixed.rds\n")
-cat("  OA_matched_donors_mixed.rds\n")
-cat("  OA_common_support_flags_mixed.rds\n")
-cat("  OA_ratio_selection_mixed.rds\n")
-cat("  OA_balance_tests_mixed.rds\n")
-cat("  OA_matching_pairs_mixed.rds\n")
-cat("  fig08_ratio_selection_by_scheme.png\n")
+cat("  OA_matched_full_pooled.rds\n")
+cat("  OA_matched_treated_pooled.rds\n")
+cat("  OA_matched_donors_pooled.rds\n")
+cat("  OA_common_support_flags_pooled.rds\n")
+cat("  OA_ratio_selection_pooled.rds\n")
+cat("  OA_balance_tests_pooled.rds\n")
+cat("  OA_matching_pairs_pooled.rds\n")
