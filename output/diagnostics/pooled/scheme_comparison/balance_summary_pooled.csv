@@ -1,0 +1,8 @@
+scheme,mean_abs_smd_before,mean_abs_smd_after,max_abs_smd_after,trend_smd_after,level_smd_after,n_treated,n_control,trend_pass,improvement
+Bath,0.7188,NA,-Inf,NA,NA,49,0,NA,NA
+Birmingham,0.8001,NA,-Inf,NA,NA,125,0,NA,NA
+Bradford,0.6308,NA,-Inf,NA,NA,265,0,NA,NA
+Bristol,0.7506,NA,-Inf,NA,NA,48,0,NA,NA
+Newcastle,0.8579,NA,-Inf,NA,NA,27,0,NA,NA
+Portsmouth,0.6095,NA,-Inf,NA,NA,58,0,NA,NA
+Sheffield,0.8975,NA,-Inf,NA,NA,41,0,NA,NA

@@ -93,25 +93,30 @@ save_fig <- function(p, filename, width = 14, height = 10, dpi = 300) {
 
 
 matched_A        <- readRDS(here("data", "processed", "OA_matched_full_mixed.rds"))
-matched_eng      <- readRDS(here("data", "processed", "OA_matched_full_mixed_England.rds"))
-matched_sco      <- readRDS(here("data", "processed", "OA_matched_full_mixed_Scotland.rds"))
 treated_A        <- readRDS(here("data", "processed", "OA_matched_treated_mixed.rds"))
 controls_A       <- readRDS(here("data", "processed", "OA_matched_donors_mixed.rds"))
 csupport         <- readRDS(here("data", "processed", "OA_common_support_flags_mixed.rds"))
 pairs_mixed      <- readRDS(here("data", "processed", "OA_matching_pairs_mixed.rds"))
 full_data        <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 
-cat("=== Sample sizes ===\n")
-cat("  COMBINED — Treated:", sum(matched_A$treat_indicator == 1),
-    "| Controls:", sum(matched_A$treat_indicator == 0), "\n")
-cat("  ENGLAND  — Treated:", sum(matched_eng$treat_indicator == 1),
-    "| Controls:", sum(matched_eng$treat_indicator == 0), "\n")
-cat("  SCOTLAND — Treated:", sum(matched_sco$treat_indicator == 1),
-    "| Controls:", sum(matched_sco$treat_indicator == 0), "\n\n")
+# Per-scheme matching: England only. matched_eng = matched_A (no Scotland).
+matched_eng <- matched_A
+matched_sco <- matched_A %>% filter(FALSE)   # empty — Scotland removed
+has_scotland <- nrow(matched_sco) > 0
 
-# Country-specific controls
+cat("=== Sample sizes ===\n")
+cat("  Treated:", sum(matched_A$treat_indicator == 1),
+    "| Controls:", sum(matched_A$treat_indicator == 0), "\n\n")
+
+# Controls
 ctrl_eng <- matched_eng %>% filter(treat_indicator == 0)
 ctrl_sco <- matched_sco %>% filter(treat_indicator == 0)
+
+# Control → scheme lookup (controls have scheme == "Control" in matched_full;
+# per-scheme matching pairs carry the actual scheme)
+ctrl_scheme_lookup <- pairs_mixed %>%
+  select(OA = control_OA, scheme) %>%
+  distinct()
 
 # =============================================================================
 # VARIABLE DEFINITIONS
@@ -135,19 +140,12 @@ stage1_socdem <- c("IMD",
 
 stage1_vars   <- c(stage1_road, stage1_urban, stage1_socdem)
 
+# Stage 2: 4 trends + 4 levels (KSI + slight combined per mode; Other in total only)
 stage2_trends <- c(
-  "trend_car_KSI_pkm",   "trend_car_slight_pkm",
-  "trend_cyc_KSI_pkm",   "trend_cyc_slight_pkm",
-  "trend_ped_KSI_pkm",   "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm",
-  "trend_total_pkm"
+  "trend_car_pkm", "trend_cyc_pkm", "trend_ped_pkm", "trend_total_pkm"
 )
 stage2_levels <- c(
-  "mean_car_KSI_pkm",   "mean_car_slight_pkm",
-  "mean_cyc_KSI_pkm",   "mean_cyc_slight_pkm",
-  "mean_ped_KSI_pkm",   "mean_ped_slight_pkm",
-  "mean_other_KSI_pkm", "mean_other_slight_pkm",
-  "mean_total_pkm"
+  "mean_car_pkm", "mean_cyc_pkm", "mean_ped_pkm", "mean_total_pkm"
 )
 
 
@@ -223,34 +221,20 @@ var_labels <- c(
   X20to24_pct                          = "% aged 20\u201324",
   X65to84_pct                          = "% aged 65\u201324",
   # Stage 2 — trends (raw scale)
-  trend_car_KSI_pkm                    = "Trend: car KSI/km",
-  trend_car_slight_pkm                 = "Trend: car slight/km",
-  trend_cyc_KSI_pkm                    = "Trend: cycling KSI/km",
-  trend_cyc_slight_pkm                 = "Trend: cycling slight/km",
-  trend_ped_KSI_pkm                    = "Trend: pedestrian KSI/km",
-  trend_ped_slight_pkm                 = "Trend: pedestrian slight/km",
-  trend_other_KSI_pkm                  = "Trend: other KSI/km",
-  trend_other_slight_pkm               = "Trend: other slight/km",
+  # Stage 2 — trends (KSI + slight combined per mode)
+  trend_car_pkm                        = "Trend: car/km",
+  trend_cyc_pkm                        = "Trend: cycling/km",
+  trend_ped_pkm                        = "Trend: pedestrian/km",
   trend_total_pkm                      = "Trend: total injuries/km",
   # Stage 2 — levels (raw scale, for descriptive tables only)
-  mean_car_KSI_pkm                     = "Mean: car KSI/km",
-  mean_car_slight_pkm                  = "Mean: car slight/km",
-  mean_cyc_KSI_pkm                     = "Mean: cycling KSI/km",
-  mean_cyc_slight_pkm                  = "Mean: cycling slight/km",
-  mean_ped_KSI_pkm                     = "Mean: pedestrian KSI/km",
-  mean_ped_slight_pkm                  = "Mean: pedestrian slight/km",
-  mean_other_KSI_pkm                   = "Mean: other KSI/km",
-  mean_other_slight_pkm                = "Mean: other slight/km",
+  mean_car_pkm                         = "Mean: car/km",
+  mean_cyc_pkm                         = "Mean: cycling/km",
+  mean_ped_pkm                         = "Mean: pedestrian/km",
   mean_total_pkm                       = "Mean: total injuries/km",
   # Stage 2 — levels (log1p scale, for balance diagnostics — matching scale)
-  log1p_mean_car_KSI_pkm               = "Mean: car KSI/km (log)",
-  log1p_mean_car_slight_pkm            = "Mean: car slight/km (log)",
-  log1p_mean_cyc_KSI_pkm               = "Mean: cycling KSI/km (log)",
-  log1p_mean_cyc_slight_pkm            = "Mean: cycling slight/km (log)",
-  log1p_mean_ped_KSI_pkm               = "Mean: pedestrian KSI/km (log)",
-  log1p_mean_ped_slight_pkm            = "Mean: pedestrian slight/km (log)",
-  log1p_mean_other_KSI_pkm             = "Mean: other KSI/km (log)",
-  log1p_mean_other_slight_pkm          = "Mean: other slight/km (log)",
+  log1p_mean_car_pkm                   = "Mean: car/km (log)",
+  log1p_mean_cyc_pkm                   = "Mean: cycling/km (log)",
+  log1p_mean_ped_pkm                   = "Mean: pedestrian/km (log)",
   log1p_mean_total_pkm                 = "Mean: total injuries/km (log)"
 )
 
@@ -278,14 +262,10 @@ add_log_vars <- function(df) {
     age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
     age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct,
     # Log1p-transformed injury levels — matching scale
-    log1p_mean_car_KSI_pkm        = log1p(pmax(mean_car_KSI_pkm,        0)),
-    log1p_mean_car_slight_pkm     = log1p(pmax(mean_car_slight_pkm,     0)),
-    log1p_mean_cyc_KSI_pkm        = log1p(pmax(mean_cyc_KSI_pkm,        0)),
-    log1p_mean_cyc_slight_pkm     = log1p(pmax(mean_cyc_slight_pkm,     0)),
-    log1p_mean_ped_KSI_pkm        = log1p(pmax(mean_ped_KSI_pkm,        0)),
-    log1p_mean_ped_slight_pkm     = log1p(pmax(mean_ped_slight_pkm,     0)),
-    log1p_mean_other_KSI_pkm      = log1p(pmax(mean_other_KSI_pkm,      0)),
-    log1p_mean_other_slight_pkm   = log1p(pmax(mean_other_slight_pkm,   0)),
+    # Combined _pkm vars created upstream in script 12 (Other in total only)
+    log1p_mean_car_pkm            = log1p(pmax(mean_car_pkm,            0)),
+    log1p_mean_cyc_pkm            = log1p(pmax(mean_cyc_pkm,            0)),
+    log1p_mean_ped_pkm            = log1p(pmax(mean_ped_pkm,            0)),
     log1p_mean_total_pkm          = log1p(pmax(mean_total_pkm,          0))
   )
 }
@@ -454,27 +434,28 @@ write_csv(desc_table_eng,
           file.path(outdir, "01_descriptive_table_england.csv"))
 cat("  Saved: 01_descriptive_table_england.csv\n")
 
-# --- 2c: Scotland ----------------------------------------------------------
-desc_table_sco <- bind_rows(
-  desc_stats(unmatched_sco_log %>% filter(treat_indicator == 1),
-             all_desc_vars, "Treated"),
-  desc_stats(matched_sco %>% filter(treat_indicator == 0),
-             all_desc_vars, "Matched")
-) %>%
-  pivot_wider(id_cols = c(variable, label), names_from = group,
-              values_from = c(mean, sd, median), names_glue = "{group}_{.value}") %>%
-  mutate(var_group = case_when(
-    variable %in% stage2_trends ~ "Injury trends",
-    variable %in% stage2_levels ~ "Injury levels",
-    TRUE                        ~ "Demographic & road characteristics"
-  )) %>%
-  select(var_group, label, Treated_mean, Matched_mean,
-         Treated_sd, Matched_sd, Treated_median, Matched_median) %>%
-  arrange(var_group, label)
-
-write_csv(desc_table_sco,
-          file.path(outdir, "01_descriptive_table_scotland.csv"))
-cat("  Saved: 01_descriptive_table_scotland.csv\n\n")
+# --- 2c: Scotland (skipped if no Scotland data) ----------------------------
+if (has_scotland) {
+  desc_table_sco <- bind_rows(
+    desc_stats(unmatched_sco_log %>% filter(treat_indicator == 1),
+               all_desc_vars, "Treated"),
+    desc_stats(matched_sco %>% filter(treat_indicator == 0),
+               all_desc_vars, "Matched")
+  ) %>%
+    pivot_wider(id_cols = c(variable, label), names_from = group,
+                values_from = c(mean, sd, median), names_glue = "{group}_{.value}") %>%
+    mutate(var_group = case_when(
+      variable %in% stage2_trends ~ "Injury trends",
+      variable %in% stage2_levels ~ "Injury levels",
+      TRUE                        ~ "Demographic & road characteristics"
+    )) %>%
+    select(var_group, label, Treated_mean, Matched_mean,
+           Treated_sd, Matched_sd, Treated_median, Matched_median) %>%
+    arrange(var_group, label)
+  write_csv(desc_table_sco, file.path(outdir, "01_descriptive_table_scotland.csv"))
+  cat("  Saved: 01_descriptive_table_scotland.csv\n")
+}
+cat("\n")
 
 # =============================================================================
 # SECTION 3 — SMD TABLES
@@ -500,12 +481,13 @@ smd_s1_eng <- smd_table(stage1_vars, unmatched_eng_log, matched_eng) %>%
 write_csv(smd_s1_eng, file.path(outdir, "02_smd_stage1_england.csv"))
 cat("  Saved: 02_smd_stage1_england.csv\n")
 
-# --- Stage 1: Scotland -------------------------------------------------------
-smd_s1_sco <- smd_table(stage1_vars, unmatched_sco_log, matched_sco) %>%
-  rename(smd_unmatched = smd_before, smd_after_S1 = smd_after) %>%
-  mutate(balanced_after_S1 = abs(smd_after_S1) < 0.1)
-write_csv(smd_s1_sco, file.path(outdir, "02_smd_stage1_scotland.csv"))
-cat("  Saved: 02_smd_stage1_scotland.csv\n")
+if (has_scotland) {
+  smd_s1_sco <- smd_table(stage1_vars, unmatched_sco_log, matched_sco) %>%
+    rename(smd_unmatched = smd_before, smd_after_S1 = smd_after) %>%
+    mutate(balanced_after_S1 = abs(smd_after_S1) < 0.1)
+  write_csv(smd_s1_sco, file.path(outdir, "02_smd_stage1_scotland.csv"))
+  cat("  Saved: 02_smd_stage1_scotland.csv\n")
+} else { smd_s1_sco <- tibble() }
 
 # --- Stage 2: combined (log-scale levels + raw trends) -----------------------
 smd_s2 <- smd_table(
@@ -543,23 +525,25 @@ smd_s2_eng <- smd_table(
 write_csv(smd_s2_eng, file.path(outdir, "03_smd_stage2_england.csv"))
 cat("  Saved: 03_smd_stage2_england.csv\n")
 
-# --- Stage 2: Scotland -------------------------------------------------------
-smd_s2_sco <- smd_table(
-  c(stage2_trends, stage2_levels_log),
-  unmatched_sco_log, matched_sco
-) %>%
-  rename(smd_preS2 = smd_before, smd_postS2 = smd_after) %>%
-  mutate(
-    var_type = if_else(variable %in% stage2_trends, "Trend", "Level (log)"),
-    balanced = abs(smd_postS2) < 0.1,
-    note     = if_else(
-      variable %in% stage2_levels_log,
-      "log1p scale — matches optimisation scale",
-      "raw scale"
+if (has_scotland) {
+  smd_s2_sco <- smd_table(
+    c(stage2_trends, stage2_levels_log),
+    unmatched_sco_log, matched_sco
+  ) %>%
+    rename(smd_preS2 = smd_before, smd_postS2 = smd_after) %>%
+    mutate(
+      var_type = if_else(variable %in% stage2_trends, "Trend", "Level (log)"),
+      balanced = abs(smd_postS2) < 0.1,
+      note     = if_else(
+        variable %in% stage2_levels_log,
+        "log1p scale — matches optimisation scale",
+        "raw scale"
+      )
     )
-  )
-write_csv(smd_s2_sco, file.path(outdir, "03_smd_stage2_scotland.csv"))
-cat("  Saved: 03_smd_stage2_scotland.csv\n\n")
+  write_csv(smd_s2_sco, file.path(outdir, "03_smd_stage2_scotland.csv"))
+  cat("  Saved: 03_smd_stage2_scotland.csv\n")
+} else { smd_s2_sco <- tibble() }
+cat("\n")
 
 # =============================================================================
 # SECTION 4 — WEIGHT DISTRIBUTION + CONCENTRATION DIAGNOSTICS (by country)
@@ -590,7 +574,7 @@ weight_summary_fn <- function(ctrl_df, label) {
 
 weight_table <- bind_rows(
   weight_summary_fn(ctrl_eng, "England"),
-  weight_summary_fn(ctrl_sco, "Scotland"),
+  if (has_scotland) weight_summary_fn(ctrl_sco, "Scotland") else NULL,
   weight_summary_fn(ctrl_A,   "Overall")
 )
 write_csv(weight_table, file.path(outdir, "04_weight_distribution.csv"))
@@ -603,8 +587,8 @@ reuse_fn <- function(ctrl_df) {
     mutate(pct = round(100 * n_controls / sum(n_controls), 1))
 }
 write_csv(reuse_fn(ctrl_eng), file.path(outdir, "04b_control_reuse_england.csv"))
-write_csv(reuse_fn(ctrl_sco), file.path(outdir, "04b_control_reuse_scotland.csv"))
-cat("  Saved: 04b_control_reuse_england.csv | 04b_control_reuse_scotland.csv\n")
+if (has_scotland) write_csv(reuse_fn(ctrl_sco), file.path(outdir, "04b_control_reuse_scotland.csv"))
+cat("  Saved: 04b_control_reuse_england.csv\n")
 
 top_ctrl_fn <- function(ctrl_df, total_w) {
   ctrl_df %>%
@@ -616,9 +600,11 @@ top_ctrl_fn <- function(ctrl_df, total_w) {
 }
 write_csv(top_ctrl_fn(ctrl_eng, sum(ctrl_eng$weights)),
           file.path(outdir, "04c_top_weight_controls_england.csv"))
-write_csv(top_ctrl_fn(ctrl_sco, sum(ctrl_sco$weights)),
-          file.path(outdir, "04c_top_weight_controls_scotland.csv"))
-cat("  Saved: 04c_top_weight_controls_england.csv | 04c_top_weight_controls_scotland.csv\n\n")
+if (has_scotland) {
+  write_csv(top_ctrl_fn(ctrl_sco, sum(ctrl_sco$weights)),
+            file.path(outdir, "04c_top_weight_controls_scotland.csv"))
+}
+cat("  Saved: 04c_top_weight_controls_england.csv\n\n")
 
 # =============================================================================
 # SECTION 5 — STRATUM CHARACTERISTICS
@@ -705,7 +691,7 @@ cat("=== Section 8: Love plots ===\n")
 # --- Stage 1 love plots ------------------------------------------------------
 ld_s1_combined <- love_data_fn(unmatched_pool_log, matched_A,   stage1_vars)
 ld_s1_eng      <- love_data_fn(unmatched_eng_log,  matched_eng, stage1_vars)
-ld_s1_sco      <- love_data_fn(unmatched_sco_log,  matched_sco, stage1_vars)
+if (has_scotland) ld_s1_sco <- love_data_fn(unmatched_sco_log, matched_sco, stage1_vars)
 
 p_love_s1_combined <- make_love_plot(
   ld_s1_combined,
@@ -715,15 +701,16 @@ p_love_s1_eng <- make_love_plot(
   ld_s1_eng,
   "Stage 1 Balance \u2014 England",
   "Structural & sociodemographic variables (log-scale where matched) | ratio 1:2, other-city controls only")
-p_love_s1_sco <- make_love_plot(
-  ld_s1_sco,
-  "Stage 1 Balance \u2014 Scotland",
-  "Structural & sociodemographic variables (log-scale where matched) | ratio 1:1, other-city + same-city controls")
-
 save_fig(p_love_s1_combined, "fig01_love_plot_stage1_combined.png", width = 16, height = 18)
 save_fig(p_love_s1_eng,      "fig01_love_plot_stage1_england.png",  width = 16, height = 18)
-save_fig(p_love_s1_sco,      "fig01_love_plot_stage1_scotland.png", width = 16, height = 18)
-cat("  Saved: fig01 love plots (combined, England, Scotland)\n")
+if (has_scotland) {
+  p_love_s1_sco <- make_love_plot(
+    ld_s1_sco,
+    "Stage 1 Balance \u2014 Scotland",
+    "Structural & sociodemographic variables (log-scale where matched) | ratio 1:1, other-city + same-city controls")
+  save_fig(p_love_s1_sco, "fig01_love_plot_stage1_scotland.png", width = 16, height = 18)
+}
+cat("  Saved: fig01 love plots\n")
 
 # --- Stage 2 love plots — ON MATCHING SCALE ----------------------------------
 # Trends: raw (as matched)
@@ -735,8 +722,8 @@ ld_s2_combined <- love_data_fn(unmatched_pool_log, matched_A,
                                c(stage2_trends, stage2_levels_log))
 ld_s2_eng      <- love_data_fn(unmatched_eng_log,  matched_eng,
                                c(stage2_trends, stage2_levels_log))
-ld_s2_sco      <- love_data_fn(unmatched_sco_log,  matched_sco,
-                               c(stage2_trends, stage2_levels_log))
+if (has_scotland) ld_s2_sco <- love_data_fn(unmatched_sco_log, matched_sco,
+                                            c(stage2_trends, stage2_levels_log))
 
 p_love_s2_combined <- make_love_plot(
   ld_s2_combined,
@@ -746,15 +733,16 @@ p_love_s2_eng <- make_love_plot(
   ld_s2_eng,
   "Stage 2 Balance \u2014 England",
   "Injury trends (raw) + mean levels (log1p) \u2014 both on matching scale | ratio 1:2")
-p_love_s2_sco <- make_love_plot(
-  ld_s2_sco,
-  "Stage 2 Balance \u2014 Scotland",
-  "Injury trends (raw) + mean levels (log1p) \u2014 both on matching scale | ratio 1:1")
-
 save_fig(p_love_s2_combined, "fig02_love_plot_stage2_combined.png", width = 16, height = 16)
 save_fig(p_love_s2_eng,      "fig02_love_plot_stage2_england.png",  width = 16, height = 16)
-save_fig(p_love_s2_sco,      "fig02_love_plot_stage2_scotland.png", width = 16, height = 16)
-cat("  Saved: fig02 love plots (combined, England, Scotland)\n\n")
+if (has_scotland) {
+  p_love_s2_sco <- make_love_plot(
+    ld_s2_sco,
+    "Stage 2 Balance \u2014 Scotland",
+    "Injury trends (raw) + mean levels (log1p) \u2014 both on matching scale | ratio 1:1")
+  save_fig(p_love_s2_sco, "fig02_love_plot_stage2_scotland.png", width = 16, height = 16)
+}
+cat("  Saved: fig02 love plots\n\n")
 
 # =============================================================================
 # SECTION 9 — SMD HEATMAP (by country)
@@ -781,7 +769,7 @@ make_heatmap_data <- function(matched_df, unmatched_log_df, label) {
 
 heatmap_long <- bind_rows(
   make_heatmap_data(matched_eng, unmatched_eng_log, "England"),
-  make_heatmap_data(matched_sco, unmatched_sco_log, "Scotland")
+  if (has_scotland) make_heatmap_data(matched_sco, unmatched_sco_log, "Scotland") else NULL
 ) %>%
   pivot_longer(c(smd_un, smd_adj), names_to = "timing", values_to = "smd") %>%
   mutate(
@@ -855,14 +843,23 @@ make_weight_panels <- function(ctrl_df, ctry_label, ctry_col) {
 }
 
 eng_wp <- make_weight_panels(ctrl_eng, "England", COL_ENGLAND)
-sco_wp <- make_weight_panels(ctrl_sco, "Scotland", COL_SCOTLAND)
 
-p_weights_country <- (eng_wp$p1 | sco_wp$p1) / (eng_wp$p2 | sco_wp$p2) +
-  plot_annotation(
-    title = "Weight Diagnostics by Country (after cap at 5)",
-    theme = theme(plot.title = element_text(size = 13, face = "bold",
-                                            colour = "#1A2E5A"))
-  )
+if (has_scotland) {
+  sco_wp <- make_weight_panels(ctrl_sco, "Scotland", COL_SCOTLAND)
+  p_weights_country <- (eng_wp$p1 | sco_wp$p1) / (eng_wp$p2 | sco_wp$p2) +
+    plot_annotation(
+      title = "Weight Diagnostics by Country (after cap at 5)",
+      theme = theme(plot.title = element_text(size = 13, face = "bold",
+                                              colour = "#1A2E5A"))
+    )
+} else {
+  p_weights_country <- eng_wp$p1 / eng_wp$p2 +
+    plot_annotation(
+      title = "Weight Diagnostics (after cap at 5)",
+      theme = theme(plot.title = element_text(size = 13, face = "bold",
+                                              colour = "#1A2E5A"))
+    )
+}
 save_fig(p_weights_country, "fig06_weight_diagnostics_by_country.png",
          width = 16, height = 12)
 cat("  Saved: fig06_weight_diagnostics_by_country.png\n\n")
@@ -884,14 +881,18 @@ cat("  Saved: fig06_weight_diagnostics_by_country.png\n\n")
 
 cat("=== Section 12: Mahalanobis distance plots (trend-focus) ===\n")
 
-if ("mdist" %in% names(matched_eng) && "mdist" %in% names(matched_sco)) {
+if ("mdist" %in% names(matched_eng) && (has_scotland && "mdist" %in% names(matched_sco) || !has_scotland)) {
   
   mdist_eng <- matched_eng %>%
     filter(treat_indicator == 1, !is.na(mdist)) %>%
     select(OA, mdist, country)
-  mdist_sco <- matched_sco %>%
-    filter(treat_indicator == 1, !is.na(mdist)) %>%
-    select(OA, mdist, country)
+  if (has_scotland) {
+    mdist_sco <- matched_sco %>%
+      filter(treat_indicator == 1, !is.na(mdist)) %>%
+      select(OA, mdist, country)
+  } else {
+    mdist_sco <- mdist_eng %>% filter(FALSE)
+  }
   mdist_all <- bind_rows(mdist_eng, mdist_sco)
   
   # --- summary stats for caption annotation ---
@@ -903,9 +904,9 @@ if ("mdist" %in% names(matched_eng) && "mdist" %in% names(matched_sco)) {
   pct_lt20  <- round(100 * mean(mdist_all$mdist <= 20), 1)
   
   n_gt20_eng <- sum(mdist_eng$mdist > 20)
-  n_gt20_sco <- sum(mdist_sco$mdist > 20)
+  n_gt20_sco <- if (nrow(mdist_sco) > 0) sum(mdist_sco$mdist > 20) else 0L
   pct_gt20_eng <- round(100 * n_gt20_eng / nrow(mdist_eng), 1)
-  pct_gt20_sco <- round(100 * n_gt20_sco / nrow(mdist_sco), 1)
+  pct_gt20_sco <- if (nrow(mdist_sco) > 0) round(100 * n_gt20_sco / nrow(mdist_sco), 1) else 0
   
   cat(sprintf("  Distance summary (trend-focused interpretation):\n"))
   cat(sprintf("    Median: %.1f  |  Mean: %.1f\n",
@@ -1056,11 +1057,17 @@ make_trend_plot <- function(matched_df, ctry_label) {
 }
 
 p_trends_eng <- make_trend_plot(matched_eng, "England")
-p_trends_sco <- make_trend_plot(matched_sco, "Scotland")
-
 save_fig(p_trends_eng, "fig14_parallel_trends_england.png", width = 14, height = 12)
-save_fig(p_trends_sco, "fig14_parallel_trends_scotland.png", width = 14, height = 12)
-cat("  Saved: fig14_parallel_trends_england.png | fig14_parallel_trends_scotland.png\n\n")
+cat("  Saved: fig14_parallel_trends_england.png\n")
+
+if (nrow(matched_sco) > 0) {
+  p_trends_sco <- make_trend_plot(matched_sco, "Scotland")
+  save_fig(p_trends_sco, "fig14_parallel_trends_scotland.png", width = 14, height = 12)
+  cat("  Saved: fig14_parallel_trends_scotland.png\n")
+} else {
+  cat("  Skipped: Scotland (no data)\n")
+}
+cat("\n")
 
 # =============================================================================
 # CONSOLE SUMMARY
@@ -1077,13 +1084,15 @@ cat(sprintf("  Combined — Treated: %d | Controls: %d\n",
 cat(sprintf("  England  — Treated: %d | Controls: %d\n",
             sum(matched_eng$treat_indicator == 1),
             sum(matched_eng$treat_indicator == 0)))
-cat(sprintf("  Scotland — Treated: %d | Controls: %d\n",
-            sum(matched_sco$treat_indicator == 1),
-            sum(matched_sco$treat_indicator == 0)))
+if (has_scotland) {
+  cat(sprintf("  Scotland — Treated: %d | Controls: %d\n",
+              sum(matched_sco$treat_indicator == 1),
+              sum(matched_sco$treat_indicator == 0)))
+}
 cat(sprintf("  Isolated OAs (flagged, included): %d\n", length(isolated_ids)))
 
 cat("\nWEIGHT SUMMARY (after cap = 5):\n")
-for (nm in c("England", "Scotland", "Overall")) {
+for (nm in c("England", if (has_scotland) "Scotland", "Overall")) {
   df  <- switch(nm, England = ctrl_eng, Scotland = ctrl_sco, Overall = ctrl_A)
   eff <- round(sum(df$weights)^2 / sum(df$weights^2), 0)
   cat(sprintf("  %-8s — N: %d | Eff N: %d | Efficiency: %.3f | Max weight: %.3f\n",
@@ -1093,14 +1102,18 @@ for (nm in c("England", "Scotland", "Overall")) {
 cat("\nBALANCE SUMMARY (matching scale):\n")
 cat(sprintf("  England  S1 — mean |SMD| after: %.3f\n",
             mean(abs(smd_s1_eng$smd_after_S1), na.rm = TRUE)))
-cat(sprintf("  Scotland S1 — mean |SMD| after: %.3f\n",
-            mean(abs(smd_s1_sco$smd_after_S1), na.rm = TRUE)))
+if (has_scotland) {
+  cat(sprintf("  Scotland S1 — mean |SMD| after: %.3f\n",
+              mean(abs(smd_s1_sco$smd_after_S1), na.rm = TRUE)))
+}
 cat(sprintf("  England  S2 — max trend |SMD|: %.3f | max level (log) |SMD|: %.3f\n",
             max(abs(smd_s2_eng$smd_postS2[smd_s2_eng$var_type == "Trend"]),    na.rm = TRUE),
             max(abs(smd_s2_eng$smd_postS2[smd_s2_eng$var_type == "Level (log)"]), na.rm = TRUE)))
-cat(sprintf("  Scotland S2 — max trend |SMD|: %.3f | max level (log) |SMD|: %.3f\n",
-            max(abs(smd_s2_sco$smd_postS2[smd_s2_sco$var_type == "Trend"]),    na.rm = TRUE),
-            max(abs(smd_s2_sco$smd_postS2[smd_s2_sco$var_type == "Level (log)"]), na.rm = TRUE)))
+if (has_scotland) {
+  cat(sprintf("  Scotland S2 — max trend |SMD|: %.3f | max level (log) |SMD|: %.3f\n",
+              max(abs(smd_s2_sco$smd_postS2[smd_s2_sco$var_type == "Trend"]),    na.rm = TRUE),
+              max(abs(smd_s2_sco$smd_postS2[smd_s2_sco$var_type == "Level (log)"]), na.rm = TRUE)))
+}
 
 cat("\nOUTPUTS SAVED TO:", outdir, "\n")
 cat("  Descriptive tables  : 01_*_combined/england/scotland.csv  [raw scale]\n")
@@ -1128,4 +1141,182 @@ missing_s2 <- setdiff(required_s2, names(unmatched_eng_log))
 
 cat("Missing S1 vars:", if (length(missing_s1) == 0) "none" else paste(missing_s1, collapse=", "), "\n")
 cat("Missing S2 vars:", if (length(missing_s2) == 0) "none" else paste(missing_s2, collapse=", "), "\n")
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║          PART B — PER-SCHEME DIAGNOSTICS (replaces 18b)             ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+cat("\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")
+cat("PART B — PER-SCHEME DIAGNOSTICS\n")
+cat(paste(rep("=", 70), collapse = ""), "\n\n")
+
+schemes <- matched_A %>%
+  filter(treat_indicator == 1) %>%
+  distinct(scheme) %>%
+  pull(scheme) %>%
+  sort()
+
+cat("Schemes:", paste(schemes, collapse = ", "), "\n\n")
+
+# =============================================================================
+# 18b-1. PER-SCHEME SMD (trends only — the key DiD assumption)
+# =============================================================================
+
+cat("--- Per-scheme SMD (trends) ---\n")
+
+smd_for_scheme <- function(scheme_name, vars) {
+  treated_oas <- matched_A %>%
+    filter(scheme == scheme_name, treat_indicator == 1) %>%
+    pull(OA)
+
+  control_oas <- ctrl_scheme_lookup %>%
+    filter(scheme == scheme_name) %>%
+    pull(OA)
+
+  # Before: this scheme's treated vs full unmatched control pool
+  before_df <- unmatched_eng_log %>%
+    filter(treated_OA == 1 & OA %in% treated_oas | control_group2_OA == 1) %>%
+    mutate(treat_indicator = as.integer(OA %in% treated_oas))
+
+  # After: this scheme's treated + their matched controls
+  after_df <- matched_A %>%
+    filter(OA %in% c(treated_oas, control_oas)) %>%
+    mutate(treat_indicator = as.integer(OA %in% treated_oas))
+
+  vars_avail <- intersect(vars, intersect(names(before_df), names(after_df)))
+
+  map_df(vars_avail, function(v) {
+    tibble(
+      scheme     = scheme_name,
+      variable   = v,
+      label      = coalesce(var_labels[v], v),
+      smd_before = round(compute_smd(before_df, v), 4),
+      smd_after  = round(compute_smd(after_df,  v), 4)
+    )
+  })
+}
+
+smd_all_schemes <- map_df(schemes, function(s) {
+  cat("  Computing SMD:", s, "\n")
+  smd_for_scheme(s, c(stage1_vars, stage2_trends, stage2_levels_log))
+})
+
+write_csv(smd_all_schemes, file.path(outdir, "09_smd_per_scheme.csv"))
+
+# =============================================================================
+# 18b-2. PER-SCHEME TREND BALANCE HEATMAP (trends only — same as original 18b)
+# =============================================================================
+
+cat("\n--- Per-scheme trend balance heatmap ---\n")
+
+s2_trend_heatmap <- smd_all_schemes %>%
+  filter(variable %in% stage2_trends)
+
+p_heatmap_scheme <- ggplot(s2_trend_heatmap,
+                           aes(x = scheme, y = label, fill = abs(smd_after))) +
+  geom_tile(colour = "white", linewidth = 0.35) +
+  geom_text(aes(label = if_else(!is.na(smd_after),
+                                sprintf("%.3f", smd_after), "")),
+            size = 2.8, colour = "white", fontface = "bold") +
+  scale_fill_gradient2(
+    low = "#2ECC71", mid = "#F39C12", high = "#E74C3C",
+    midpoint = 0.1, na.value = "#EEEEEE", name = "|SMD|", limits = c(0, NA)) +
+  labs(
+    title    = "Pre-Treatment Trend Balance by Scheme \u2014 After Matching",
+    subtitle = "Green < 0.10 (balanced) | Orange = marginal | Red > 0.20 (imbalanced)\nTrends on raw scale (as matched)",
+    x = NULL, y = NULL,
+    caption  = "Per-scheme matching — each scheme matched independently"
+  ) +
+  theme_diag() +
+  theme(axis.text.x   = element_text(angle = 30, hjust = 1, size = 11),
+        axis.text.y   = element_text(size = 10),
+        panel.grid    = element_blank(),
+        panel.spacing = unit(0.3, "lines"))
+
+save_fig(p_heatmap_scheme, "fig18b_trend_heatmap_per_scheme.png",
+         width = 14, height = 10)
+
+# =============================================================================
+# 18b-3. PER-SCHEME LOVE PLOTS (faceted — trends + key S1 vars)
+# =============================================================================
+
+cat("--- Per-scheme love plots ---\n")
+
+key_vars_scheme <- c(stage2_trends,
+                     "log1p_road_density_m_km2", "log1p_pop_density", "IMD")
+
+love_scheme_data <- smd_all_schemes %>%
+  filter(variable %in% key_vars_scheme) %>%
+  pivot_longer(c(smd_before, smd_after),
+               names_to = "timing", values_to = "smd") %>%
+  mutate(
+    timing = if_else(timing == "smd_before", "Before", "After"),
+    timing = factor(timing, levels = c("Before", "After"))
+  )
+
+p_love_scheme <- ggplot(
+  love_scheme_data,
+  aes(x = abs(smd), y = label, colour = timing, shape = timing)
+) +
+  geom_vline(xintercept = 0.10, linetype = "dashed", colour = "#999999") +
+  geom_vline(xintercept = 0, colour = "#DDDDDD") +
+  geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.3) +
+  geom_point(size = 2.5) +
+  scale_colour_manual(values = c("Before" = COL_BEFORE, "After" = COL_AFTER)) +
+  scale_shape_manual(values = c("Before" = 16, "After" = 17)) +
+  facet_wrap(~scheme, ncol = 4) +
+  labs(
+    title    = "Per-Scheme Balance: Injury Trends + Key Covariates",
+    subtitle = "Before vs after per-scheme matching | dashed = 0.10 threshold",
+    x = "|SMD|", y = NULL, colour = NULL, shape = NULL,
+    caption = "Each scheme matched independently against the shared other-city control pool"
+  ) +
+  theme_diag(base_size = 11) +
+  theme(legend.position = "bottom",
+        axis.text.y = element_text(size = 8))
+
+save_fig(p_love_scheme, "fig18b_love_plots_per_scheme.png",
+         width = 16, height = 12)
+
+# =============================================================================
+# 18b-4. PER-SCHEME BALANCE SUMMARY TABLE
+# =============================================================================
+
+cat("\n--- Per-scheme balance summary ---\n\n")
+
+scheme_balance <- smd_all_schemes %>%
+  filter(variable %in% stage2_trends) %>%
+  group_by(scheme) %>%
+  summarise(
+    mean_trend_smd_before = round(mean(abs(smd_before), na.rm = TRUE), 4),
+    mean_trend_smd_after  = round(mean(abs(smd_after),  na.rm = TRUE), 4),
+    max_trend_smd_after   = round(max(abs(smd_after),   na.rm = TRUE), 4),
+    n_trends_imbalanced   = sum(abs(smd_after) >= 0.10, na.rm = TRUE),
+    all_trends_balanced   = all(abs(smd_after) < 0.10, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    matched_A %>%
+      filter(treat_indicator == 1) %>%
+      count(scheme, name = "n_treated"),
+    by = "scheme"
+  ) %>%
+  left_join(
+    ctrl_scheme_lookup %>% count(scheme, name = "n_controls"),
+    by = "scheme"
+  )
+
+write_csv(scheme_balance, file.path(outdir, "18b_scheme_balance_summary.csv"))
+
+cat("=== PER-SCHEME TREND BALANCE SUMMARY ===\n")
+print(scheme_balance, n = Inf)
+
+cat("\n================================================================\n")
+cat("PART B COMPLETE — per-scheme diagnostics saved\n")
+cat("================================================================\n")
+cat("  09_smd_per_scheme.csv\n")
+cat("  18b_scheme_balance_summary.csv\n")
+cat("  fig18b_trend_heatmap_per_scheme.png\n")
+cat("  fig18b_love_plots_per_scheme.png\n")
 

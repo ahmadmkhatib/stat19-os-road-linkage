@@ -1,0 +1,8 @@
+scheme,mean_trend_smd_before,mean_trend_smd_after,max_trend_smd_after,n_trends_imbalanced,all_trends_balanced,n_treated,n_controls
+Bath,0.106,0.0507,0.0754,0,TRUE,49,84
+Birmingham,0.1032,0.053900000000000003,0.1318,1,FALSE,125,106
+Bradford,0.075,0.0306,0.0398,0,TRUE,265,244
+Bristol,0.1083,0.0614,0.1171,1,FALSE,48,81
+Newcastle,0.0992,0.0654,0.1471,1,FALSE,27,26
+Portsmouth,0.1091,0.0423,0.0932,0,TRUE,58,225
+Sheffield,0.1362,0.0633,0.1478,1,FALSE,41,38

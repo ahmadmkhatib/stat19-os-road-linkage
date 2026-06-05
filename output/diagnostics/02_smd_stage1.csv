@@ -1,0 +1,32 @@
+variable,label,smd_before,smd_after,balanced
+log1p_road_length_km,Road length (log),-0.1197,-0.0099,TRUE
+log1p_road_density_m_km2,Road density (log),0.6085,0.1054,FALSE
+log_area_km2,Area (log),-0.5756,-0.156,FALSE
+pct_A_road,% A-road,0.4395,0.2688,FALSE
+pct_B_road,% B-road,0.1616,0.1402,FALSE
+pct_minor_road,% Minor road,-0.4672,-0.3117,FALSE
+log1p_dist_citycentre,Dist. city centre (log),0.9011,0.7552,FALSE
+log1p_pop_density,Pop. density (log),0.6453,0.1477,FALSE
+log1p_business_retail_per_km2,Retail density (log),1.681,0.7373,FALSE
+IMD,IMD,0.7891,0.2146,FALSE
+cars_one_pct,% 1 car,-0.5117,-0.2119,FALSE
+cars_twoPlus_pct,% 2+ cars,-1.3774,-0.5402,FALSE
+Drive_Car_pct,% Drive to work,-1.7021,-0.6429,FALSE
+Passenger_Car_pct,% Car passenger,-0.5994,-0.3359,FALSE
+Walk_pct,% Walk,1.1294,0.4037,FALSE
+Bicycle_pct,% Cycle,-0.3646,-0.2394,FALSE
+bus_Coach_pct,% Bus/coach,0.0209,-0.0232,TRUE
+Train_pct,% Train,0.3749,0.2597,FALSE
+Underground_train_tram_pct,% Underground/tram,0.2223,0.2936,FALSE
+Taxi_pct,% Taxi,0.2797,0.0089,TRUE
+workAthome_pct,% WFH,-0.2125,0.1115,FALSE
+Other_pct,% Other commute,0.2197,0.1209,FALSE
+White_pct,% White,-1.3405,-0.5728,FALSE
+Mixed_pct,% Mixed,0.4192,0.2512,FALSE
+Asian_pct,% Asian,1.055,0.4116,FALSE
+Black_pct,% Black,0.5109,0.2881,FALSE
+age_under15_pct,% Under 15,-0.1929,-0.1105,FALSE
+age_15to24_pct,% 15-24,0.8255,0.2048,FALSE
+age_25to44_pct,% 25-44,0.6873,0.33,FALSE
+age_45to64_pct,% 45-64,-1.2187,-0.4458,FALSE
+age_65to84_pct,% 65-84,-1.066,-0.4112,FALSE

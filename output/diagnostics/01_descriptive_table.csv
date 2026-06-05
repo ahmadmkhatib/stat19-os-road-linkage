@@ -1,0 +1,50 @@
+variable,label,Treated_mean,Matched_mean,Treated_sd,Matched_sd,Treated_median,Matched_median,var_group
+cars_one_pct,% 1 car,37.1019,39.4799,11.0269,8.5809,38.3562,40.1515,Demographic & road characteristics
+age_15to24_pct,% 15-24,24.2019,20.044,18.1413,14.234,17.8694,15.1515,Demographic & road characteristics
+cars_twoPlus_pct,% 2+ cars,13.1739,19.3524,10.0752,12.1648,10.828,17.2727,Demographic & road characteristics
+age_25to44_pct,% 25-44,35.5832,31.1725,13.9091,10.0967,31.068,29.4382,Demographic & road characteristics
+age_45to64_pct,% 45-64,16.397,19.9101,7.8137,7.1127,17.3333,20.9877,Demographic & road characteristics
+age_65to84_pct,% 65-84,6.9314,9.6035,6.1922,6.6633,5.6075,8.3682,Demographic & road characteristics
+pct_A_road,% A-road,13.743,9.2458,18.1605,13.9932,3.0303,0,Demographic & road characteristics
+Asian_pct,% Asian,33.9102,22.9138,27.3261,24.3763,22.7011,12.5,Demographic & road characteristics
+pct_B_road,% B-road,4.4712,2.8554,11.7002,8.5068,0,0,Demographic & road characteristics
+Black_pct,% Black,8.3127,5.3199,10.8384,6.4467,4.3668,2.8986,Demographic & road characteristics
+bus_Coach_pct,% Bus/coach,6.124,6.2029,3.2738,3.563,5.3922,5.6604,Demographic & road characteristics
+Passenger_Car_pct,% Car passenger,2.6985,3.3283,1.9562,1.7616,2.2857,3.1373,Demographic & road characteristics
+Bicycle_pct,% Cycle,1.2761,1.6755,1.6904,1.646,0.5952,1.2097,Demographic & road characteristics
+Drive_Car_pct,% Drive to work,18.5076,24.8539,8.5216,10.577,17.8947,24.1611,Demographic & road characteristics
+pct_minor_road,% Minor road,81.6655,87.5993,20.5293,16.3459,87.7551,97.4359,Demographic & road characteristics
+Mixed_pct,% Mixed,4.0715,3.4536,2.5908,2.0717,3.8265,3.1461,Demographic & road characteristics
+Other_pct,% Other commute,0.4883,0.4209,0.525,0.4746,0.3968,0.3623,Demographic & road characteristics
+Taxi_pct,% Taxi,0.6256,0.6014,0.7392,0.6569,0.4619,0.4405,Demographic & road characteristics
+Train_pct,% Train,3.7408,2.7433,4.0421,3.3017,2.2624,1.5038,Demographic & road characteristics
+age_under15_pct,% Under 15,15.8783,16.9062,10.8923,8.777,16.5517,17.5258,Demographic & road characteristics
+Underground_train_tram_pct,% Underground/tram,0.5861,0.2688,1.3198,0.7103,0,0,Demographic & road characteristics
+workAthome_pct,% WFH,2.2029,2.001,1.8712,1.6994,1.6438,1.6086,Demographic & road characteristics
+Walk_pct,% Walk,16.1704,12.476,9.2971,7.4691,12.9944,9.8361,Demographic & road characteristics
+White_pct,% White,48.3852,64.1261,27.4452,26.8596,50.1075,72.2054,Demographic & road characteristics
+area_km2,Area (km²),0.0655,0.0729,0.0832,0.1285,0.0389,0.0452,Demographic & road characteristics
+dist_citycentre,Dist. city centre (m),8258.323,5459.5833,3713.5847,2895.9633,8642.6699,4966.4465,Demographic & road characteristics
+IMD,IMD,40.4959,36.6475,18.2103,17.0525,36.9,35,Demographic & road characteristics
+pop_density,Pop. density (persons/km²),11344.4032,8836.4374,10550.6798,6004.3215,8725.1238,7396.3894,Demographic & road characteristics
+business_retail_per_km2,Retail (per km²),39.7747,23.9685,32.4592,21.1573,28.2501,16.9076,Demographic & road characteristics
+road_density_m_km2,Road density (m/km²),22026.1455,20614.4671,9519.834,8486.5022,20495.957,19193.12,Demographic & road characteristics
+road_length_km,Road length (km),1.24,1.1713,1.3895,1.1002,0.8866,0.8896,Demographic & road characteristics
+mean_car_KSI_pkm,Mean: car KSI/km,0.0132,0.0067,0.0384,0.0157,0,0,Injury levels
+mean_car_slight_pkm,Mean: car slight/km,0.2192,0.1031,0.5217,0.1152,0.1046,0.0678,Injury levels
+mean_cyc_KSI_pkm,Mean: cycling KSI/km,0.0096,0.0053,0.0351,0.0133,0,0,Injury levels
+mean_cyc_slight_pkm,Mean: cycling slight/km,0.0453,0.0234,0.0867,0.0379,0.0101,0,Injury levels
+mean_other_KSI_pkm,Mean: other KSI/km,0.0081,0.0055,0.0241,0.0133,0,0,Injury levels
+mean_other_slight_pkm,Mean: other slight/km,0.0305,0.0169,0.0618,0.0313,0,0,Injury levels
+mean_ped_KSI_pkm,Mean: ped. KSI/km,0.0252,0.0144,0.0515,0.0242,0,0,Injury levels
+mean_ped_slight_pkm,Mean: ped. slight/km,0.0841,0.039,0.1696,0.0491,0.0414,0.0226,Injury levels
+mean_total_pkm,Mean: total injuries/km,0.4353,0.2252,0.6088,0.208,0.2947,0.1598,Injury levels
+trend_car_KSI_pkm,Trend: car KSI/km,0.0058,0.0065,0.1077,0.076,0,0,Injury trends
+trend_car_slight_pkm,Trend: car slight/km,-0.023,-0.0211,0.139,0.0923,0,0,Injury trends
+trend_cyc_KSI_pkm,Trend: cycling KSI/km,0.0071,0.0021,0.0899,0.0518,0,0,Injury trends
+trend_cyc_slight_pkm,Trend: cycling slight/km,-0.0134,-0.0116,0.1446,0.0925,0,0,Injury trends
+trend_other_KSI_pkm,Trend: other KSI/km,0.0034,0.0028,0.1001,0.0611,0,0,Injury trends
+trend_other_slight_pkm,Trend: other slight/km,-0.0089,-0.0069,0.1183,0.0841,0,0,Injury trends
+trend_ped_KSI_pkm,Trend: ped. KSI/km,-0.0028,-0.0011,0.1197,0.0822,0,0,Injury trends
+trend_ped_slight_pkm,Trend: ped. slight/km,-0.0086,-0.0087,0.1279,0.0893,0,0,Injury trends
+trend_total_pkm,Trend: total injuries/km,-0.018,-0.0161,0.1159,0.0852,-0.0119,-0.0116,Injury trends

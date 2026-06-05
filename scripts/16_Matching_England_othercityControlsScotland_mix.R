@@ -70,19 +70,12 @@ stage1_socdem   <- c(
 )
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
+# Stage 2: 4 trends + 4 levels (KSI + slight combined per mode; Other in total only)
 stage2_trends <- c(
-  "trend_car_KSI_pkm",   "trend_car_slight_pkm",
-  "trend_cyc_KSI_pkm",   "trend_cyc_slight_pkm",
-  "trend_ped_KSI_pkm",   "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm",
-  "trend_total_pkm"
+  "trend_car_pkm", "trend_cyc_pkm", "trend_ped_pkm", "trend_total_pkm"
 )
 stage2_levels <- c(
-  "mean_car_KSI_pkm",   "mean_car_slight_pkm",
-  "mean_cyc_KSI_pkm",   "mean_cyc_slight_pkm",
-  "mean_ped_KSI_pkm",   "mean_ped_slight_pkm",
-  "mean_other_KSI_pkm", "mean_other_slight_pkm",
-  "mean_total_pkm"
+  "mean_car_pkm", "mean_cyc_pkm", "mean_ped_pkm", "mean_total_pkm"
 )
 stage2_vars <- c(stage2_trends, stage2_levels)
 
@@ -156,7 +149,10 @@ prep_dataset <- function(data) {
       age_15to24_pct  = X15to19_pct  + X20to24_pct,
       age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
       age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
-      age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct
+      age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct,
+      # Combined KSI + slight per mode — created upstream in script 12
+      # trend_car_pkm, trend_cyc_pkm, trend_ped_pkm, trend_other_pkm
+      # mean_car_pkm, mean_cyc_pkm, mean_ped_pkm, mean_other_pkm
     )
 }
 
@@ -347,7 +343,7 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
 
   m_s1 <- tryCatch(
     matchit(formula_s1, data = data_clean, method = "nearest",
-            distance = "mahalanobis", ratio = 10, replace = TRUE),
+            distance = "mahalanobis", ratio = 50, replace = TRUE),
     error = function(e) { cat("FAILED:", conditionMessage(e), "\n"); NULL }
   )
   if (is.null(m_s1)) return(NULL)
@@ -668,6 +664,36 @@ p_ratio <- ratio_combined %>%
 
 ggsave(file.path(outdir, "fig08_ratio_selection_by_scheme.png"),
        p_ratio, width = 13, height = 7, dpi = 300, bg = "white")
+
+# --- Per-scheme Stage 2 ratio summary ---
+cat("\n=== STAGE 2 RATIO SELECTION PER SCHEME ===\n\n")
+
+ratio_summary <- ratio_combined %>%
+  filter(!is.na(max_trend_smd)) %>%
+  group_by(scheme) %>%
+  arrange(max_trend_smd, mean_smd) %>%
+  slice(1) %>%
+  ungroup() %>%
+  left_join(
+    matched_full %>%
+      group_by(scheme) %>%
+      summarise(
+        n_treated  = sum(treat_indicator == 1),
+        n_controls = sum(treat_indicator == 0),
+        .groups = "drop"
+      ),
+    by = "scheme"
+  ) %>%
+  select(scheme, n_treated, n_controls,
+         selected_ratio = ratio, max_trend_smd, mean_smd) %>%
+  arrange(scheme)
+
+print(ratio_summary)
+
+cat("\nRatio range across schemes:", min(ratio_summary$selected_ratio),
+    "to", max(ratio_summary$selected_ratio), "\n")
+cat("Schemes with ratio 1:1:",
+    sum(ratio_summary$selected_ratio == 1), "\n\n")
 
 # --- Overall balance summary ---
 balance_summary <- bind_rows(balance_test_log) %>%

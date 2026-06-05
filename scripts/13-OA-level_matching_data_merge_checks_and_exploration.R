@@ -305,12 +305,8 @@ if (nrow(na_s1) == 0) {
 cat("\n[6] Stage 2 variable completeness (matching pool, n_roads > 0)\n")
 
 stage2_expected <- c(
-  "trend_car_KSI_pkm", "trend_car_slight_pkm", "trend_cyc_KSI_pkm",
-  "trend_cyc_slight_pkm", "trend_ped_KSI_pkm", "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm", "trend_total_pkm",
-  "mean_car_KSI_pkm", "mean_car_slight_pkm", "mean_cyc_KSI_pkm",
-  "mean_cyc_slight_pkm", "mean_ped_KSI_pkm", "mean_ped_slight_pkm",
-  "mean_other_KSI_pkm", "mean_other_slight_pkm", "mean_total_pkm"
+  "trend_car_pkm", "trend_cyc_pkm", "trend_ped_pkm", "trend_total_pkm",
+  "mean_car_pkm", "mean_cyc_pkm", "mean_ped_pkm", "mean_total_pkm"
 )
 na_s2 <- OA_matching_census |>
   filter(treated_OA == 1 | control_group1_OA == 1 | control_group2_OA == 1,

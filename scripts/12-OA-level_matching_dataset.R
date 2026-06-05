@@ -253,7 +253,13 @@ inj_pre <- OA_injuries_balanced %>%
   arrange(OA, quarter_year) %>%
   group_by(OA) %>%
   mutate(time = row_number()) %>%
-  ungroup()
+  ungroup() %>%
+  # Combined KSI + slight raw counts per mode (Other kept in total only)
+  mutate(
+    Car_Van_total    = Car_Van_KSI    + Car_Van_Slight,
+    Cyclist_total    = Cyclist_KSI    + Cyclist_Slight,
+    Pedestrian_total = Pedestrian_KSI + Pedestrian_Slight
+  )
 
 # ── Road lengths lookup ───────────────────────────────────────────────────────
 
@@ -314,15 +320,10 @@ poisson_slope <- function(y, x, offset = NULL) {
 inj_trends <- inj_pre %>%
   group_by(OA) %>%
   summarise(
-    trend_car_KSI    = poisson_slope(Car_Van_KSI,       time),
-    trend_car_slight = poisson_slope(Car_Van_Slight,    time),
-    trend_cyc_KSI    = poisson_slope(Cyclist_KSI,       time),
-    trend_cyc_slight = poisson_slope(Cyclist_Slight,    time),
-    trend_ped_KSI    = poisson_slope(Pedestrian_KSI,    time),
-    trend_ped_slight = poisson_slope(Pedestrian_Slight, time),
-    trend_other_KSI    = poisson_slope(Other_KSI,       time),
-    trend_other_slight = poisson_slope(Other_Slight,    time),
-    trend_total      = poisson_slope(total_injuries,    time),
+    trend_car   = poisson_slope(Car_Van_total,    time),
+    trend_cyc   = poisson_slope(Cyclist_total,    time),
+    trend_ped   = poisson_slope(Pedestrian_total, time),
+    trend_total = poisson_slope(total_injuries,   time),
     .groups = "drop"
   )
 
@@ -331,15 +332,10 @@ inj_trends <- inj_pre %>%
 inj_baseline <- inj_pre %>%
   group_by(OA) %>%
   summarise(
-    mean_car_KSI    = mean(Car_Van_KSI,        na.rm = TRUE),
-    mean_car_slight = mean(Car_Van_Slight,      na.rm = TRUE),
-    mean_cyc_KSI    = mean(Cyclist_KSI,         na.rm = TRUE),
-    mean_cyc_slight = mean(Cyclist_Slight,      na.rm = TRUE),
-    mean_ped_KSI    = mean(Pedestrian_KSI,      na.rm = TRUE),
-    mean_ped_slight = mean(Pedestrian_Slight,   na.rm = TRUE),
-    mean_other_KSI    = mean(Other_KSI,        na.rm = TRUE),
-    mean_other_slight = mean(Other_Slight,      na.rm = TRUE),
-    mean_total      = mean(total_injuries,      na.rm = TRUE),
+    mean_car   = mean(Car_Van_total,    na.rm = TRUE),
+    mean_cyc   = mean(Cyclist_total,    na.rm = TRUE),
+    mean_ped   = mean(Pedestrian_total, na.rm = TRUE),
+    mean_total = mean(total_injuries,   na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -348,15 +344,10 @@ inj_baseline <- inj_pre %>%
 inj_per_km <- inj_baseline %>%
   left_join(road_lengths, by = "OA") %>%
   mutate(
-    mean_other_KSI_pkm    = mean_other_KSI    / road_length_km,
-    mean_other_slight_pkm = mean_other_slight / road_length_km,
-    mean_car_KSI_pkm    = mean_car_KSI    / road_length_km,
-    mean_car_slight_pkm = mean_car_slight / road_length_km,
-    mean_cyc_KSI_pkm    = mean_cyc_KSI    / road_length_km,
-    mean_cyc_slight_pkm = mean_cyc_slight / road_length_km,
-    mean_ped_KSI_pkm    = mean_ped_KSI    / road_length_km,
-    mean_ped_slight_pkm = mean_ped_slight / road_length_km,
-    mean_total_pkm      = mean_total      / road_length_km
+    mean_car_pkm   = mean_car   / road_length_km,
+    mean_cyc_pkm   = mean_cyc   / road_length_km,
+    mean_ped_pkm   = mean_ped   / road_length_km,
+    mean_total_pkm = mean_total / road_length_km
   ) %>%
 dplyr::  select(OA, ends_with("_pkm"))
 
@@ -374,15 +365,10 @@ inj_pre_offset <- inj_pre %>%
 inj_trends_pkm <- inj_pre_offset %>%
   group_by(OA) %>%
   summarise(
-    trend_car_KSI_pkm     = poisson_slope(Car_Van_KSI,    time, log_road_km),
-    trend_car_slight_pkm  = poisson_slope(Car_Van_Slight, time, log_road_km),
-    trend_cyc_KSI_pkm     = poisson_slope(Cyclist_KSI,    time, log_road_km),
-    trend_cyc_slight_pkm  = poisson_slope(Cyclist_Slight, time, log_road_km),
-    trend_ped_KSI_pkm     = poisson_slope(Pedestrian_KSI,    time, log_road_km),
-    trend_ped_slight_pkm  = poisson_slope(Pedestrian_Slight, time, log_road_km),
-    trend_other_KSI_pkm   = poisson_slope(Other_KSI,    time, log_road_km),
-    trend_other_slight_pkm = poisson_slope(Other_Slight, time, log_road_km),
-    trend_total_pkm       = poisson_slope(total_injuries, time, log_road_km),
+    trend_car_pkm   = poisson_slope(Car_Van_total,    time, log_road_km),
+    trend_cyc_pkm   = poisson_slope(Cyclist_total,    time, log_road_km),
+    trend_ped_pkm   = poisson_slope(Pedestrian_total, time, log_road_km),
+    trend_total_pkm = poisson_slope(total_injuries,   time, log_road_km),
     .groups = "drop"
   )
 
@@ -504,10 +490,9 @@ inj_baseline %>%
   group_by(treated_OA, control_group1_OA, control_group2_OA) %>%
   summarise(
     n                = n(),
-    pct_zero_car_KSI = mean(mean_car_KSI == 0) * 100,
-    pct_zero_cyc_KSI = mean(mean_cyc_KSI == 0) * 100,
-    pct_zero_ped_KSI = mean(mean_ped_KSI == 0) * 100,
-    pct_zero_total   = mean(mean_total   == 0) * 100,
+    pct_zero_car   = mean(mean_car   == 0) * 100,
+    pct_zero_cyc   = mean(mean_cyc   == 0) * 100,
+    pct_zero_ped   = mean(mean_ped   == 0) * 100,
     .groups = "drop"
   ) %>%
   print()
@@ -674,34 +659,22 @@ var_description <- c(
   n_B                  = "Number of B-road segments within the OA.",
   n_motorway           = "Number of motorway segments within the OA.",
   n_minor              = "Number of minor/local road segments within the OA.",
-  mean_car_KSI         = "Mean quarterly car/van KSI casualties, pre-treatment period (zero-filled).",
-  mean_car_slight      = "Mean quarterly car/van slight casualties, pre-treatment period (zero-filled).",
-  mean_cyc_KSI         = "Mean quarterly cyclist KSI casualties, pre-treatment period (zero-filled).",
-  mean_cyc_slight      = "Mean quarterly cyclist slight casualties, pre-treatment period (zero-filled).",
-  mean_ped_KSI         = "Mean quarterly pedestrian KSI casualties, pre-treatment period (zero-filled).",
-  mean_ped_slight      = "Mean quarterly pedestrian slight casualties, pre-treatment period (zero-filled).",
-  mean_total           = "Mean quarterly total casualties (all modes/severities), pre-treatment (zero-filled).",
-  trend_car_KSI        = "Quasi-Poisson GLM slope (log-rate/quarter) for car/van KSI, pre-treatment.",
-  trend_car_slight     = "Quasi-Poisson GLM slope (log-rate/quarter) for car/van slight, pre-treatment.",
-  trend_cyc_KSI        = "Quasi-Poisson GLM slope (log-rate/quarter) for cyclist KSI, pre-treatment.",
-  trend_cyc_slight     = "Quasi-Poisson GLM slope (log-rate/quarter) for cyclist slight, pre-treatment.",
-  trend_ped_KSI        = "Quasi-Poisson GLM slope (log-rate/quarter) for pedestrian KSI, pre-treatment.",
-  trend_ped_slight     = "Quasi-Poisson GLM slope (log-rate/quarter) for pedestrian slight, pre-treatment.",
-  trend_total          = "Quasi-Poisson GLM slope (log-rate/quarter) for total casualties, pre-treatment.",
-  mean_car_KSI_pkm     = "Mean quarterly car/van KSI casualties per road-km, pre-treatment (zero-filled).",
-  mean_car_slight_pkm  = "Mean quarterly car/van slight casualties per road-km, pre-treatment (zero-filled).",
-  mean_cyc_KSI_pkm     = "Mean quarterly cyclist KSI casualties per road-km, pre-treatment (zero-filled).",
-  mean_cyc_slight_pkm  = "Mean quarterly cyclist slight casualties per road-km, pre-treatment (zero-filled).",
-  mean_ped_KSI_pkm     = "Mean quarterly pedestrian KSI casualties per road-km, pre-treatment (zero-filled).",
-  mean_ped_slight_pkm  = "Mean quarterly pedestrian slight casualties per road-km, pre-treatment (zero-filled).",
-  mean_total_pkm       = "Mean quarterly total casualties per road-km, pre-treatment (zero-filled).",
-  trend_car_KSI_pkm    = "Quasi-Poisson GLM slope with log(road_km) offset for car/van KSI rate.",
-  trend_car_slight_pkm = "Quasi-Poisson GLM slope with log(road_km) offset for car/van slight rate.",
-  trend_cyc_KSI_pkm    = "Quasi-Poisson GLM slope with log(road_km) offset for cyclist KSI rate.",
-  trend_cyc_slight_pkm = "Quasi-Poisson GLM slope with log(road_km) offset for cyclist slight rate.",
-  trend_ped_KSI_pkm    = "Quasi-Poisson GLM slope with log(road_km) offset for pedestrian KSI rate.",
-  trend_ped_slight_pkm = "Quasi-Poisson GLM slope with log(road_km) offset for pedestrian slight rate.",
-  trend_total_pkm      = "Quasi-Poisson GLM slope with log(road_km) offset for total casualty rate.",
+  mean_car             = "Mean quarterly car/van casualties (KSI + slight combined), pre-treatment.",
+  mean_cyc             = "Mean quarterly cyclist casualties (KSI + slight combined), pre-treatment.",
+  mean_ped             = "Mean quarterly pedestrian casualties (KSI + slight combined), pre-treatment.",
+  mean_total           = "Mean quarterly total casualties (all modes incl. other), pre-treatment.",
+  trend_car            = "Quasi-Poisson GLM slope (log-rate/quarter) for car/van (KSI + slight), pre-treatment.",
+  trend_cyc            = "Quasi-Poisson GLM slope (log-rate/quarter) for cyclist (KSI + slight), pre-treatment.",
+  trend_ped            = "Quasi-Poisson GLM slope (log-rate/quarter) for pedestrian (KSI + slight), pre-treatment.",
+  trend_total          = "Quasi-Poisson GLM slope (log-rate/quarter) for total casualties (incl. other), pre-treatment.",
+  mean_car_pkm         = "Mean quarterly car/van casualties per road-km (KSI + slight), pre-treatment.",
+  mean_cyc_pkm         = "Mean quarterly cyclist casualties per road-km (KSI + slight), pre-treatment.",
+  mean_ped_pkm         = "Mean quarterly pedestrian casualties per road-km (KSI + slight), pre-treatment.",
+  mean_total_pkm       = "Mean quarterly total casualties per road-km (incl. other), pre-treatment.",
+  trend_car_pkm        = "Quasi-Poisson GLM slope with log(road_km) offset for car/van (KSI + slight) rate.",
+  trend_cyc_pkm        = "Quasi-Poisson GLM slope with log(road_km) offset for cyclist (KSI + slight) rate.",
+  trend_ped_pkm        = "Quasi-Poisson GLM slope with log(road_km) offset for pedestrian (KSI + slight) rate.",
+  trend_total_pkm      = "Quasi-Poisson GLM slope with log(road_km) offset for total casualty rate (incl. other).",
   pct_A_road           = "Percentage of road segments in the OA that are A-roads.",
   pct_B_road           = "Percentage of road segments in the OA that are B-roads.",
   pct_minor_road       = "Percentage of road segments in the OA that are minor roads.",
@@ -715,3 +688,4 @@ tibble(
   description = unname(var_description)
 ) %>%
   print(n = Inf)
+

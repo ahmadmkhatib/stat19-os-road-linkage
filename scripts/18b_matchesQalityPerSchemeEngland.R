@@ -89,18 +89,12 @@ stage1_socdem <- c("IMD",
                    "age_45to64_pct", "age_65to84_pct")
 stage1_vars   <- c(stage1_road, stage1_urban, stage1_socdem)
 
+# Stage 2: 4 trends + 4 levels (KSI + slight combined; Other in total only)
 stage2_trends <- c(
-  "trend_car_KSI_pkm",   "trend_car_slight_pkm",
-  "trend_cyc_KSI_pkm",   "trend_cyc_slight_pkm",
-  "trend_ped_KSI_pkm",   "trend_ped_slight_pkm",
-  "trend_other_KSI_pkm", "trend_other_slight_pkm",
-  "trend_total_pkm"
+  "trend_car_pkm", "trend_cyc_pkm", "trend_ped_pkm", "trend_total_pkm"
 )
 stage2_levels_log <- c(
-  "log1p_mean_car_KSI_pkm",   "log1p_mean_car_slight_pkm",
-  "log1p_mean_cyc_KSI_pkm",   "log1p_mean_cyc_slight_pkm",
-  "log1p_mean_ped_KSI_pkm",   "log1p_mean_ped_slight_pkm",
-  "log1p_mean_other_KSI_pkm", "log1p_mean_other_slight_pkm",
+  "log1p_mean_car_pkm", "log1p_mean_cyc_pkm", "log1p_mean_ped_pkm",
   "log1p_mean_total_pkm"
 )
 all_match_vars <- c(stage1_vars, stage2_trends, stage2_levels_log)
@@ -145,23 +139,13 @@ var_labels <- c(
   age_25to44_pct                = "% aged 25–44",
   age_45to64_pct                = "% aged 45–64",
   age_65to84_pct                = "% aged 65–84",
-  trend_car_KSI_pkm             = "Trend: car KSI",
-  trend_car_slight_pkm          = "Trend: car slight",
-  trend_cyc_KSI_pkm             = "Trend: cycling KSI",
-  trend_cyc_slight_pkm          = "Trend: cycling slight",
-  trend_ped_KSI_pkm             = "Trend: ped KSI",
-  trend_ped_slight_pkm          = "Trend: ped slight",
-  trend_other_KSI_pkm           = "Trend: other KSI",
-  trend_other_slight_pkm        = "Trend: other slight",
+  trend_car_pkm                 = "Trend: car",
+  trend_cyc_pkm                 = "Trend: cycling",
+  trend_ped_pkm                 = "Trend: pedestrian",
   trend_total_pkm               = "Trend: total",
-  log1p_mean_car_KSI_pkm        = "Mean: car KSI (log)",
-  log1p_mean_car_slight_pkm     = "Mean: car slight (log)",
-  log1p_mean_cyc_KSI_pkm        = "Mean: cycling KSI (log)",
-  log1p_mean_cyc_slight_pkm     = "Mean: cycling slight (log)",
-  log1p_mean_ped_KSI_pkm        = "Mean: ped KSI (log)",
-  log1p_mean_ped_slight_pkm     = "Mean: ped slight (log)",
-  log1p_mean_other_KSI_pkm      = "Mean: other KSI (log)",
-  log1p_mean_other_slight_pkm   = "Mean: other slight (log)",
+  log1p_mean_car_pkm            = "Mean: car (log)",
+  log1p_mean_cyc_pkm            = "Mean: cycling (log)",
+  log1p_mean_ped_pkm            = "Mean: pedestrian (log)",
   log1p_mean_total_pkm          = "Mean: total (log)"
 )
 
@@ -225,14 +209,10 @@ add_log_vars <- function(df) {
     age_25to44_pct  = X25to29_pct  + X30to34_pct + X35to39_pct + X40to44_pct,
     age_45to64_pct  = X45to49_pct  + X50to54_pct + X55to59_pct + X60to64_pct,
     age_65to84_pct  = X65to69_pct  + X70to74_pct + X75to79_pct + X80to84_pct,
-    log1p_mean_car_KSI_pkm        = log1p(pmax(mean_car_KSI_pkm,        0)),
-    log1p_mean_car_slight_pkm     = log1p(pmax(mean_car_slight_pkm,     0)),
-    log1p_mean_cyc_KSI_pkm        = log1p(pmax(mean_cyc_KSI_pkm,        0)),
-    log1p_mean_cyc_slight_pkm     = log1p(pmax(mean_cyc_slight_pkm,     0)),
-    log1p_mean_ped_KSI_pkm        = log1p(pmax(mean_ped_KSI_pkm,        0)),
-    log1p_mean_ped_slight_pkm     = log1p(pmax(mean_ped_slight_pkm,     0)),
-    log1p_mean_other_KSI_pkm      = log1p(pmax(mean_other_KSI_pkm,      0)),
-    log1p_mean_other_slight_pkm   = log1p(pmax(mean_other_slight_pkm,   0)),
+    # Combined _pkm vars created upstream in script 12 (Other in total only)
+    log1p_mean_car_pkm            = log1p(pmax(mean_car_pkm,            0)),
+    log1p_mean_cyc_pkm            = log1p(pmax(mean_cyc_pkm,            0)),
+    log1p_mean_ped_pkm            = log1p(pmax(mean_ped_pkm,            0)),
     log1p_mean_total_pkm          = log1p(pmax(mean_total_pkm,          0))
   )
 }
@@ -1165,15 +1145,10 @@ cat("=== Plot 3: Per-variable SMD at caliper = 15 ===\n")
 ILLUSTRATIVE_CALIPER <- 15
 
 var_labels_trend <- c(
-  trend_car_KSI_pkm      = "Car KSI",
-  trend_car_slight_pkm   = "Car slight",
-  trend_cyc_KSI_pkm      = "Cycling KSI",
-  trend_cyc_slight_pkm   = "Cycling slight",
-  trend_ped_KSI_pkm      = "Ped KSI",
-  trend_ped_slight_pkm   = "Ped slight",
-  trend_other_KSI_pkm    = "Other KSI",
-  trend_other_slight_pkm = "Other slight",
-  trend_total_pkm        = "Total"
+  trend_car_pkm   = "Car",
+  trend_cyc_pkm   = "Cycling",
+  trend_ped_pkm   = "Pedestrian",
+  trend_total_pkm = "Total"
 )
 
 smd_comparison <- map_df(flagged, function(s) {

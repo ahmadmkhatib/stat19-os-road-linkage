@@ -1,0 +1,8 @@
+scheme,mean_abs_smd_before,mean_abs_smd_after,max_abs_smd_after,n_imbalanced,pct_balanced,max_trend_smd,n_treated,n_controls
+Bath,0.601,0.3136,1.9005,31,36.7,0.1781,49,151
+Birmingham,0.7161,0.2435,0.8969,28,42.9,0.1618,125,172
+Bradford,0.5132,0.2433,1.6896,30,38.8,0.1121,265,621
+Bristol,0.726,0.3083,2.641,34,30.6,0.1537,48,38
+Newcastle,0.8321,0.3553,1.2799,37,24.5,0.1808,27,47
+Portsmouth,0.5306,0.3216,0.9675,40,18.4,0.144,58,236
+Sheffield,0.8743,0.313,1.9316,38,22.4,0.1813,41,70

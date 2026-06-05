@@ -1,32 +1,32 @@
 variable,label,smd
-pct_minor_road,% Minor road,-0.886
-pct_B_road,% B-road,0.808
-age_under15_pct,% aged under 15,-0.636
-age_45to64_pct,% aged 45–64,-0.61
-cars_twoPlus_pct,% households: 2+ cars,-0.6
-log1p_dist_citycentre,Distance to city centre (m),-0.599
-age_65to84_pct,% aged 65–84,-0.566
-Underground_train_tram_pct,% commuting: underground/tram,0.538
-log1p_road_density_m_km2,Road density (m/km²),-0.477
-log1p_business_retail_per_km2,Retail businesses (per km²),0.397
-Mixed_pct,% Mixed ethnicity,0.382
-age_15to24_pct,% aged 15–24,0.379
-age_25to44_pct,% aged 25–44,0.379
-Drive_Car_pct,% commuting: drive car,-0.352
-cars_one_pct,% households: 1 car,-0.35
-Train_pct,% commuting: train,0.32
-Walk_pct,% commuting: walk,0.314
-bus_Coach_pct,bus_Coach_pct,-0.281
-Asian_pct,% Asian,-0.254
-Black_pct,% Black,0.235
-pct_A_road,% A-road,0.216
-Bicycle_pct,% commuting: bicycle,-0.171
-workAthome_pct,% working from home,0.163
-IMD,Index of Multiple Deprivation,-0.157
-Other_pct,% commuting: other mode,0.137
-White_pct,% White,-0.039
-log1p_road_length_km,Road length (km),-0.035
-log1p_pop_density,Population density (persons/km²),-0.012
-Passenger_Car_pct,% commuting: car passenger,0.012
-log_area_km2,Area (km²),-0.01
-Taxi_pct,% commuting: taxi,0.01
+log1p_road_length_km,Road length (km),NA
+log1p_road_density_m_km2,Road density (m/km²),NA
+log_area_km2,Area (km²),NA
+pct_A_road,% A-road,NA
+pct_B_road,% B-road,NA
+pct_minor_road,% Minor road,NA
+log1p_dist_citycentre,Distance to city centre (m),NA
+log1p_pop_density,Population density (persons/km²),NA
+log1p_business_retail_per_km2,Retail businesses (per km²),NA
+IMD,Index of Multiple Deprivation,NA
+cars_one_pct,% households: 1 car,NA
+cars_twoPlus_pct,% households: 2+ cars,NA
+Drive_Car_pct,% commuting: drive car,NA
+Passenger_Car_pct,% commuting: car passenger,NA
+Walk_pct,% commuting: walk,NA
+Bicycle_pct,% commuting: bicycle,NA
+bus_Coach_pct,bus_Coach_pct,NA
+Train_pct,% commuting: train,NA
+Underground_train_tram_pct,% commuting: underground/tram,NA
+Taxi_pct,% commuting: taxi,NA
+workAthome_pct,% working from home,NA
+Other_pct,% commuting: other mode,NA
+White_pct,% White,NA
+Mixed_pct,% Mixed ethnicity,NA
+Asian_pct,% Asian,NA
+Black_pct,% Black,NA
+age_under15_pct,% aged under 15,NA
+age_15to24_pct,% aged 15–24,NA
+age_25to44_pct,% aged 25–44,NA
+age_45to64_pct,% aged 45–64,NA
+age_65to84_pct,% aged 65–84,NA

@@ -1,0 +1,274 @@
+scheme,variable,label,smd_before,smd_after
+Bath,log1p_road_length_km,Road length (km),-0.476,-0.0224
+Bath,log1p_road_density_m_km2,Road density (m/km²),0.3281,-0.1157
+Bath,log_area_km2,Area (km²),-0.6595,0.0018
+Bath,pct_A_road,% A-road,0.9188,0.9583
+Bath,pct_B_road,% B-road,-0.2135,0.2017
+Bath,pct_minor_road,% Minor road,-0.7584,-0.9626
+Bath,log1p_dist_citycentre,Distance to city centre (m),1.4656,2.1143
+Bath,log1p_pop_density,Population density (persons/km²),0.5067,-0.1677
+Bath,log1p_business_retail_per_km2,Retail businesses (per km²),1.3373,0.4409
+Bath,IMD,Index of Multiple Deprivation,-0.5937,-0.5585
+Bath,cars_one_pct,% households: 1 car,-0.2042,-0.2746
+Bath,cars_twoPlus_pct,% households: 2+ cars,-1.4207,-0.4855
+Bath,Drive_Car_pct,% commuting: drive car,-2.1312,-1.1443
+Bath,Passenger_Car_pct,% commuting: car passenger,-1.604,-0.9632
+Bath,Walk_pct,% commuting: walk,3.0686,1.0727
+Bath,Bicycle_pct,% commuting: bicycle,-0.1606,-0.8042
+Bath,bus_Coach_pct,bus_Coach_pct,-0.5234,-0.3482
+Bath,Train_pct,% commuting: train,0.9932,0.4475
+Bath,Underground_train_tram_pct,% commuting: underground/tram,-0.1689,0.038
+Bath,Taxi_pct,% commuting: taxi,-0.5315,-0.2231
+Bath,workAthome_pct,% working from home,1.2212,0.6695
+Bath,Other_pct,% commuting: other mode,0.415,0.3466
+Bath,White_pct,% White,0.2464,-0.1488
+Bath,Mixed_pct,% Mixed ethnicity,0.6357,0.3988
+Bath,Asian_pct,% Asian,-0.2302,0.222
+Bath,Black_pct,% Black,-0.5494,-0.3446
+Bath,age_under15_pct,% aged under 15,-2.1982,-1.1003
+Bath,age_15to24_pct,% aged 15–24,1.3261,0.4361
+Bath,age_25to44_pct,% aged 25–44,0.3333,0.0507
+Bath,age_45to64_pct,% aged 45–64,-0.634,-0.1114
+Bath,age_65to84_pct,% aged 65–84,-0.3403,-0.1291
+Bath,trend_car_pkm,Trend: car/km,0.0485,0.0754
+Bath,trend_cyc_pkm,Trend: cycling/km,0.2693,0.0505
+Bath,trend_ped_pkm,Trend: pedestrian/km,-0.0877,0.0514
+Bath,trend_total_pkm,Trend: total injuries/km,-0.0187,0.0254
+Bath,log1p_mean_car_pkm,Mean: car/km (log),0.1166,-0.0266
+Bath,log1p_mean_cyc_pkm,Mean: cycling/km (log),0.4642,0.1083
+Bath,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.5507,0.0522
+Bath,log1p_mean_total_pkm,Mean: total injuries/km (log),0.5826,0.0531
+Birmingham,log1p_road_length_km,Road length (km),-0.3166,0.0348
+Birmingham,log1p_road_density_m_km2,Road density (m/km²),0.3779,0.0576
+Birmingham,log_area_km2,Area (km²),-0.7787,-0.087
+Birmingham,pct_A_road,% A-road,0.2437,-0.0084
+Birmingham,pct_B_road,% B-road,0.4508,0.2457
+Birmingham,pct_minor_road,% Minor road,-0.49,-0.155
+Birmingham,log1p_dist_citycentre,Distance to city centre (m),-0.4671,-0.1561
+Birmingham,log1p_pop_density,Population density (persons/km²),0.7216,0.0162
+Birmingham,log1p_business_retail_per_km2,Retail businesses (per km²),2.2176,0.8946
+Birmingham,IMD,Index of Multiple Deprivation,0.7567,0.2041
+Birmingham,cars_one_pct,% households: 1 car,-0.5208,0.0446
+Birmingham,cars_twoPlus_pct,% households: 2+ cars,-2.017,-0.6216
+Birmingham,Drive_Car_pct,% commuting: drive car,-1.8817,-0.3946
+Birmingham,Passenger_Car_pct,% commuting: car passenger,-1.6146,-0.9264
+Birmingham,Walk_pct,% commuting: walk,1.7327,0.5544
+Birmingham,Bicycle_pct,% commuting: bicycle,-0.6138,-0.7379
+Birmingham,bus_Coach_pct,bus_Coach_pct,0.3741,-0.0645
+Birmingham,Train_pct,% commuting: train,0.9168,0.5745
+Birmingham,Underground_train_tram_pct,% commuting: underground/tram,0.3771,0.3477
+Birmingham,Taxi_pct,% commuting: taxi,-0.0372,-7e-4
+Birmingham,workAthome_pct,% working from home,-0.301,0.1962
+Birmingham,Other_pct,% commuting: other mode,0.0706,0.0978
+Birmingham,White_pct,% White,-1.8349,-1.1001
+Birmingham,Mixed_pct,% Mixed ethnicity,1.1872,0.6274
+Birmingham,Asian_pct,% Asian,0.8168,0.5918
+Birmingham,Black_pct,% Black,1.4616,0.8127
+Birmingham,age_under15_pct,% aged under 15,-0.6337,-0.0285
+Birmingham,age_15to24_pct,% aged 15–24,0.8022,0.0486
+Birmingham,age_25to44_pct,% aged 25–44,1.3831,0.6302
+Birmingham,age_45to64_pct,% aged 45–64,-1.784,-0.6232
+Birmingham,age_65to84_pct,% aged 65–84,-1.5884,-0.701
+Birmingham,trend_car_pkm,Trend: car/km,-0.1058,0.1318
+Birmingham,trend_cyc_pkm,Trend: cycling/km,0.1317,0.0046
+Birmingham,trend_ped_pkm,Trend: pedestrian/km,-0.1112,-0.0484
+Birmingham,trend_total_pkm,Trend: total injuries/km,-0.0642,0.0308
+Birmingham,log1p_mean_car_pkm,Mean: car/km (log),1.0537,0.1564
+Birmingham,log1p_mean_cyc_pkm,Mean: cycling/km (log),0.5341,0.1255
+Birmingham,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.8618,0.019
+Birmingham,log1p_mean_total_pkm,Mean: total injuries/km (log),1.4334,0.1931
+Bradford,log1p_road_length_km,Road length (km),0.1177,0.2275
+Bradford,log1p_road_density_m_km2,Road density (m/km²),0.7521,0.2949
+Bradford,log_area_km2,Area (km²),-0.3752,0.0182
+Bradford,pct_A_road,% A-road,0.397,0.143
+Bradford,pct_B_road,% B-road,-0.1052,0.0344
+Bradford,pct_minor_road,% Minor road,-0.2892,-0.1456
+Bradford,log1p_dist_citycentre,Distance to city centre (m),1.9069,1.9274
+Bradford,log1p_pop_density,Population density (persons/km²),0.5458,0.0988
+Bradford,log1p_business_retail_per_km2,Retail businesses (per km²),1.5105,0.6447
+Bradford,IMD,Index of Multiple Deprivation,1.218,0.6798
+Bradford,cars_one_pct,% households: 1 car,-0.3711,-0.1782
+Bradford,cars_twoPlus_pct,% households: 2+ cars,-0.9213,-0.2817
+Bradford,Drive_Car_pct,% commuting: drive car,-1.3746,-0.6278
+Bradford,Passenger_Car_pct,% commuting: car passenger,0.1293,0.0387
+Bradford,Walk_pct,% commuting: walk,0.3676,0.0107
+Bradford,Bicycle_pct,% commuting: bicycle,-0.8289,-0.8946
+Bradford,bus_Coach_pct,bus_Coach_pct,0.1329,-0.0658
+Bradford,Train_pct,% commuting: train,0.2219,-0.005
+Bradford,Underground_train_tram_pct,% commuting: underground/tram,-0.2859,-0.198
+Bradford,Taxi_pct,% commuting: taxi,0.6983,0.3438
+Bradford,workAthome_pct,% working from home,-0.5105,-0.2495
+Bradford,Other_pct,% commuting: other mode,0.3055,0.2007
+Bradford,White_pct,% White,-2.1004,-1.0034
+Bradford,Mixed_pct,% Mixed ethnicity,0.0117,-0.2117
+Bradford,Asian_pct,% Asian,2.0902,1.0438
+Bradford,Black_pct,% Black,0.1306,-0.2
+Bradford,age_under15_pct,% aged under 15,0.8369,0.531
+Bradford,age_15to24_pct,% aged 15–24,0.5621,0.2634
+Bradford,age_25to44_pct,% aged 25–44,0.4528,0.154
+Bradford,age_45to64_pct,% aged 45–64,-0.9574,-0.5427
+Bradford,age_65to84_pct,% aged 65–84,-0.9966,-0.5978
+Bradford,trend_car_pkm,Trend: car/km,-0.0347,0.0398
+Bradford,trend_cyc_pkm,Trend: cycling/km,-0.1707,-0.039
+Bradford,trend_ped_pkm,Trend: pedestrian/km,-0.0301,-0.0268
+Bradford,trend_total_pkm,Trend: total injuries/km,-0.0647,-0.017
+Bradford,log1p_mean_car_pkm,Mean: car/km (log),0.6979,0.0958
+Bradford,log1p_mean_cyc_pkm,Mean: cycling/km (log),-0.0161,0.0502
+Bradford,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.6894,0.0696
+Bradford,log1p_mean_total_pkm,Mean: total injuries/km (log),0.7277,0.0988
+Bristol,log1p_road_length_km,Road length (km),-0.3779,-0.027
+Bristol,log1p_road_density_m_km2,Road density (m/km²),0.3993,0.0856
+Bristol,log_area_km2,Area (km²),-0.7613,-0.2174
+Bristol,pct_A_road,% A-road,0.7426,0.3371
+Bristol,pct_B_road,% B-road,0.2374,-0.0179
+Bristol,pct_minor_road,% Minor road,-0.8071,-0.2931
+Bristol,log1p_dist_citycentre,Distance to city centre (m),1.8015,2.8625
+Bristol,log1p_pop_density,Population density (persons/km²),0.7696,-0.0034
+Bristol,log1p_business_retail_per_km2,Retail businesses (per km²),2.2337,0.9446
+Bristol,IMD,Index of Multiple Deprivation,0.0475,-0.1067
+Bristol,cars_one_pct,% households: 1 car,-0.0671,0.118
+Bristol,cars_twoPlus_pct,% households: 2+ cars,-1.7798,-0.6999
+Bristol,Drive_Car_pct,% commuting: drive car,-1.7257,-0.2292
+Bristol,Passenger_Car_pct,% commuting: car passenger,-1.8354,-1.0843
+Bristol,Walk_pct,% commuting: walk,3.2038,1.547
+Bristol,Bicycle_pct,% commuting: bicycle,0.6951,0.5126
+Bristol,bus_Coach_pct,bus_Coach_pct,-0.3652,-0.557
+Bristol,Train_pct,% commuting: train,0.413,0.2388
+Bristol,Underground_train_tram_pct,% commuting: underground/tram,-0.3018,-0.516
+Bristol,Taxi_pct,% commuting: taxi,-0.3067,-0.1287
+Bristol,workAthome_pct,% working from home,0.3732,0.3824
+Bristol,Other_pct,% commuting: other mode,0.4538,0.2539
+Bristol,White_pct,% White,-0.4261,-0.0676
+Bristol,Mixed_pct,% Mixed ethnicity,0.8728,0.2382
+Bristol,Asian_pct,% Asian,0.0944,0.0861
+Bristol,Black_pct,% Black,0.2688,-0.0519
+Bristol,age_under15_pct,% aged under 15,-1.6472,-0.4897
+Bristol,age_15to24_pct,% aged 15–24,0.9637,-0.1629
+Bristol,age_25to44_pct,% aged 25–44,1.1174,0.7129
+Bristol,age_45to64_pct,% aged 45–64,-1.6826,-0.2887
+Bristol,age_65to84_pct,% aged 65–84,-1.0795,-0.1232
+Bristol,trend_car_pkm,Trend: car/km,-0.2192,0.0341
+Bristol,trend_cyc_pkm,Trend: cycling/km,-0.0829,0.0664
+Bristol,trend_ped_pkm,Trend: pedestrian/km,-0.108,0.028
+Bristol,trend_total_pkm,Trend: total injuries/km,-0.0231,0.1171
+Bristol,log1p_mean_car_pkm,Mean: car/km (log),0.5159,0.0074
+Bristol,log1p_mean_cyc_pkm,Mean: cycling/km (log),1.2336,0.285
+Bristol,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.9039,0.1163
+Bristol,log1p_mean_total_pkm,Mean: total injuries/km (log),1.5926,0.2678
+Newcastle,log1p_road_length_km,Road length (km),0.2924,0.1594
+Newcastle,log1p_road_density_m_km2,Road density (m/km²),0.8143,-0.0708
+Newcastle,log_area_km2,Area (km²),-0.2883,0.1358
+Newcastle,pct_A_road,% A-road,0.8508,0.4146
+Newcastle,pct_B_road,% B-road,0.7013,0.4324
+Newcastle,pct_minor_road,% Minor road,-1.3624,-0.7192
+Newcastle,log1p_dist_citycentre,Distance to city centre (m),1.0946,2.0979
+Newcastle,log1p_pop_density,Population density (persons/km²),0.365,-0.2808
+Newcastle,log1p_business_retail_per_km2,Retail businesses (per km²),2.1168,0.1014
+Newcastle,IMD,Index of Multiple Deprivation,0.4541,-0.1005
+Newcastle,cars_one_pct,% households: 1 car,-1.3265,0.01
+Newcastle,cars_twoPlus_pct,% households: 2+ cars,-2.2242,-0.8202
+Newcastle,Drive_Car_pct,% commuting: drive car,-2.5973,-0.4077
+Newcastle,Passenger_Car_pct,% commuting: car passenger,-1.7305,-1.0772
+Newcastle,Walk_pct,% commuting: walk,2.1884,0.2728
+Newcastle,Bicycle_pct,% commuting: bicycle,-0.7379,-0.7738
+Newcastle,bus_Coach_pct,bus_Coach_pct,0.1322,-0.2281
+Newcastle,Train_pct,% commuting: train,-0.1747,-0.6008
+Newcastle,Underground_train_tram_pct,% commuting: underground/tram,2.0206,1.8197
+Newcastle,Taxi_pct,% commuting: taxi,-0.2702,-0.3443
+Newcastle,workAthome_pct,% working from home,-0.3252,0.1952
+Newcastle,Other_pct,% commuting: other mode,-0.0517,-0.0319
+Newcastle,White_pct,% White,-1.2093,-0.6473
+Newcastle,Mixed_pct,% Mixed ethnicity,0.0069,-0.6256
+Newcastle,Asian_pct,% Asian,1.0229,0.8167
+Newcastle,Black_pct,% Black,0.1807,-0.5019
+Newcastle,age_under15_pct,% aged under 15,-2.1595,-0.442
+Newcastle,age_15to24_pct,% aged 15–24,2.2207,0.2831
+Newcastle,age_25to44_pct,% aged 25–44,0.5372,0.0681
+Newcastle,age_45to64_pct,% aged 45–64,-2.0851,-0.2094
+Newcastle,age_65to84_pct,% aged 65–84,-1.5697,-0.2967
+Newcastle,trend_car_pkm,Trend: car/km,0.0715,0.1471
+Newcastle,trend_cyc_pkm,Trend: cycling/km,0.261,0.0403
+Newcastle,trend_ped_pkm,Trend: pedestrian/km,-0.0542,0.0476
+Newcastle,trend_total_pkm,Trend: total injuries/km,-0.0102,-0.0266
+Newcastle,log1p_mean_car_pkm,Mean: car/km (log),0.7953,0.0402
+Newcastle,log1p_mean_cyc_pkm,Mean: cycling/km (log),0.5665,-0.2729
+Newcastle,log1p_mean_ped_pkm,Mean: pedestrian/km (log),1.1769,0.0148
+Newcastle,log1p_mean_total_pkm,Mean: total injuries/km (log),1.4625,0.0579
+Portsmouth,log1p_road_length_km,Road length (km),-0.6027,-0.4936
+Portsmouth,log1p_road_density_m_km2,Road density (m/km²),0.6105,0.283
+Portsmouth,log_area_km2,Area (km²),-0.9604,-0.6821
+Portsmouth,pct_A_road,% A-road,0.2208,-0.0103
+Portsmouth,pct_B_road,% B-road,0.0655,0.1923
+Portsmouth,pct_minor_road,% Minor road,-0.2163,-0.0549
+Portsmouth,log1p_dist_citycentre,Distance to city centre (m),-0.2504,0.053900000000000003
+Portsmouth,log1p_pop_density,Population density (persons/km²),1.0404,0.6661
+Portsmouth,log1p_business_retail_per_km2,Retail businesses (per km²),1.3088,0.7743
+Portsmouth,IMD,Index of Multiple Deprivation,1.4575,0.7052
+Portsmouth,cars_one_pct,% households: 1 car,-0.946,-0.3926
+Portsmouth,cars_twoPlus_pct,% households: 2+ cars,-1.7102,-0.8755
+Portsmouth,Drive_Car_pct,% commuting: drive car,-2.0328,-0.7563
+Portsmouth,Passenger_Car_pct,% commuting: car passenger,-0.4215,-0.1846
+Portsmouth,Walk_pct,% commuting: walk,1.4089,0.5643
+Portsmouth,Bicycle_pct,% commuting: bicycle,0.7944,0.5672
+Portsmouth,bus_Coach_pct,bus_Coach_pct,-0.5954,-0.7377
+Portsmouth,Train_pct,% commuting: train,-0.1898,0.2981
+Portsmouth,Underground_train_tram_pct,% commuting: underground/tram,-0.3237,-0.1544
+Portsmouth,Taxi_pct,% commuting: taxi,0.4109,0.4093
+Portsmouth,workAthome_pct,% working from home,-0.7637,-0.2498
+Portsmouth,Other_pct,% commuting: other mode,0.1416,0.1867
+Portsmouth,White_pct,% White,-0.4928,-0.5918
+Portsmouth,Mixed_pct,% Mixed ethnicity,0.1268,-0.1282
+Portsmouth,Asian_pct,% Asian,0.1292,0.5197
+Portsmouth,Black_pct,% Black,0.6606,0.4867
+Portsmouth,age_under15_pct,% aged under 15,0.1537,0.3124
+Portsmouth,age_15to24_pct,% aged 15–24,0.6377,-0.2342
+Portsmouth,age_25to44_pct,% aged 25–44,-0.0671,-0.0063
+Portsmouth,age_45to64_pct,% aged 45–64,-0.8122,0.1175
+Portsmouth,age_65to84_pct,% aged 65–84,-0.5414,0.1278
+Portsmouth,trend_car_pkm,Trend: car/km,-0.0436,0.0297
+Portsmouth,trend_cyc_pkm,Trend: cycling/km,-0.1534,-0.0932
+Portsmouth,trend_ped_pkm,Trend: pedestrian/km,0.1646,0.0301
+Portsmouth,trend_total_pkm,Trend: total injuries/km,-0.0747,-0.016
+Portsmouth,log1p_mean_car_pkm,Mean: car/km (log),0.398,0.1011
+Portsmouth,log1p_mean_cyc_pkm,Mean: cycling/km (log),1.0589,0.318
+Portsmouth,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.8123,0.0962
+Portsmouth,log1p_mean_total_pkm,Mean: total injuries/km (log),0.9179,0.2109
+Sheffield,log1p_road_length_km,Road length (km),0.0292,0.0421
+Sheffield,log1p_road_density_m_km2,Road density (m/km²),0.9909,0.6328
+Sheffield,log_area_km2,Area (km²),-0.6545,-0.2532
+Sheffield,pct_A_road,% A-road,0.3192,-0.2058
+Sheffield,pct_B_road,% B-road,0.3492,0.2636
+Sheffield,pct_minor_road,% Minor road,-0.4876,0.0653
+Sheffield,log1p_dist_citycentre,Distance to city centre (m),1.4799,2.3702
+Sheffield,log1p_pop_density,Population density (persons/km²),0.7798,0.1723
+Sheffield,log1p_business_retail_per_km2,Retail businesses (per km²),2.1743,0.7285
+Sheffield,IMD,Index of Multiple Deprivation,0.3483,-0.2378
+Sheffield,cars_one_pct,% households: 1 car,-1.5541,-0.3781
+Sheffield,cars_twoPlus_pct,% households: 2+ cars,-2.2806,-0.8606
+Sheffield,Drive_Car_pct,% commuting: drive car,-2.5747,-0.4853
+Sheffield,Passenger_Car_pct,% commuting: car passenger,-1.8629,-0.6576
+Sheffield,Walk_pct,% commuting: walk,1.9422,0.338
+Sheffield,Bicycle_pct,% commuting: bicycle,-0.6989,-0.4996
+Sheffield,bus_Coach_pct,bus_Coach_pct,-0.2165,-0.3676
+Sheffield,Train_pct,% commuting: train,0.1849,0.0152
+Sheffield,Underground_train_tram_pct,% commuting: underground/tram,1.6407,1.3855
+Sheffield,Taxi_pct,% commuting: taxi,-0.4057,-0.0598
+Sheffield,workAthome_pct,% working from home,-0.5141,0.0616
+Sheffield,Other_pct,% commuting: other mode,-0.2303,-0.2634
+Sheffield,White_pct,% White,-1.5046,-0.8235
+Sheffield,Mixed_pct,% Mixed ethnicity,0.5324,-0.2882
+Sheffield,Asian_pct,% Asian,0.9703,0.8641
+Sheffield,Black_pct,% Black,0.6316,0.1045
+Sheffield,age_under15_pct,% aged under 15,-1.8741,-0.1667
+Sheffield,age_15to24_pct,% aged 15–24,2.1063,0.0563
+Sheffield,age_25to44_pct,% aged 25–44,0.9909,0.582
+Sheffield,age_45to64_pct,% aged 45–64,-2.9194,-0.4962
+Sheffield,age_65to84_pct,% aged 65–84,-2.1308,-0.965
+Sheffield,trend_car_pkm,Trend: car/km,-0.1992,0.1478
+Sheffield,trend_cyc_pkm,Trend: cycling/km,0.0418,0.0338
+Sheffield,trend_ped_pkm,Trend: pedestrian/km,0.0799,0.0483
+Sheffield,trend_total_pkm,Trend: total injuries/km,-0.2239,-0.0232
+Sheffield,log1p_mean_car_pkm,Mean: car/km (log),0.7021,0.0583
+Sheffield,log1p_mean_cyc_pkm,Mean: cycling/km (log),0.5226,-0.0324
+Sheffield,log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.9353,0.0021
+Sheffield,log1p_mean_total_pkm,Mean: total injuries/km (log),1.1455,0.0393

@@ -1,50 +1,42 @@
 var_group,label,Treated_mean,Matched_mean,Treated_sd,Matched_sd,Treated_median,Matched_median
-Demographic & road characteristics,% A-road,11.702,13.2753,22.8314,22.5159,0,0
-Demographic & road characteristics,% Asian,14.7193,8.3627,10.3198,9.0904,12.0879,5.102
-Demographic & road characteristics,% B-road,1.652,2.4208,10.775,11.4713,0,0
-Demographic & road characteristics,% Black,4.2038,3.1023,7.1757,4.3859,2.1978,1.7699
-Demographic & road characteristics,% Minor road,85.5196,82.2579,25.8723,27.8514,100,100
-Demographic & road characteristics,% Mixed ethnicity,3.6459,2.1359,2.4295,2.0945,3.3058,1.7699
-Demographic & road characteristics,% White,73.4493,83.7668,12.4598,11.9815,74.7253,85.443
-Demographic & road characteristics,% aged 15–24,43.2385,19.1065,21.4563,12.4391,40.3509,14.6667
-Demographic & road characteristics,% aged 25–44,34.4104,33.4817,13.0821,12.1456,35.1648,31.6667
-Demographic & road characteristics,% aged 45–64,12.7349,22.6764,9.1359,7.9754,10.8434,22.6994
-Demographic & road characteristics,% aged 65–84,5.2133,12.2342,6.298,8.6155,3.4826,10.5882
-Demographic & road characteristics,% aged under 15,4.4488,10.1468,4.6619,6.4167,3.125,9.9291
-Demographic & road characteristics,% commuting: bicycle,2.7265,2.8321,3.2979,3.0907,1.7857,2.1277
-Demographic & road characteristics,% commuting: car passenger,2.1834,3.9911,2.3204,3.1676,1.7857,3.6364
-Demographic & road characteristics,% commuting: drive car,18.2392,35.2332,7.9019,12.9424,17.757,34.2105
-Demographic & road characteristics,% commuting: other mode,1.5789,0.8945,1.9914,1.3675,0.9615,0
-Demographic & road characteristics,% commuting: taxi,0.4367,0.4742,0.9916,0.9827,0,0
-Demographic & road characteristics,% commuting: train,5.1467,3.325,4.3045,4.7926,4.6512,1.7857
-Demographic & road characteristics,% commuting: underground/tram,0.7177,0.5729,1.4789,2.0092,0,0
-Demographic & road characteristics,% commuting: walk,40.3854,21.4305,9.167,7.8034,41.0256,20.9877
-Demographic & road characteristics,% households: 1 car,27.8008,39.161,11.452,9.7333,25.3731,38.5714
-Demographic & road characteristics,% households: 2+ cars,5.2424,13.1777,4.6443,9.574,4.6512,10.6383
-Demographic & road characteristics,% working from home,11.3639,10.0597,6.0263,5.2527,11.1111,9.1954
-Demographic & road characteristics,Area (km²),-4.1878,-3.935,1.1077,1.1758,-4.3191,-4.1221
-Demographic & road characteristics,Distance to city centre (m),8.569,8.6224,0.8456,0.7183,8.9485,8.796
-Demographic & road characteristics,Index of Multiple Deprivation,20.7856,24.0312,11.4119,18.6771,19.5,19.4
-Demographic & road characteristics,Population density (persons/km²),9.0536,8.6582,1.017,1.139,9.1917,8.8413
-Demographic & road characteristics,Retail businesses (per km²),3.9662,2.7543,0.6114,0.8532,4.2354,2.8876
-Demographic & road characteristics,Road density (m/km²),9.9114,9.7346,0.463,0.5288,9.9764,9.8498
-Demographic & road characteristics,Road length (km),0.3891,0.3767,0.4159,0.3974,0.2299,0.2508
-Demographic & road characteristics,bus_Coach_pct,17.0797,20.427,8.3942,11.1106,15.8537,19.5652
-Injury levels,Mean: car KSI/km,0.0213,0.0047,0.0888,0.0183,0,0
-Injury levels,Mean: car slight/km,0.1289,0.0761,0.2777,0.1167,0,0.0253
-Injury levels,Mean: cycling KSI/km,0.0201,0.0076,0.055,0.0218,0,0
-Injury levels,Mean: cycling slight/km,0.0742,0.0314,0.1406,0.0534,0,0
-Injury levels,Mean: other KSI/km,0.0212,0.0074,0.0756,0.022,0,0
-Injury levels,Mean: other slight/km,0.0449,0.018,0.1042,0.0394,0,0
-Injury levels,Mean: pedestrian KSI/km,0.0654,0.0258,0.1233,0.0481,0,0
-Injury levels,Mean: pedestrian slight/km,0.1321,0.0548,0.1971,0.0798,0.0726,0
-Injury levels,Mean: total injuries/km,0.5081,0.2645,0.536,0.2307,0.3362,0.1868
-Injury trends,Trend: car KSI/km,0.002,2e-4,0.0939,0.0486,0,0
-Injury trends,Trend: car slight/km,-0.0253,-0.0277,0.0981,0.0726,0,0
-Injury trends,Trend: cycling KSI/km,-7e-4,-0.0026,0.0852,0.0526,0,0
-Injury trends,Trend: cycling slight/km,-0.0202,-0.0191,0.0892,0.066,0,0
-Injury trends,Trend: other KSI/km,-0.0097,-0.0091,0.10780000000000001,0.1009,0,0
-Injury trends,Trend: other slight/km,-0.0333,-0.022,0.1166,0.088,0,0
-Injury trends,Trend: pedestrian KSI/km,-0.0083,-0.0078,0.123,0.0953,0,0
-Injury trends,Trend: pedestrian slight/km,-0.0331,-0.0197,0.1424,0.1247,0,0
-Injury trends,Trend: total injuries/km,-0.0361,-0.0414,0.1206,0.0845,-0.0373,-0.0371
+Demographic & road characteristics,% A-road,11.702,NA,22.8314,NA,0,NA
+Demographic & road characteristics,% Asian,14.7193,NA,10.3198,NA,12.0879,NA
+Demographic & road characteristics,% B-road,1.652,NA,10.775,NA,0,NA
+Demographic & road characteristics,% Black,4.2038,NA,7.1757,NA,2.1978,NA
+Demographic & road characteristics,% Minor road,85.5196,NA,25.8723,NA,100,NA
+Demographic & road characteristics,% Mixed ethnicity,3.6459,NA,2.4295,NA,3.3058,NA
+Demographic & road characteristics,% White,73.4493,NA,12.4598,NA,74.7253,NA
+Demographic & road characteristics,% aged 15–24,43.2385,NA,21.4563,NA,40.3509,NA
+Demographic & road characteristics,% aged 25–44,34.4104,NA,13.0821,NA,35.1648,NA
+Demographic & road characteristics,% aged 45–64,12.7349,NA,9.1359,NA,10.8434,NA
+Demographic & road characteristics,% aged 65–84,5.2133,NA,6.298,NA,3.4826,NA
+Demographic & road characteristics,% aged under 15,4.4488,NA,4.6619,NA,3.125,NA
+Demographic & road characteristics,% commuting: bicycle,2.7265,NA,3.2979,NA,1.7857,NA
+Demographic & road characteristics,% commuting: car passenger,2.1834,NA,2.3204,NA,1.7857,NA
+Demographic & road characteristics,% commuting: drive car,18.2392,NA,7.9019,NA,17.757,NA
+Demographic & road characteristics,% commuting: other mode,1.5789,NA,1.9914,NA,0.9615,NA
+Demographic & road characteristics,% commuting: taxi,0.4367,NA,0.9916,NA,0,NA
+Demographic & road characteristics,% commuting: train,5.1467,NA,4.3045,NA,4.6512,NA
+Demographic & road characteristics,% commuting: underground/tram,0.7177,NA,1.4789,NA,0,NA
+Demographic & road characteristics,% commuting: walk,40.3854,NA,9.167,NA,41.0256,NA
+Demographic & road characteristics,% households: 1 car,27.8008,NA,11.452,NA,25.3731,NA
+Demographic & road characteristics,% households: 2+ cars,5.2424,NA,4.6443,NA,4.6512,NA
+Demographic & road characteristics,% working from home,11.3639,NA,6.0263,NA,11.1111,NA
+Demographic & road characteristics,Area (km²),-4.1878,NA,1.1077,NA,-4.3191,NA
+Demographic & road characteristics,Distance to city centre (m),8.569,NA,0.8456,NA,8.9485,NA
+Demographic & road characteristics,Index of Multiple Deprivation,20.7856,NA,11.4119,NA,19.5,NA
+Demographic & road characteristics,Population density (persons/km²),9.0536,NA,1.017,NA,9.1917,NA
+Demographic & road characteristics,Retail businesses (per km²),3.9662,NA,0.6114,NA,4.2354,NA
+Demographic & road characteristics,Road density (m/km²),9.9114,NA,0.463,NA,9.9764,NA
+Demographic & road characteristics,Road length (km),0.3891,NA,0.4159,NA,0.2299,NA
+Demographic & road characteristics,bus_Coach_pct,17.0797,NA,8.3942,NA,15.8537,NA
+Injury levels,Mean: car/km,0.1503,NA,0.3026,NA,0.0376,NA
+Injury levels,Mean: cycling/km,0.0943,NA,0.1681,NA,0.0125,NA
+Injury levels,Mean: other/km,0.0661,NA,0.1578,NA,0,NA
+Injury levels,Mean: pedestrian/km,0.1974,NA,0.2577,NA,0.1054,NA
+Injury levels,Mean: total injuries/km,0.5081,NA,0.536,NA,0.3362,NA
+Injury trends,Trend: car/km,-0.0234,NA,0.1377,NA,0,NA
+Injury trends,Trend: cycling/km,-0.0209,NA,0.1218,NA,0,NA
+Injury trends,Trend: other/km,-0.0429,NA,0.1714,NA,0,NA
+Injury trends,Trend: pedestrian/km,-0.0414,NA,0.1831,NA,-0.0157,NA
+Injury trends,Trend: total injuries/km,-0.0361,NA,0.1206,NA,-0.0373,NA

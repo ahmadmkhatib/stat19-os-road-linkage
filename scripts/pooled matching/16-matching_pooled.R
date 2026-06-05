@@ -47,7 +47,7 @@ OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds
 # VARIABLE DEFINITIONS
 # =============================================================================
 
-# Stage 1: same as original — road, urban, business, sociodemographic
+# Stage 1:— road, urban, business, sociodemographic
 stage1_road     <- c("road_density_m_km2", "road_length_km",
                      "pct_A_road", "pct_B_road", "pct_minor_road")
 stage1_urban    <- c("dist_citycentre", "pop_density", "area_km2")
