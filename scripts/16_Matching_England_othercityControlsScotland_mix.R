@@ -3,8 +3,8 @@
 # =============================================================================
 #
 # Matches treated OAs to other-city controls SEPARATELY for each CAZ scheme.
-# This ensures within-scheme covariate balance rather than global balance
-# across all schemes simultaneously.
+# better for  within-scheme covariate balance rather than a global one
+#.
 #
 # CONTROL GROUP STRATEGY:
 #   Other-city controls only (control_group2):
@@ -256,7 +256,7 @@ prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   s1v        <- check_vars(data_clean, s1_vars, paste("S1 ratio prep", label))
   formula_s1 <- reformulate(s1v, response = "treat_indicator")
   m_s1 <- matchit(formula_s1, data = data_clean, method = "nearest",
-                  distance = "mahalanobis", ratio = 10, replace = TRUE)
+                  distance = "mahalanobis", ratio = 30, replace = TRUE)
   mm_s1       <- m_s1$match.matrix
   treated_s1  <- data_clean[as.integer(rownames(mm_s1)), , drop = FALSE] %>%
     mutate(treat_indicator = 1L)
@@ -280,17 +280,23 @@ prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   list(data = s2_raw, s2_vars = s2v)
 }
 
-select_ratio <- function(data, s2_vars, trend_vars, label,
+select_ratio <- function(data, s2_vars, trend_vars, total_trend_var, label,
                          ratios_to_test = 1:10) {
+  # trend_vars     : all trend variables (used as diagnostics)
+  # total_trend_var: the single variable that drives ratio selection
+  #                  (e.g. "trend_total_pkm") — parallel trends assumption
+  #                  is on total injuries, not individual modes
+  
   n_t <- sum(data$treat_indicator == 1)
   n_c <- sum(data$treat_indicator == 0)
   ratios_to_test <- ratios_to_test[ratios_to_test <= floor(n_c / n_t)]
-
+  
   cat("\n--- Ratio selection:", label, "---\n")
   cat("  Treated:", n_t, "| Controls:", n_c, "\n")
-
+  cat("  Selection criterion: total_trend_smd (|SMD| on", total_trend_var, ")\n")
+  
   formula_s2 <- reformulate(s2_vars, response = "treat_indicator")
-
+  
   ratio_results <- map_df(ratios_to_test, function(r) {
     m <- tryCatch(
       matchit(formula_s2, data = data, method = "nearest",
@@ -298,35 +304,43 @@ select_ratio <- function(data, s2_vars, trend_vars, label,
       error = function(e) NULL
     )
     if (is.null(m)) return(tibble(ratio = r, mean_smd = NA,
-                                  max_trend_smd = NA, max_level_smd = NA))
-    bt          <- bal.tab(m, un = FALSE, stats = "mean.diffs")$Balance
-    trend_rows  <- rownames(bt)[rownames(bt) %in% trend_vars]
-    level_rows  <- rownames(bt)[!rownames(bt) %in% trend_vars]
+                                  total_trend_smd  = NA,
+                                  max_trend_smd    = NA,
+                                  max_level_smd    = NA))
+    
+    bt         <- bal.tab(m, un = FALSE, stats = "mean.diffs")$Balance
+    trend_rows <- rownames(bt)[rownames(bt) %in% trend_vars]
+    level_rows <- rownames(bt)[!rownames(bt) %in% trend_vars]
+    
+    # Primary selection target: total trend only
+    total_smd <- if (total_trend_var %in% rownames(bt))
+      abs(bt[total_trend_var, "Diff.Adj"]) else NA_real_
+    
     tibble(
-      ratio         = r,
-      mean_smd      = round(mean(abs(bt$Diff.Adj), na.rm = TRUE), 4),
-      max_trend_smd = round(max(abs(bt[trend_rows, "Diff.Adj"]),
-                                na.rm = TRUE), 4),
-      max_level_smd = round(max(abs(bt[level_rows, "Diff.Adj"]),
-                                na.rm = TRUE), 4)
+      ratio           = r,
+      mean_smd        = round(mean(abs(bt$Diff.Adj),               na.rm = TRUE), 4),
+      total_trend_smd = round(total_smd,                                          4),
+      max_trend_smd   = round(max(abs(bt[trend_rows, "Diff.Adj"]), na.rm = TRUE), 4),
+      max_level_smd   = round(max(abs(bt[level_rows, "Diff.Adj"]), na.rm = TRUE), 4)
     )
   })
-
+  
   print(ratio_results)
-
+  
+  # Select on total_trend_smd first; break ties with mean_smd
   best <- ratio_results %>%
-    filter(!is.na(max_trend_smd)) %>%
-    arrange(max_trend_smd, mean_smd) %>%
+    filter(!is.na(total_trend_smd)) %>%
+    arrange(total_trend_smd, mean_smd) %>%
     slice(1)
-
-  cat(sprintf("  Selected: 1:%d (max trend |SMD| = %.4f)\n",
-              best$ratio, best$max_trend_smd))
-
+  
+  cat(sprintf("  Selected: 1:%d (total trend |SMD| = %.4f, max trend |SMD| = %.4f)\n",
+              best$ratio, best$total_trend_smd, best$max_trend_smd))
+  
   list(optimal_ratio = best$ratio, ratio_results = ratio_results, label = label)
 }
 
 # =============================================================================
-# MATCHING FUNCTION (unchanged from original)
+# MATCHING FUNCTION 
 # =============================================================================
 
 run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
@@ -485,41 +499,58 @@ for (s in english_schemes) {
   cat("\n", paste(rep("#", 60), collapse = ""), "\n")
   cat("### SCHEME:", s, "###\n")
   cat(paste(rep("#", 60), collapse = ""), "\n")
-
+  
   # Build scheme-specific dataset: this scheme's treated + full control pool
   scheme_treated <- data_england %>%
     filter(treat_indicator == 1, scheme == s)
-
+  
   scheme_data <- bind_rows(scheme_treated, control_pool)
-
+  
   cat("Treated OAs:", nrow(scheme_treated),
       "| Control pool:", nrow(control_pool), "\n")
-
+  
   # Winsorise + log-transform for this scheme's data
   scheme_clean <- winsorise_and_log_s1(scheme_data, stage1_vars,
                                        log_transform_s1, log_nozero_s1)
   scheme_clean <- winsorise_and_log_s2(scheme_clean, stage2_levels,
                                        log_transform_s2_levels)
-
+  
   s1_vars_scheme <- check_vars(scheme_clean, stage1_vars_log,
                                paste("S1", s))
   s2_vars_scheme <- check_vars(scheme_clean, stage2_vars_log,
                                paste("S2", s))
-
+  
+  # Identify trend variables and the total trend selection target
+  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends)
+  
+  total_trend_var_scheme <- intersect(
+    trend_vars_scheme,
+    c("trend_total_pkm", "trend_total_ksi",
+      "trend_total_slight", "trend_total")
+  )
+  if (length(total_trend_var_scheme) == 0) {
+    stop("No total trend variable found for scheme: ", s,
+         "\nAvailable trend vars: ", paste(trend_vars_scheme, collapse = ", "))
+  }
+  total_trend_var_scheme <- total_trend_var_scheme[1]
+  cat("  Total trend variable:", total_trend_var_scheme, "\n")
+  
   # Ratio selection for this scheme
   s2_prep <- prepare_s2_for_ratio(scheme_clean, s1_vars_scheme,
                                   s2_vars_scheme, s)
-  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends)
-
+  
   ratio_result <- select_ratio(
     s2_prep$data, s2_prep$s2_vars,
-    trend_vars_scheme, s, 1:10
+    trend_vars      = trend_vars_scheme,
+    total_trend_var = total_trend_var_scheme,
+    label           = s,
+    ratios_to_test  = 1:10
   )
   optimal_ratio <- ratio_result$optimal_ratio
-
+  
   all_ratio_tables[[s]] <- ratio_result$ratio_results %>%
     mutate(scheme = s)
-
+  
   # Run matching
   result <- run_matching(
     data_clean = scheme_clean,
@@ -529,9 +560,8 @@ for (s in english_schemes) {
     label      = s,
     trend_vars = trend_vars_scheme
   )
-
+  
   if (!is.null(result)) {
-    # Tag scheme on matched data
     result$matched_data <- result$matched_data %>%
       mutate(scheme = s)
     result$pairs <- result$pairs %>%
@@ -543,7 +573,6 @@ for (s in english_schemes) {
     cat("WARNING: Matching FAILED for scheme:", s, "\n")
   }
 }
-
 # =============================================================================
 # COMBINE ACROSS SCHEMES
 # =============================================================================

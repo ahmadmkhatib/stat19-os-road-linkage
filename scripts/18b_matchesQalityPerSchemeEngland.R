@@ -71,7 +71,7 @@ SCHEME_COLS <- c(
 )
 
 # =============================================================================
-# VARIABLE DEFINITIONS  (copy from your diagnostics script)
+# VARIABLE DEFINITIONS  
 # =============================================================================
 
 stage1_road   <- c("log1p_road_length_km", "log1p_road_density_m_km2",

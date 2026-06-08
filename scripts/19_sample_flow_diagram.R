@@ -29,13 +29,13 @@ counts <- list(
   elig_treated = 613,
   elig_ctrl = 46218,
 
-  # Stage 1: Structural restriction
-  s1_total = 3800, s1_treated = 613, s1_ctrl = 3187,
-  s1_ctrl_excl = 43031, s1_ctrl_excl_pct = 93.1,
+  # Stage 1: Structural restriction (per-scheme, ratio 1:50)
+  s1_total = 2887, s1_treated = 613, s1_ctrl = 2274,
+  s1_ctrl_excl = 43944, s1_ctrl_excl_pct = 95.1,
 
   # Stage 2 / Final analytical sample
-  s2_ctrl_excl = 2313, s2_ctrl_excl_pct = 60.9,
-  final_total = 1487, final_treated = 613, final_ctrl = 874
+  s2_ctrl_excl = 1440, s2_ctrl_excl_pct = 63.3,
+  final_total = 1447, final_treated = 613, final_ctrl = 834
 )
 fN <- function(x) format(x, big.mark = ",", scientific = FALSE)
 

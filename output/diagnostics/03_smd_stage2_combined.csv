@@ -1,9 +1,9 @@
 variable,label,smd_preS2,smd_postS2,var_type,balanced,note
-trend_car_pkm,Trend: car/km,-0.0794,0.0034,Trend,TRUE,raw scale
-trend_cyc_pkm,Trend: cycling/km,-0.0582,-0.0011,Trend,TRUE,raw scale
-trend_ped_pkm,Trend: pedestrian/km,-0.0783,-0.0454,Trend,TRUE,raw scale
-trend_total_pkm,Trend: total injuries/km,-0.1042,0.0048,Trend,TRUE,raw scale
-log1p_mean_car_pkm,Mean: car/km (log),0.6185,0.2024,Level (log),FALSE,log1p scale — matches optimisation scale
-log1p_mean_cyc_pkm,Mean: cycling/km (log),0.5379,-0.0635,Level (log),TRUE,log1p scale — matches optimisation scale
-log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.8011,0.133,Level (log),FALSE,log1p scale — matches optimisation scale
-log1p_mean_total_pkm,Mean: total injuries/km (log),1.0431,0.1886,Level (log),FALSE,log1p scale — matches optimisation scale
+trend_car_pkm,Trend: car/km,-0.0794,-0.019,Trend,TRUE,raw scale
+trend_cyc_pkm,Trend: cycling/km,-0.0582,0.0138,Trend,TRUE,raw scale
+trend_ped_pkm,Trend: pedestrian/km,-0.0783,-0.0294,Trend,TRUE,raw scale
+trend_total_pkm,Trend: total injuries/km,-0.1042,-0.0136,Trend,TRUE,raw scale
+log1p_mean_car_pkm,Mean: car/km (log),0.6185,0.2592,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_cyc_pkm,Mean: cycling/km (log),0.5379,0.2356,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_ped_pkm,Mean: pedestrian/km (log),0.8011,0.2973,Level (log),FALSE,log1p scale — matches optimisation scale
+log1p_mean_total_pkm,Mean: total injuries/km (log),1.0431,0.3984,Level (log),FALSE,log1p scale — matches optimisation scale

@@ -28,7 +28,7 @@ road_panel_matched <- arrow::read_parquet(
 )
 
 cat("Rows:", nrow(road_panel_matched),
-    "| Roads:", n_distinct(road_panel_matched$identifier),
+    "| Panel units:", n_distinct(road_panel_matched$panel_id),
     "| OAs:", n_distinct(road_panel_matched$OA),
     "| Quarters:", n_distinct(road_panel_matched$quarter_year), "\n")
 
@@ -192,10 +192,10 @@ panel_reg <- panel %>%
     qtr_num  = as.numeric(quarter_year)
   )
 
-m_total  <- feols(total_pkm  ~ treated:post_int | identifier + qtr_num, data = panel_reg, cluster = ~OA)
-m_KSI    <- feols(KSI_pkm    ~ treated:post_int | identifier + qtr_num, data = panel_reg, cluster = ~OA)
-m_slight <- feols(slight_pkm ~ treated:post_int | identifier + qtr_num, data = panel_reg, cluster = ~OA)
-m_ped    <- feols(ped_pkm    ~ treated:post_int | identifier + qtr_num, data = panel_reg, cluster = ~OA)
+m_total  <- feols(total_pkm  ~ treated:post_int | panel_id + qtr_num, data = panel_reg, cluster = ~OA)
+m_KSI    <- feols(KSI_pkm    ~ treated:post_int | panel_id + qtr_num, data = panel_reg, cluster = ~OA)
+m_slight <- feols(slight_pkm ~ treated:post_int | panel_id + qtr_num, data = panel_reg, cluster = ~OA)
+m_ped    <- feols(ped_pkm    ~ treated:post_int | panel_id + qtr_num, data = panel_reg, cluster = ~OA)
 
 etable(
   m_total, m_KSI, m_slight, m_ped,
@@ -217,7 +217,7 @@ min_qtr <- min(as.numeric(panel$quarter_year), na.rm = TRUE)
 
 panel_did <- panel %>%
   mutate(
-    road_id = as.integer(factor(identifier)),
+    road_id = as.integer(factor(panel_id)),
     # Integer time index (1 = earliest quarter in data)
     qtr_int = as.integer(round((as.numeric(quarter_year) - min_qtr) * 4)) + 1L,
     # g = first treated period (numeric); 0 = never treated
@@ -231,8 +231,8 @@ panel_did <- panel %>%
   filter(!is.na(total_pkm))
 
 cat("\nStaggered DiD setup:\n")
-cat("Time periods :", n_distinct(panel_did$qtr_int), "\n")
-cat("Roads        :", n_distinct(panel_did$road_id),  "\n")
+cat("Time periods  :", n_distinct(panel_did$qtr_int), "\n")
+cat("Panel units   :", n_distinct(panel_did$road_id),  "\n")
 
 # Treatment cohort breakdown
 panel_did %>%
@@ -333,7 +333,7 @@ panel_did8 <- panel %>%
     Slight_car_pkm = Slight_adj_Car.Van    / road_length_km,
     Slight_cyc_pkm = Slight_adj_Cyclist    / road_length_km,
     Slight_oth_pkm = Slight_adj_Other      / road_length_km,
-    road_id = as.integer(factor(identifier)),
+    road_id = as.integer(factor(panel_id)),
     qtr_int = as.integer(round((as.numeric(quarter_year) - min_qtr) * 4)) + 1L,
     g = case_when(
       treat_group == 1 & !is.na(caz_start_q) ~
