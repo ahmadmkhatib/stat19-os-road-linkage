@@ -480,7 +480,7 @@ if ("mdist" %in% names(matched_full)) {
                         labels = c("Control", "Treated")) +
     labs(
       title = "Mahalanobis distance ECDF (Stage 2)",
-      subtitle = "Pooled matching — 2 Stage 2 variables",
+      subtitle = "2 Stage 2 variables",
       x = "Mahalanobis distance", y = "Cumulative proportion",
       colour = NULL
     ) +
@@ -518,7 +518,7 @@ if (length(trend_vars) > 0) {
     scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment trend distributions: treated vs matched controls",
-      subtitle = "Pooled matching — total injuries per road-km",
+      subtitle = "total injuries per road-km",
       x = "Pre-treatment slope", y = "Density",
       fill = NULL, colour = NULL
     ) +
@@ -526,6 +526,159 @@ if (length(trend_vars) > 0) {
     theme(legend.position = "bottom")
 
   save_fig(p_trends, "fig14_parallel_trends.png", width = 10, height = 7)
+
+  # Per-scheme version
+  trend_scheme_data <- matched_full %>%
+    select(OA, treat_indicator, scheme, all_of(trend_vars)) %>%
+    pivot_longer(all_of(trend_vars), names_to = "variable", values_to = "value") %>%
+    mutate(
+      group = if_else(treat_indicator == 1, "Treated", "Control"),
+      label = coalesce(var_labels[variable], variable)
+    )
+
+  p_trends_scheme <- ggplot(trend_scheme_data,
+                            aes(x = value, fill = group, colour = group)) +
+    geom_density(alpha = 0.3, linewidth = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "#888888") +
+    facet_wrap(~scheme, scales = "free_y") +
+    scale_fill_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
+    scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
+    labs(
+      title    = "Pre-treatment trend distributions by scheme: treated vs matched controls",
+      subtitle = "Total injuries per road-km",
+      x = "Pre-treatment slope", y = "Density",
+      fill = NULL, colour = NULL
+    ) +
+    theme_diag() +
+    theme(legend.position = "bottom")
+
+  save_fig(p_trends_scheme, "fig14b_parallel_trends_per_scheme.png",
+           width = 16, height = 12)
+
+  # Per-scheme pre-treatment time series
+  library(zoo)
+
+  oa_q <- readRDS(here("data", "processed", "OA_injuries_quarterly.rds")) %>%
+    mutate(quarter_year = as.yearqtr(quarter_year))
+
+  scheme_starts <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%
+    distinct(scheme, caz_start_q) %>%
+    filter(!is.na(scheme))
+
+  oa_panel <- oa_q %>%
+    inner_join(
+      matched_full %>%
+        select(OA, treat_indicator, weights, scheme, road_length_km),
+      by = "OA"
+    ) %>%
+    left_join(scheme_starts, by = "scheme") %>%
+    mutate(injuries_per_km = total_injuries / pmax(road_length_km, 0.001))
+
+  oa_pre_quarterly <- oa_panel %>%
+    filter(quarter_year < caz_start_q) %>%
+    group_by(scheme, quarter_year, treat_indicator) %>%
+    summarise(
+      wtd_mean_inj = weighted.mean(injuries_per_km, w = weights, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      group  = if_else(treat_indicator == 1, "Treated", "Matched control"),
+      q_date = as.Date(quarter_year)
+    )
+
+  vline_data <- scheme_starts %>%
+    filter(scheme %in% unique(oa_pre_quarterly$scheme)) %>%
+    mutate(start_date = as.Date(caz_start_q))
+
+  p_ts_scheme <- ggplot(
+    oa_pre_quarterly %>%
+      mutate(group = factor(group, levels = c("Treated", "Matched control"))),
+    aes(x = q_date, y = wtd_mean_inj, colour = group, linetype = group)
+  ) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    geom_vline(
+      data = vline_data,
+      aes(xintercept = start_date),
+      linetype = "dotted", colour = "#888888", linewidth = 0.5
+    ) +
+    scale_colour_manual(
+      values = c("Treated" = COL_TREATED, "Matched control" = COL_CONTROL)
+    ) +
+    scale_linetype_manual(
+      values = c("Treated" = "solid", "Matched control" = "longdash")
+    ) +
+    facet_wrap(~scheme, ncol = 3, scales = "free_y") +
+    labs(
+      title    = "Pre-treatment injury trends by scheme — pooled matching",
+      subtitle = "Quarterly weighted mean injuries per km | dotted line = scheme start",
+      x = NULL, y = "Weighted mean injuries per km",
+      colour = NULL, linetype = NULL
+    ) +
+    theme_diag() +
+    theme(
+      legend.position = "bottom",
+      axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
+      strip.text      = element_text(size = 10, face = "bold"),
+      panel.spacing   = unit(0.6, "lines")
+    )
+
+  save_fig(p_ts_scheme, "fig14c_parallel_trends_timeseries_per_scheme.png",
+           width = 16, height = 14)
+
+  # All schemes combined: treated vs control LOESS trajectories
+  p_loess_all <- ggplot(
+    oa_pre_quarterly %>%
+      mutate(group = factor(group, levels = c("Treated", "Matched control"))),
+    aes(x = q_date, y = wtd_mean_inj, colour = group, fill = group)
+  ) +
+    geom_point(size = 1, alpha = 0.2) +
+    geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.2) +
+    scale_colour_manual(values = c("Treated" = COL_TREATED,
+                                    "Matched control" = COL_CONTROL)) +
+    scale_fill_manual(values = c("Treated" = COL_TREATED,
+                                  "Matched control" = COL_CONTROL)) +
+    labs(
+      title    = "Pre-treatment injury trajectories: treated vs matched controls (all schemes)",
+      subtitle = "LOESS smoother \u00b1 SE | parallel smoothers = parallel trends supported",
+      x = NULL, y = "Weighted mean injuries per km",
+      colour = NULL, fill = NULL
+    ) +
+    theme_diag() +
+    theme(legend.position = "bottom")
+
+  save_fig(p_loess_all, "fig14f_parallel_trends_loess_all_schemes.png",
+           width = 12, height = 8)
+
+  # Per-scheme LOESS: treated vs control trajectories
+  p_loess_scheme <- ggplot(
+    oa_pre_quarterly %>%
+      mutate(group = factor(group, levels = c("Treated", "Matched control"))),
+    aes(x = q_date, y = wtd_mean_inj, colour = group, fill = group)
+  ) +
+    geom_point(size = 1, alpha = 0.3) +
+    geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.1) +
+    facet_wrap(~scheme, ncol = 3, scales = "free_y") +
+    scale_colour_manual(values = c("Treated" = COL_TREATED,
+                                    "Matched control" = COL_CONTROL)) +
+    scale_fill_manual(values = c("Treated" = COL_TREATED,
+                                  "Matched control" = COL_CONTROL)) +
+    labs(
+      title    = "Pre-treatment injury trajectories: treated vs matched controls",
+      subtitle = "LOESS smoother \u00b1 SE | parallel smoothers = parallel trends supported",
+      x = NULL, y = "Weighted mean injuries per km",
+      colour = NULL, fill = NULL
+    ) +
+    theme_diag() +
+    theme(
+      legend.position = "bottom",
+      axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
+      strip.text      = element_text(size = 10, face = "bold"),
+      panel.spacing   = unit(0.6, "lines")
+    )
+
+  save_fig(p_loess_scheme, "fig14d_parallel_trends_loess_per_scheme.png",
+           width = 16, height = 14)
 }
 cat("\n")
 
@@ -546,16 +699,9 @@ schemes <- matched_full %>%
 
 cat("Schemes:", paste(schemes, collapse = ", "), "\n\n")
 
-# Build control → scheme lookup from matching pairs.
-# Controls in matched_full have scheme == "Control" (not their matched
-# treated OA's scheme), so we need the pairs to identify which controls
-# belong to which scheme.
-treated_scheme_lookup <- matched_full %>%
-  filter(treat_indicator == 1) %>%
-  select(OA, scheme)
-
+# Control → scheme lookup from matching pairs (scheme column added by
+# the per-scheme matching loop in script 16).
 ctrl_scheme_lookup <- matching_pairs %>%
-  left_join(treated_scheme_lookup, by = c("treated_OA" = "OA")) %>%
   select(OA = control_OA, scheme) %>%
   distinct()
 
@@ -637,7 +783,7 @@ p_love_scheme <- ggplot(
   scale_shape_manual(values = c("Before" = 16, "After" = 17)) +
   facet_wrap(~scheme, ncol = 4) +
   labs(
-    title    = "Balance by scheme: key covariates (pooled matching)",
+    title    = "Balance by scheme: key covariates",
     subtitle = "Before vs after matching",
     x = "|SMD|", y = NULL, colour = NULL, shape = NULL,
     caption = "Dashed = 0.10 threshold"
@@ -650,41 +796,56 @@ save_fig(p_love_scheme, "fig10_love_plots_per_scheme.png",
          width = 16, height = 10)
 
 # =============================================================================
-# 11. SMD HEATMAP ACROSS SCHEMES
+# 11. SMD HEATMAP ACROSS SCHEMES (trends only)
 # =============================================================================
 
 cat("--- 11. SMD heatmap ---\n")
 
-# Trends only (same style as non-pooled heatmap)
+smd_breaks  <- c(0, 0.05, 0.10, 0.15, 0.20, Inf)
+smd_labels  <- c("<0.05", "0.05-0.10", "0.10-0.15", "0.15-0.20", ">0.20")
+smd_colours <- c("#1a9850", "#91cf60", "#fee08b", "#fc8d59", "#d73027")
+
 s2_trend_heatmap <- smd_all_schemes %>%
-  filter(variable %in% stage2_trends)
+  filter(variable %in% stage2_trends, !is.na(smd_after)) %>%
+  mutate(
+    scheme     = factor(scheme, levels = sort(unique(scheme))),
+    smd_band   = cut(abs(smd_after), breaks = smd_breaks,
+                     labels = smd_labels, right = FALSE, include.lowest = TRUE),
+    cell_label = sprintf("%.3f", abs(smd_after))
+  )
 
 p_heatmap <- ggplot(s2_trend_heatmap,
-                    aes(x = scheme, y = label, fill = abs(smd_after))) +
-  geom_tile(colour = "white", linewidth = 0.35) +
-  geom_text(aes(label = if_else(!is.na(smd_after),
-                                sprintf("%.3f", smd_after), "")),
-            size = 2.8, colour = "white", fontface = "bold") +
-  scale_fill_gradient2(
-    low = "#2ECC71", mid = "#F39C12", high = "#E74C3C",
-    midpoint = 0.1, na.value = "#EEEEEE", name = "|SMD|", limits = c(0, NA)) +
-  labs(
-    title    = "Pre-Treatment Trend Balance by Scheme \u2014 After Matching",
-    subtitle = "Green < 0.10 (balanced) | Orange = marginal | Red > 0.20 (imbalanced)\nTrends on raw scale (as matched)",
-    x = NULL, y = NULL,
-    caption  = "Pooled matching — total injuries only"
+                    aes(x = scheme, y = label, fill = smd_band)) +
+  geom_tile(colour = "white", linewidth = 0.8) +
+  geom_text(aes(label = cell_label), size = 3, colour = "#222222") +
+  scale_fill_manual(
+    values = setNames(smd_colours, smd_labels),
+    name   = "|SMD| after matching",
+    drop   = FALSE
   ) +
-  theme_diag() +
-  theme(axis.text.x   = element_text(angle = 30, hjust = 1, size = 11),
-        axis.text.y   = element_text(size = 10),
-        panel.grid    = element_blank(),
-        panel.spacing = unit(0.3, "lines"))
+  scale_x_discrete(guide = guide_axis(angle = 35)) +
+  labs(
+    title    = "Injury trend balance \u2014 England",
+    subtitle = "Each cell = |SMD| after matching",
+    x = NULL, y = NULL,
+    caption  = "Green < 0.05  \u00b7  yellow 0.05-0.10  \u00b7  orange 0.10-0.15  \u00b7  red > 0.20"
+  ) +
+  theme_diag(base_size = 12) +
+  theme(
+    panel.grid       = element_blank(),
+    panel.border     = element_blank(),
+    axis.text.x      = element_text(size = 11, face = "bold"),
+    axis.text.y      = element_text(size = 10),
+    legend.position  = "bottom",
+    legend.key.width = unit(1.2, "cm")
+  )
 
 save_fig(p_heatmap, "fig11_smd_heatmap_per_scheme.png",
-         width = 14, height = 10)
+         width = max(8, length(schemes) * 1.6 + 4), height = 7)
 
-# Full heatmap (all matching variables)
+# Full heatmap (all matching variables — same layout as non-pooled script)
 full_heatmap <- smd_all_schemes %>%
+  filter(!is.na(smd_after)) %>%
   mutate(
     var_group = case_when(
       variable %in% stage2_vars_log ~ "Stage 2: Injury",
@@ -692,28 +853,43 @@ full_heatmap <- smd_all_schemes %>%
         variable %in% paste0("log_", log_nozero_s1) |
         variable %in% c("pct_A_road", "pct_B_road", "pct_minor_road") ~ "Road network",
       variable %in% c("log1p_dist_citycentre", "log1p_pop_density",
-                       "log1p_business_retail_per_km2") ~ "Urban",
+                       "log1p_business_retail_per_km2") ~ "Urban form",
       TRUE ~ "Sociodemographic"
-    )
+    ),
+    var_group = factor(var_group,
+                       levels = c("Stage 2: Injury", "Road network",
+                                  "Urban form", "Sociodemographic")),
+    scheme     = factor(scheme, levels = sort(unique(scheme))),
+    smd_band   = cut(abs(smd_after), breaks = smd_breaks,
+                     labels = smd_labels, right = FALSE, include.lowest = TRUE),
+    cell_label = sprintf("%.2f", abs(smd_after))
   )
 
 p_heatmap_full <- ggplot(full_heatmap,
-                          aes(x = scheme, y = label, fill = abs(smd_after))) +
+                          aes(x = scheme, y = label, fill = smd_band)) +
   geom_tile(colour = "white", linewidth = 0.4) +
-  geom_text(aes(label = sprintf("%.2f", smd_after)), size = 2.2) +
-  scale_fill_gradient2(low = COL_AFTER, mid = "#F1C40F", high = COL_BEFORE,
-                       midpoint = 0.10, name = "|SMD|") +
+  geom_text(aes(label = cell_label), size = 2.2, colour = "#222222") +
+  scale_fill_manual(
+    values = setNames(smd_colours, smd_labels),
+    name   = "|SMD| after matching",
+    drop   = FALSE
+  ) +
   facet_wrap(~var_group, ncol = 1, scales = "free_y") +
+  scale_x_discrete(guide = guide_axis(angle = 35)) +
   labs(
-    title = "Full balance heatmap by scheme (all matching variables)",
-    subtitle = "Pooled matching — |SMD| after matching",
-    x = NULL, y = NULL
+    title    = "Full balance heatmap by scheme (all matching variables)",
+    subtitle = "Each cell = |SMD| after matching",
+    x = NULL, y = NULL,
+    caption  = "per-scheme |SMD| after matching"
   ) +
   theme_diag(base_size = 10) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.text.y = element_text(size = 7),
-        panel.grid = element_blank(),
-        strip.text = element_text(size = 10))
+  theme(axis.text.x  = element_text(size = 10, face = "bold"),
+        axis.text.y  = element_text(size = 7),
+        panel.grid   = element_blank(),
+        panel.border = element_blank(),
+        strip.text   = element_text(size = 10, face = "bold"),
+        legend.position  = "bottom",
+        legend.key.width = unit(1.2, "cm"))
 
 save_fig(p_heatmap_full, "fig11b_smd_heatmap_full.png",
          width = 14, height = 22)
@@ -725,40 +901,31 @@ save_fig(p_heatmap_full, "fig11b_smd_heatmap_full.png",
 cat("--- 12. Per-scheme balance summary ---\n\n")
 
 scheme_balance <- smd_all_schemes %>%
+  filter(variable %in% stage2_trends) %>%
   group_by(scheme) %>%
   summarise(
-    mean_abs_smd_before = round(mean(abs(smd_before), na.rm = TRUE), 4),
-    mean_abs_smd_after  = round(mean(abs(smd_after),  na.rm = TRUE), 4),
-    max_abs_smd_after   = round(max(abs(smd_after),   na.rm = TRUE), 4),
-    n_imbalanced        = sum(abs(smd_after) >= 0.10, na.rm = TRUE),
-    pct_balanced        = round(100 * mean(abs(smd_after) < 0.10, na.rm = TRUE), 1),
+    mean_trend_smd_before = round(mean(abs(smd_before), na.rm = TRUE), 4),
+    mean_trend_smd_after  = round(mean(abs(smd_after),  na.rm = TRUE), 4),
+    max_trend_smd_after   = round(max(abs(smd_after),   na.rm = TRUE), 4),
+    n_trends_imbalanced   = sum(abs(smd_after) >= 0.10, na.rm = TRUE),
+    all_trends_balanced   = all(abs(smd_after) < 0.10, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   left_join(
-    smd_all_schemes %>%
-      filter(variable == "trend_total_pkm") %>%
-      select(scheme, trend_smd = smd_after),
+    matched_full %>%
+      filter(treat_indicator == 1) %>%
+      count(scheme, name = "n_treated"),
     by = "scheme"
   ) %>%
   left_join(
-    matched_full %>%
-      group_by(scheme) %>%
-      summarise(
-        n_treated  = sum(treat_indicator == 1),
-        n_controls = sum(treat_indicator == 0),
-        .groups = "drop"
-      ),
+    ctrl_scheme_lookup %>% count(scheme, name = "n_controls"),
     by = "scheme"
-  ) %>%
-  mutate(improvement = mean_abs_smd_before - mean_abs_smd_after)
+  )
 
 write_csv(scheme_balance, file.path(outdir, "12_scheme_balance_summary.csv"))
 
-cat("=== PER-SCHEME BALANCE SUMMARY ===\n")
-print(scheme_balance %>%
-        select(scheme, n_treated, n_controls,
-               mean_abs_smd_after, trend_smd, pct_balanced),
-      n = Inf)
+cat("=== PER-SCHEME TREND BALANCE SUMMARY ===\n")
+print(scheme_balance, n = Inf)
 
 # =============================================================================
 # DONE

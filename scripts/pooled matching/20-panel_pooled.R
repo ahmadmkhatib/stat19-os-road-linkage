@@ -2,8 +2,12 @@
 # Post-Matching Road × Quarter Panel — POOLED MATCHING
 # ============================================================
 #
-# Same structure as main script 20, but reads from pooled
-# matching outputs (total injuries matching only).
+# Same structure as main script 20: control roads are ROW-
+# DUPLICATED according to how many times their OA was matched
+# (with replacement), rather than carrying frequency weights.
+# Each copy gets a unique panel_id so att_gt() treats them as
+# separate units. OA-level clustering absorbs the within-OA
+# correlation from duplication.
 #
 # Inputs:
 #   road_panel_dataset/           (parquet)
@@ -42,32 +46,28 @@ road_attrs <- st_read(
   st_drop_geometry() %>%
   select(identifier, OA, road_class, length)
 
-# Pooled matching outputs (England only, no Scotland filtering needed)
+# Pooled matching outputs
 matched_oas <- readRDS(
   here("data", "processed", "OA_matched_full_pooled.rds")
-) %>%
-  select(OA, weights, treat_indicator, scheme,
-         baseline_injury_stratum)
+)
 
 matching_pairs <- readRDS(
   here("data", "processed", "OA_matching_pairs_pooled.rds")
 )
 
-cat("Matched OAs:", nrow(matched_oas), "\n")
-cat("  Treated:", sum(matched_oas$treat_indicator == 1),
-    "| Controls:", sum(matched_oas$treat_indicator == 0), "\n")
-
-# Map each control OA to its paired treated OA's scheme
-treated_scheme <- matched_oas %>%
+# Treated OA metadata
+treated_oas <- matched_oas %>%
   filter(treat_indicator == 1) %>%
-  select(OA, scheme)
+  select(OA, treat_indicator, scheme, baseline_injury_stratum)
 
-ctrl_scheme_lookup <- matching_pairs %>%
-  left_join(treated_scheme, by = c("treated_OA" = "OA")) %>%
-  select(OA = control_OA, scheme_from_treated = scheme) %>%
-  distinct()
+# Control OA → scheme mapping with match counts (for row expansion).
+# A control matched N times within a scheme gets N rows in the panel.
+ctrl_match_counts <- matching_pairs %>%
+  count(control_OA, scheme, name = "match_count")
 
-cat("Control OA → scheme lookup:", nrow(ctrl_scheme_lookup), "entries\n")
+cat("Treated OAs:", nrow(treated_oas), "\n")
+cat("Matching pairs:", nrow(matching_pairs), "\n")
+cat("Unique control OAs:", n_distinct(ctrl_match_counts$control_OA), "\n")
 
 # CAZ proportions (England only)
 scottish_schemes <- c("Aberdeen", "Dundee", "Edinburgh", "Glasgow")
@@ -93,33 +93,58 @@ cat("Roads missing OA assignment:", n_missing_oa,
     sprintf("(%.2f%%)\n", 100 * n_missing_oa / nrow(road_panel)))
 
 # ============================================================
-# Restrict to matched OAs
+# Build panel: treated roads + expanded control roads
 # ============================================================
+# Instead of frequency weights, control roads are DUPLICATED
+# proportional to how many times their OA was matched (with
+# replacement). Each copy gets a unique panel_id so att_gt()
+# treats them as separate units. OA-level clustering absorbs
+# the within-OA correlation from duplication.
 
-matched_oa_ids <- matched_oas %>% pull(OA)
+all_matched_oas <- unique(c(treated_oas$OA, ctrl_match_counts$control_OA))
 
 road_panel_matched <- road_panel %>%
-  filter(OA %in% matched_oa_ids)
+  filter(OA %in% all_matched_oas)
 
-cat("\nAfter restricting to matched OAs:\n")
-cat("  Rows:  ", nrow(road_panel_matched), "\n")
-cat("  Roads: ", n_distinct(road_panel_matched$identifier), "\n")
+cat("\nRoads in matched OAs:", n_distinct(road_panel_matched$identifier), "\n")
 
-# ============================================================
-# Attach matching weights and OA-level metadata
-# ============================================================
+# --- Treated roads: one entry per road × quarter ---
+panel_treated <- road_panel_matched %>%
+  semi_join(treated_oas, by = "OA") %>%
+  mutate(treat_indicator = 1L, match_copy = 1L)
 
+# --- Control roads: expand by match_count per scheme ---
+panel_controls <- road_panel_matched %>%
+  inner_join(
+    ctrl_match_counts %>% rename(OA = control_OA),
+    by = "OA",
+    relationship = "many-to-many"
+  ) %>%
+  mutate(treat_indicator = 0L) %>%
+  uncount(match_count) %>%
+  group_by(identifier, quarter_year, scheme) %>%
+  mutate(match_copy = row_number()) %>%
+  ungroup()
+
+# --- Combine ---
+road_panel_matched <- bind_rows(panel_treated, panel_controls)
+
+# Unique panel identifier (road × copy, for att_gt idname)
+road_panel_matched <- road_panel_matched %>%
+  mutate(panel_id = paste0(identifier, "_", match_copy))
+
+# Attach treated OA metadata (baseline_injury_stratum)
 road_panel_matched <- road_panel_matched %>%
   left_join(
-    matched_oas %>%
-      select(OA, oa_weight = weights, treat_indicator,
-             baseline_injury_stratum),
+    treated_oas %>% select(OA, baseline_injury_stratum),
     by = "OA"
   )
 
-stopifnot(
-  "Missing OA weights after join" = !anyNA(road_panel_matched$oa_weight)
-)
+cat("\nPanel constructed:\n")
+cat("  Treated rows:", sum(road_panel_matched$treat_indicator == 1), "\n")
+cat("  Control rows:", sum(road_panel_matched$treat_indicator == 0), "\n")
+cat("  Unique roads:", n_distinct(road_panel_matched$identifier), "\n")
+cat("  Unique panel_ids:", n_distinct(road_panel_matched$panel_id), "\n")
 
 # ============================================================
 # Treatment indicators
@@ -143,7 +168,7 @@ road_panel_matched <- road_panel_matched %>%
   )
 
 # ============================================================
-# Attach CAZ proportions and scheme for control roads
+# Attach CAZ proportions
 # ============================================================
 
 road_panel_matched <- road_panel_matched %>%
@@ -151,16 +176,7 @@ road_panel_matched <- road_panel_matched %>%
     road_caz_props %>% select(identifier, prop_in_caz),
     by = "identifier"
   ) %>%
-  mutate(prop_in_caz = replace_na(prop_in_caz, 0)) %>%
-  left_join(ctrl_scheme_lookup, by = "OA") %>%
-  mutate(
-    scheme = if_else(
-      treat_group == 0 & is.na(scheme),
-      scheme_from_treated,
-      scheme
-    )
-  ) %>%
-  select(-scheme_from_treated)
+  mutate(prop_in_caz = replace_na(prop_in_caz, 0))
 
 # ============================================================
 # Final column selection
@@ -168,13 +184,37 @@ road_panel_matched <- road_panel_matched %>%
 
 road_panel_matched <- road_panel_matched %>%
   select(
-    identifier, OA, quarter_year,
-    treat_group, post, rel_time,
-    scheme, caz_start_q, prop_in_caz,
-    oa_weight, treat_indicator, baseline_injury_stratum,
-    road_class, length,
-    KSI_adj_All, Slight_adj_All, total_inj_adj_All,
-    starts_with("KSI_adj_"), starts_with("Slight_adj_"),
+    # Identifiers
+    panel_id,
+    identifier,
+    OA,
+    quarter_year,
+    match_copy,
+
+    # Treatment
+    treat_group,
+    post,
+    rel_time,
+    scheme,
+    caz_start_q,
+    prop_in_caz,
+
+    # Matching metadata
+    treat_indicator,
+    baseline_injury_stratum,
+
+    # Road characteristics
+    road_class,
+    length,
+
+    # Outcomes — adjusted (primary)
+    KSI_adj_All,
+    Slight_adj_All,
+    total_inj_adj_All,
+
+    # Outcomes — by mode (adjusted)
+    starts_with("KSI_adj_"),
+    starts_with("Slight_adj_"),
     starts_with("total_inj_adj_")
   ) %>%
   rename_with(~ make.names(.x))
@@ -185,10 +225,21 @@ road_panel_matched <- road_panel_matched %>%
 
 cat("\n=== POST-MATCHING PANEL DIAGNOSTICS (POOLED) ===\n")
 
-cat("\nTreatment group breakdown (road level):\n")
+cat("\nTreatment group breakdown (panel_id level):\n")
 road_panel_matched %>%
-  distinct(identifier, treat_group, scheme) %>%
+  distinct(panel_id, treat_group, scheme) %>%
   count(treat_group) %>%
+  print()
+
+cat("\nPer-scheme breakdown:\n")
+road_panel_matched %>%
+  distinct(panel_id, treat_group, scheme) %>%
+  group_by(scheme) %>%
+  summarise(
+    treated  = sum(treat_group == 1),
+    controls = sum(treat_group == 0),
+    .groups  = "drop"
+  ) %>%
   print()
 
 cat("\nScheme × treatment timing:\n")
@@ -198,27 +249,40 @@ road_panel_matched %>%
   arrange(caz_start_q) %>%
   print()
 
-cat("\nWeight distribution by treatment status:\n")
+cat("\nRow expansion from replacement matching:\n")
+cat("  Unique roads:", n_distinct(road_panel_matched$identifier), "\n")
+cat("  Unique panel_ids:", n_distinct(road_panel_matched$panel_id), "\n")
+cat("  Expansion factor:",
+    round(n_distinct(road_panel_matched$panel_id) /
+            n_distinct(road_panel_matched$identifier), 2), "\n")
+
+cat("\nOutcome summary (treated roads, post period):\n")
 road_panel_matched %>%
-  distinct(OA, oa_weight, treat_indicator) %>%
-  group_by(treat_indicator) %>%
+  filter(treat_group == 1, post == 1) %>%
   summarise(
-    n_OAs     = n(),
-    mean_wt   = round(mean(oa_weight), 3),
-    median_wt = round(median(oa_weight), 3),
-    max_wt    = round(max(oa_weight), 3),
-    .groups   = "drop"
+    n_obs           = n(),
+    mean_KSI        = round(mean(KSI_adj_All,       na.rm = TRUE), 4),
+    mean_slight     = round(mean(Slight_adj_All,     na.rm = TRUE), 4),
+    mean_total      = round(mean(total_inj_adj_All,  na.rm = TRUE), 4),
+    pct_zero_total  = round(mean(total_inj_adj_All == 0) * 100, 1)
   ) %>%
   print()
 
-n_roads <- n_distinct(road_panel_matched$identifier)
+cat("\nQuarter coverage:\n")
+cat("  Min quarter:", as.character(min(road_panel_matched$quarter_year)), "\n")
+cat("  Max quarter:", as.character(max(road_panel_matched$quarter_year)), "\n")
+cat("  N quarters: ", n_distinct(road_panel_matched$quarter_year), "\n")
+
+# Panel balance check (on panel_id, not identifier)
+n_units <- n_distinct(road_panel_matched$panel_id)
 n_qtrs  <- n_distinct(road_panel_matched$quarter_year)
-cat("\nPanel balance:\n")
-cat("  Roads:    ", n_roads, "\n")
-cat("  Quarters: ", n_qtrs, "\n")
-cat("  Rows:     ", nrow(road_panel_matched), "\n")
-cat("  Expected: ", n_roads * n_qtrs, "\n")
-cat("  Balanced: ", nrow(road_panel_matched) == n_roads * n_qtrs, "\n")
+cat("\nPanel balance (panel_id × quarter):\n")
+cat("  Panel units:", n_units, "\n")
+cat("  Quarters:   ", n_qtrs, "\n")
+cat("  Rows:       ", nrow(road_panel_matched), "\n")
+cat("  Expected:   ", n_units * n_qtrs, "\n")
+cat("  Balanced:   ",
+    nrow(road_panel_matched) == n_units * n_qtrs, "\n")
 
 # ============================================================
 # Save
@@ -230,5 +294,6 @@ arrow::write_parquet(
 )
 
 cat("\nSaved: road_panel_matched_pooled.parquet\n")
-cat("Rows:", nrow(road_panel_matched),
-    "| Roads:", n_roads, "| Quarters:", n_qtrs, "\n")
+cat("  Rows:", nrow(road_panel_matched),
+    "| Panel units:", n_units,
+    "| Quarters:", n_qtrs, "\n")

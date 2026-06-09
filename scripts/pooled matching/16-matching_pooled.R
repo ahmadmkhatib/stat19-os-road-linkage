@@ -1,13 +1,15 @@
 # =============================================================================
-# POOLED MATCHING — OA-LEVEL TWO-STAGE MAHALANOBIS DISTANCE MATCHING
+# POOLED MATCHING — PER-SCHEME TWO-STAGE MAHALANOBIS DISTANCE MATCHING
 # =============================================================================
 #
-# Matches treated OAs to other-city control OAs using:
+# Matches treated OAs to other-city control OAs SEPARATELY for each CAZ scheme.
+#
 #   Stage 1: road network, urban form, and sociodemographic covariates
 #   Stage 2: POOLED total injury trend + level only (no mode-specific trends)
 #
 # This is the simplified pooled matching for a DiD with total injuries
-# (any injury whatsoever) as the outcome.
+# (any injury whatsoever) as the outcome. Stage 2 ratio is selected
+# per scheme (1:1 to 1:10) to minimise |SMD| on the total trend variable.
 #
 # England only — no Scotland.
 #
@@ -170,11 +172,6 @@ winsorise_and_log_s2 <- function(data, raw_vars, log_vars) {
   data
 }
 
-data_clean <- winsorise_and_log_s1(data_england, stage1_vars,
-                                   log_transform_s1, log_nozero_s1)
-data_clean <- winsorise_and_log_s2(data_clean, stage2_levels,
-                                   log_transform_s2_levels)
-
 check_vars <- function(data, vars, label) {
   missing <- setdiff(vars, names(data))
   if (length(missing) > 0)
@@ -190,8 +187,15 @@ check_vars <- function(data, vars, label) {
   setdiff(intersect(vars, names(data)), low)
 }
 
-s1_vars <- check_vars(data_clean, stage1_vars_log, "S1 England")
-s2_vars <- check_vars(data_clean, stage2_vars_log, "S2 England")
+# English schemes
+english_schemes <- data_england %>%
+  filter(treat_indicator == 1) %>%
+  distinct(scheme) %>%
+  pull(scheme) %>%
+  sort()
+
+cat("Schemes:", paste(english_schemes, collapse = ", "), "\n")
+cat("N schemes:", length(english_schemes), "\n\n")
 
 # =============================================================================
 # BALANCE TEST FUNCTION
@@ -243,18 +247,14 @@ run_balance_tests <- function(matchit_obj, trend_vars, label) {
 }
 
 # =============================================================================
-# RATIO SELECTION
+# RATIO SELECTION FUNCTIONS
 # =============================================================================
-
-cat(paste(rep("=", 60), collapse = ""), "\n")
-cat("RATIO SELECTION — POOLED MATCHING\n")
-cat(paste(rep("=", 60), collapse = ""), "\n")
 
 prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   s1v        <- check_vars(data_clean, s1_vars, paste("S1 ratio prep", label))
   formula_s1 <- reformulate(s1v, response = "treat_indicator")
   m_s1 <- matchit(formula_s1, data = data_clean, method = "nearest",
-                  distance = "mahalanobis", ratio = 10, replace = TRUE)
+                  distance = "mahalanobis", ratio = 30, replace = TRUE)
   mm_s1       <- m_s1$match.matrix
   treated_s1  <- data_clean[as.integer(rownames(mm_s1)), , drop = FALSE] %>%
     mutate(treat_indicator = 1L)
@@ -278,14 +278,20 @@ prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   list(data = s2_raw, s2_vars = s2v)
 }
 
-select_ratio <- function(data, s2_vars, trend_vars, label,
+select_ratio <- function(data, s2_vars, trend_vars, total_trend_var, label,
                          ratios_to_test = 1:10) {
+  # trend_vars     : all trend variables (used as diagnostics)
+  # total_trend_var: the single variable that drives ratio selection
+  #                  (e.g. "trend_total_pkm") — parallel trends assumption
+  #                  is on total injuries, not individual modes
+
   n_t <- sum(data$treat_indicator == 1)
   n_c <- sum(data$treat_indicator == 0)
   ratios_to_test <- ratios_to_test[ratios_to_test <= floor(n_c / n_t)]
 
   cat("\n--- Ratio selection:", label, "---\n")
   cat("  Treated:", n_t, "| Controls:", n_c, "\n")
+  cat("  Selection criterion: total_trend_smd (|SMD| on", total_trend_var, ")\n")
 
   formula_s2 <- reformulate(s2_vars, response = "treat_indicator")
 
@@ -296,62 +302,40 @@ select_ratio <- function(data, s2_vars, trend_vars, label,
       error = function(e) NULL
     )
     if (is.null(m)) return(tibble(ratio = r, mean_smd = NA,
-                                  max_trend_smd = NA, max_level_smd = NA))
-    bt          <- bal.tab(m, un = FALSE, stats = "mean.diffs")$Balance
-    trend_rows  <- rownames(bt)[rownames(bt) %in% trend_vars]
-    level_rows  <- rownames(bt)[!rownames(bt) %in% trend_vars]
+                                  total_trend_smd  = NA,
+                                  max_trend_smd    = NA,
+                                  max_level_smd    = NA))
+
+    bt         <- bal.tab(m, un = FALSE, stats = "mean.diffs")$Balance
+    trend_rows <- rownames(bt)[rownames(bt) %in% trend_vars]
+    level_rows <- rownames(bt)[!rownames(bt) %in% trend_vars]
+
+    # Primary selection target: total trend only
+    total_smd <- if (total_trend_var %in% rownames(bt))
+      abs(bt[total_trend_var, "Diff.Adj"]) else NA_real_
+
     tibble(
-      ratio         = r,
-      mean_smd      = round(mean(abs(bt$Diff.Adj), na.rm = TRUE), 4),
-      max_trend_smd = round(max(abs(bt[trend_rows, "Diff.Adj"]),
-                                na.rm = TRUE), 4),
-      max_level_smd = round(max(abs(bt[level_rows, "Diff.Adj"]),
-                                na.rm = TRUE), 4)
+      ratio           = r,
+      mean_smd        = round(mean(abs(bt$Diff.Adj),               na.rm = TRUE), 4),
+      total_trend_smd = round(total_smd,                                          4),
+      max_trend_smd   = round(max(abs(bt[trend_rows, "Diff.Adj"]), na.rm = TRUE), 4),
+      max_level_smd   = round(max(abs(bt[level_rows, "Diff.Adj"]), na.rm = TRUE), 4)
     )
   })
 
   print(ratio_results)
 
+  # Select on total_trend_smd first; break ties with mean_smd
   best <- ratio_results %>%
-    filter(!is.na(max_trend_smd)) %>%
-    arrange(max_trend_smd, mean_smd) %>%
+    filter(!is.na(total_trend_smd)) %>%
+    arrange(total_trend_smd, mean_smd) %>%
     slice(1)
 
-  cat(sprintf("  Selected: 1:%d (max trend |SMD| = %.4f)\n",
-              best$ratio, best$max_trend_smd))
+  cat(sprintf("  Selected: 1:%d (total trend |SMD| = %.4f, max trend |SMD| = %.4f)\n",
+              best$ratio, best$total_trend_smd, best$max_trend_smd))
 
   list(optimal_ratio = best$ratio, ratio_results = ratio_results, label = label)
 }
-
-s2_prep <- prepare_s2_for_ratio(data_clean, s1_vars, s2_vars, "England")
-trend_vars_eng <- intersect(s2_vars, stage2_trends)
-ratio_result <- select_ratio(s2_prep$data, s2_prep$s2_vars,
-                             trend_vars_eng, "England (pooled)", 1:10)
-optimal_ratio <- ratio_result$optimal_ratio
-
-cat("\nOptimal ratio (pooled): 1:", optimal_ratio, "\n\n")
-
-saveRDS(ratio_result$ratio_results %>% mutate(matching = "pooled"),
-        here("data", "processed", "OA_ratio_selection_pooled.rds"))
-
-p_ratio <- ratio_result$ratio_results %>%
-  filter(!is.na(max_trend_smd)) %>%
-  ggplot(aes(x = ratio, y = max_trend_smd)) +
-  geom_line(linewidth = 0.9, colour = "#2E6FAB") +
-  geom_point(size = 3, colour = "#2E6FAB") +
-  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "#888888") +
-  geom_hline(yintercept = 0.05, linetype = "dotted", colour = "#555555") +
-  scale_x_continuous(breaks = 1:10) +
-  labs(
-    title    = "Ratio selection — pooled matching (total injuries only)",
-    subtitle = paste0("Optimal ratio: 1:", optimal_ratio),
-    x        = "Matching ratio (1:k)",
-    y        = "Maximum trend |SMD| after matching"
-  ) +
-  theme_minimal(base_size = 13)
-
-ggsave(file.path(outdir, "fig_ratio_selection_pooled.png"),
-       p_ratio, width = 10, height = 6, dpi = 300, bg = "white")
 
 # =============================================================================
 # MATCHING FUNCTION
@@ -371,7 +355,7 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
 
   m_s1 <- tryCatch(
     matchit(formula_s1, data = data_clean, method = "nearest",
-            distance = "mahalanobis", ratio = 10, replace = TRUE),
+            distance = "mahalanobis", ratio = 50, replace = TRUE),
     error = function(e) { cat("FAILED:", conditionMessage(e), "\n"); NULL }
   )
   if (is.null(m_s1)) return(NULL)
@@ -494,23 +478,137 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
 }
 
 # =============================================================================
-# RUN MATCHING
+# PER-SCHEME MATCHING LOOP
 # =============================================================================
 
-result <- run_matching(
-  data_clean  = data_clean,
-  s1_vars     = s1_vars,
-  s2_vars     = s2_vars,
-  ratio       = optimal_ratio,
-  label       = "England (pooled)",
-  trend_vars  = trend_vars_eng
+cat("\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")
+cat("PER-SCHEME MATCHING — ", length(english_schemes), " schemes\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")
+
+# Control pool (shared across all schemes)
+control_pool <- data_england %>% filter(treat_indicator == 0)
+cat("\nShared control pool:", nrow(control_pool), "OAs\n")
+
+all_results      <- list()
+all_ratio_tables <- list()
+
+for (s in english_schemes) {
+  cat("\n", paste(rep("#", 60), collapse = ""), "\n")
+  cat("### SCHEME:", s, "###\n")
+  cat(paste(rep("#", 60), collapse = ""), "\n")
+
+  # Build scheme-specific dataset: this scheme's treated + full control pool
+  scheme_treated <- data_england %>%
+    filter(treat_indicator == 1, scheme == s)
+
+  scheme_data <- bind_rows(scheme_treated, control_pool)
+
+  cat("Treated OAs:", nrow(scheme_treated),
+      "| Control pool:", nrow(control_pool), "\n")
+
+  # Winsorise + log-transform for this scheme's data
+  scheme_clean <- winsorise_and_log_s1(scheme_data, stage1_vars,
+                                       log_transform_s1, log_nozero_s1)
+  scheme_clean <- winsorise_and_log_s2(scheme_clean, stage2_levels,
+                                       log_transform_s2_levels)
+
+  s1_vars_scheme <- check_vars(scheme_clean, stage1_vars_log,
+                               paste("S1", s))
+  s2_vars_scheme <- check_vars(scheme_clean, stage2_vars_log,
+                               paste("S2", s))
+
+  # Identify trend variables and the total trend selection target
+  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends)
+
+  total_trend_var_scheme <- intersect(
+    trend_vars_scheme,
+    c("trend_total_pkm", "trend_total_ksi",
+      "trend_total_slight", "trend_total")
+  )
+  if (length(total_trend_var_scheme) == 0) {
+    stop("No total trend variable found for scheme: ", s,
+         "\nAvailable trend vars: ", paste(trend_vars_scheme, collapse = ", "))
+  }
+  total_trend_var_scheme <- total_trend_var_scheme[1]
+  cat("  Total trend variable:", total_trend_var_scheme, "\n")
+
+  # Ratio selection for this scheme
+  s2_prep <- prepare_s2_for_ratio(scheme_clean, s1_vars_scheme,
+                                  s2_vars_scheme, s)
+
+  ratio_result <- select_ratio(
+    s2_prep$data, s2_prep$s2_vars,
+    trend_vars      = trend_vars_scheme,
+    total_trend_var = total_trend_var_scheme,
+    label           = s,
+    ratios_to_test  = 1:10
+  )
+  optimal_ratio <- ratio_result$optimal_ratio
+
+  all_ratio_tables[[s]] <- ratio_result$ratio_results %>%
+    mutate(scheme = s)
+
+  # Run matching
+  result <- run_matching(
+    data_clean = scheme_clean,
+    s1_vars    = s1_vars_scheme,
+    s2_vars    = s2_vars_scheme,
+    ratio      = optimal_ratio,
+    label      = s,
+    trend_vars = trend_vars_scheme
+  )
+
+  if (!is.null(result)) {
+    result$matched_data <- result$matched_data %>%
+      mutate(scheme = s)
+    result$pairs <- result$pairs %>%
+      mutate(scheme = s)
+    result$isolated_OAs <- result$isolated_OAs %>%
+      mutate(scheme = s)
+    all_results[[s]] <- result
+  } else {
+    cat("WARNING: Matching FAILED for scheme:", s, "\n")
+  }
+}
+
+# =============================================================================
+# COMBINE ACROSS SCHEMES
+# =============================================================================
+
+cat("\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")
+cat("COMBINING RESULTS ACROSS SCHEMES\n")
+cat(paste(rep("=", 70), collapse = ""), "\n\n")
+
+matched_full <- bind_rows(
+  map(all_results, ~ .x$matched_data)
 )
 
-matched_full <- result$matched_data
+isolated_combined <- bind_rows(
+  map(all_results, ~ .x$isolated_OAs)
+)
 
-cat("\n=== FINAL MATCHED DATASET (POOLED) ===\n")
-cat("Treated:", sum(matched_full$treat_indicator == 1),
-    "| Controls:", sum(matched_full$treat_indicator == 0), "\n\n")
+pairs_pooled <- bind_rows(
+  map(all_results, ~ .x$pairs)
+)
+
+# Per-scheme summary
+scheme_summary <- matched_full %>%
+  group_by(scheme) %>%
+  summarise(
+    n_treated  = sum(treat_indicator == 1),
+    n_controls = sum(treat_indicator == 0),
+    ratio      = round(n_controls / n_treated, 1),
+    .groups    = "drop"
+  )
+
+cat("Per-scheme matching results:\n")
+print(scheme_summary)
+cat("\nTotal treated:", sum(scheme_summary$n_treated),
+    "| Total control rows:", sum(scheme_summary$n_controls), "\n")
+cat("Unique control OAs:", n_distinct(
+  matched_full$OA[matched_full$treat_indicator == 0]), "\n\n")
 
 # =============================================================================
 # BASELINE INJURY STRATIFICATION
@@ -533,16 +631,16 @@ matched_full <- matched_full %>%
   ))
 
 # =============================================================================
-# EXTRACT + INTEGRITY CHECKS + SAVE
+# INTEGRITY CHECKS + SAVE
 # =============================================================================
 
 matched_treated <- matched_full %>%
   filter(treat_indicator == 1) %>%
-  select(OA, weights, baseline_injury_stratum)
+  select(OA, weights, baseline_injury_stratum, scheme)
 
 matched_controls <- matched_full %>%
   filter(treat_indicator == 0) %>%
-  select(OA, weights)
+  select(OA, weights, scheme)
 
 stopifnot(
   "treated weights == 1"     = all(matched_treated$weights == 1),
@@ -557,14 +655,70 @@ saveRDS(matched_controls,
         here("data", "processed", "OA_matched_donors_pooled.rds"))
 saveRDS(matched_full,
         here("data", "processed", "OA_matched_full_pooled.rds"))
-saveRDS(result$isolated_OAs,
+saveRDS(isolated_combined,
         here("data", "processed", "OA_common_support_flags_pooled.rds"))
 saveRDS(bind_rows(balance_test_log),
         here("data", "processed", "OA_balance_tests_pooled.rds"))
-
-pairs_pooled <- result$pairs
 saveRDS(pairs_pooled,
         here("data", "processed", "OA_matching_pairs_pooled.rds"))
+
+# Ratio selection table
+ratio_combined <- bind_rows(all_ratio_tables)
+saveRDS(ratio_combined,
+        here("data", "processed", "OA_ratio_selection_pooled.rds"))
+
+# Ratio selection plot (per scheme)
+p_ratio <- ratio_combined %>%
+  filter(!is.na(max_trend_smd)) %>%
+  ggplot(aes(x = ratio, y = max_trend_smd,
+             colour = scheme, group = scheme)) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "#888888") +
+  geom_hline(yintercept = 0.05, linetype = "dotted", colour = "#555555") +
+  scale_x_continuous(breaks = 1:10) +
+  labs(
+    title    = "Ratio selection — pooled matching (per scheme)",
+    subtitle = "Maximum trend |SMD| by matching ratio",
+    x        = "Matching ratio (1:k)",
+    y        = "Maximum trend |SMD| after matching",
+    colour   = "Scheme"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(outdir, "fig_ratio_selection_pooled.png"),
+       p_ratio, width = 13, height = 7, dpi = 300, bg = "white")
+
+# --- Per-scheme Stage 2 ratio summary ---
+cat("\n=== STAGE 2 RATIO SELECTION PER SCHEME ===\n\n")
+
+ratio_summary <- ratio_combined %>%
+  filter(!is.na(max_trend_smd)) %>%
+  group_by(scheme) %>%
+  arrange(total_trend_smd, mean_smd) %>%
+  slice(1) %>%
+  ungroup() %>%
+  left_join(
+    matched_full %>%
+      group_by(scheme) %>%
+      summarise(
+        n_treated  = sum(treat_indicator == 1),
+        n_controls = sum(treat_indicator == 0),
+        .groups = "drop"
+      ),
+    by = "scheme"
+  ) %>%
+  select(scheme, n_treated, n_controls,
+         selected_ratio = ratio, total_trend_smd, max_trend_smd, mean_smd) %>%
+  arrange(scheme)
+
+print(ratio_summary)
+
+cat("\nRatio range across schemes:", min(ratio_summary$selected_ratio),
+    "to", max(ratio_summary$selected_ratio), "\n")
+cat("Schemes with ratio 1:1:",
+    sum(ratio_summary$selected_ratio == 1), "\n\n")
 
 # --- Overall balance summary ---
 balance_summary <- bind_rows(balance_test_log) %>%
@@ -579,8 +733,17 @@ balance_summary <- bind_rows(balance_test_log) %>%
     .groups = "drop"
   )
 
-cat("\n=== OVERALL BALANCE SUMMARY ===\n")
+cat("\n=== OVERALL BALANCE SUMMARY (across all schemes) ===\n")
 print(balance_summary)
+
+# Per-scheme Stage 2 balance
+s2_balance <- bind_rows(balance_test_log) %>%
+  filter(str_starts(label, "S2_")) %>%
+  mutate(scheme = str_remove(label, "^S2_"))
+
+cat("\n=== STAGE 2 BALANCE PER SCHEME ===\n")
+print(s2_balance %>% select(scheme, mean_smd_adj, max_trend_smd,
+                             test_a_pass, test_b_pass))
 
 cat("\n=== OUTPUTS SAVED ===\n")
 cat("  OA_matched_full_pooled.rds\n")
@@ -590,3 +753,4 @@ cat("  OA_common_support_flags_pooled.rds\n")
 cat("  OA_ratio_selection_pooled.rds\n")
 cat("  OA_balance_tests_pooled.rds\n")
 cat("  OA_matching_pairs_pooled.rds\n")
+cat("  fig_ratio_selection_pooled.png\n")
