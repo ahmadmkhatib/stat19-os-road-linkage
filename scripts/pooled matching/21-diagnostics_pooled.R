@@ -170,6 +170,133 @@ p_scheme <- ggplot(trend_scheme,
 
 save_fig(p_scheme, "fig_parallel_trends_by_scheme.png", width = 16, height = 10)
 
+# --- 3b. LOESS trajectory plots (road level) ---
+
+# All schemes — LOESS
+trend_pooled_loess <- panel %>%
+  group_by(group, quarter_year) %>%
+  summarise(total_pkm = mean(total_pkm, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    group  = factor(group, levels = c("Treated", "Control")),
+    q_date = as.Date(quarter_year)
+  )
+
+p_loess_all <- ggplot(
+  trend_pooled_loess,
+  aes(x = q_date, y = total_pkm, colour = group, fill = group)
+) +
+  geom_point(size = 1, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.2) +
+  scale_colour_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  scale_fill_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  labs(
+    title    = "Injury trajectories: treated vs matched controls (road level, all schemes)",
+    subtitle = "LOESS smoother \u00b1 SE | parallel smoothers = parallel trends supported",
+    x = NULL, y = "Mean injuries per road-km",
+    colour = NULL, fill = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+
+save_fig(p_loess_all, "fig_parallel_trends_loess_all.png", width = 12, height = 8)
+
+# Per scheme — LOESS
+trend_scheme_loess <- panel %>%
+  group_by(scheme, group, quarter_year) %>%
+  summarise(total_pkm = mean(total_pkm, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    group  = factor(group, levels = c("Treated", "Control")),
+    q_date = as.Date(quarter_year)
+  )
+
+p_loess_scheme <- ggplot(
+  trend_scheme_loess,
+  aes(x = q_date, y = total_pkm, colour = group, fill = group)
+) +
+  geom_point(size = 1, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.1) +
+  geom_vline(data = scheme_timing,
+             aes(xintercept = as.Date(caz_start_q)),
+             linetype = "dotted", colour = "#888888", linewidth = 0.5) +
+  facet_wrap(~scheme, ncol = 3, scales = "free_y") +
+  scale_colour_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  scale_fill_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  labs(
+    title    = "Injury trajectories by scheme (road level)",
+    subtitle = "LOESS smoother \u00b1 SE | dotted = scheme start | parallel smoothers = parallel trends",
+    x = NULL, y = "Mean injuries per road-km",
+    colour = NULL, fill = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
+    strip.text      = element_text(size = 10, face = "bold"),
+    panel.spacing   = unit(0.6, "lines")
+  )
+
+save_fig(p_loess_scheme, "fig_parallel_trends_loess_by_scheme.png",
+         width = 16, height = 14)
+
+# --- 3c. Pre-treatment trend slope densities (road level) ---
+
+cat("Computing per-road pre-treatment trend slopes...\n")
+
+road_trends <- panel_pre %>%
+  mutate(t = as.numeric(quarter_year)) %>%
+  group_by(identifier, group, scheme) %>%
+  summarise(
+    trend_slope = coef(lm(total_pkm ~ t))[2],
+    .groups = "drop"
+  )
+
+# Trim axis to 1st–99th percentile for readability
+trend_xlim <- quantile(road_trends$trend_slope, c(0.01, 0.99), na.rm = TRUE)
+
+# All schemes
+p_trend_dens_all <- ggplot(
+  road_trends,
+  aes(x = trend_slope, fill = group, colour = group)
+) +
+  geom_density(alpha = 0.3, linewidth = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "#888888") +
+  coord_cartesian(xlim = trend_xlim) +
+  scale_fill_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  scale_colour_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  labs(
+    title    = "Pre-treatment trend distributions: treated vs matched controls (road level)",
+    subtitle = "Per-road-link slope of total injuries/km over pre-treatment quarters",
+    x = "Pre-treatment slope", y = "Density",
+    fill = NULL, colour = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+
+save_fig(p_trend_dens_all, "fig_trend_density_all.png", width = 12, height = 7)
+
+# Per scheme
+p_trend_dens_scheme <- ggplot(
+  road_trends,
+  aes(x = trend_slope, fill = group, colour = group)
+) +
+  geom_density(alpha = 0.3, linewidth = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "#888888") +
+  coord_cartesian(xlim = trend_xlim) +
+  facet_wrap(~scheme, scales = "free_y") +
+  scale_fill_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  scale_colour_manual(values = c("Treated" = "#D85A30", "Control" = "#2E6FAB")) +
+  labs(
+    title    = "Pre-treatment trend distributions by scheme (road level)",
+    subtitle = "Per-road-link slope of total injuries/km over pre-treatment quarters",
+    x = "Pre-treatment slope", y = "Density",
+    fill = NULL, colour = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+save_fig(p_trend_dens_scheme, "fig_trend_density_by_scheme.png",
+         width = 16, height = 12)
+
 # =============================================================================
 # 4. EVENT-STUDY — sunab (integer quarters)
 # =============================================================================
