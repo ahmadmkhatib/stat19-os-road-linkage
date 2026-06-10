@@ -77,7 +77,7 @@ SCHEME_COLS <- c(
 stage1_road   <- c("log1p_road_length_km", "log1p_road_density_m_km2",
                    "log_area_km2",
                    "pct_A_road", "pct_B_road", "pct_minor_road")
-stage1_urban  <- c("log1p_dist_citycentre", "log1p_pop_density",
+stage1_urban  <- c("log1p_dist_BUA_centroid", "log1p_pop_density",
                    "log1p_business_retail_per_km2")
 stage1_socdem <- c("IMD",
                    "cars_one_pct", "cars_twoPlus_pct",
@@ -114,7 +114,7 @@ var_labels <- c(
   pct_A_road                    = "% A-road",
   pct_B_road                    = "% B-road",
   pct_minor_road                = "% Minor road",
-  log1p_dist_citycentre         = "Distance to city centre",
+  log1p_dist_BUA_centroid         = "Dist. to BUA centroid",
   log1p_pop_density             = "Population density",
   log1p_business_retail_per_km2 = "Retail businesses/km²",
   IMD                           = "IMD",
@@ -201,7 +201,7 @@ add_log_vars <- function(df) {
     log1p_road_length_km          = log1p(pmax(road_length_km,          0)),
     log1p_road_density_m_km2      = log1p(pmax(road_density_m_km2,      0)),
     log_area_km2                  = log(area_km2),
-    log1p_dist_citycentre         = log1p(pmax(dist_citycentre,         0)),
+    log1p_dist_BUA_centroid         = log1p(pmax(dist_BUA_centroid,         0)),
     log1p_pop_density             = log1p(pmax(pop_density,             0)),
     log1p_business_retail_per_km2 = log1p(pmax(business_retail_per_km2, 0)),
     age_under15_pct = X4under_pct  + X5to9_pct   + X10to14_pct,

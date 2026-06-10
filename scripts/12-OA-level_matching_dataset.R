@@ -141,7 +141,7 @@ OA_roads_clean <- OA_roads %>%
     .groups = "drop"
   ) %>%
   right_join(
-    oa_sub %>% st_drop_geometry() %>% select(OA),
+    oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),
     by = "OA"
   ) %>%
   mutate(across(
@@ -186,7 +186,7 @@ nrow(has_injuries_no_roads)
 # where Are they concentrated 
 OA_roads_clean %>%
   filter(n_roads == 0) %>%
-  left_join(OA_analysis %>% select(OA, assignment), by = "OA") %>%
+  left_join(OA_analysis %>% dplyr::select(OA, assignment), by = "OA") %>%
   count(assignment)
 
 
@@ -378,10 +378,10 @@ oa_area <- oa_sub %>%
   st_make_valid() %>%
   mutate(area_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
   st_drop_geometry() %>%
-  select(OA, area_km2)
+  dplyr:: select(OA, area_km2)
 
 road_composition <- OA_roads_clean %>%
-  select(OA, total_road_length, n_A, n_B, n_minor, n_roads) %>%
+  dplyr:: select(OA, total_road_length, n_A, n_B, n_minor, n_roads) %>%
   left_join(oa_area, by = "OA") %>%
   mutate(
     total_road_length  = if_else(
@@ -430,7 +430,7 @@ OA_matching_dataset %>%
 
 # No OAs missing from oa_sub
 anti_join(
-  oa_sub %>% st_drop_geometry() %>% select(OA),
+  oa_sub %>% st_drop_geometry() %>% dplyr::select(OA),
   OA_matching_dataset, by = "OA"
 ) %>% nrow()
 
@@ -485,7 +485,7 @@ cat("OAs with fewer than 4 pre-treatment quarters:", nrow(short_pre), "\n")
 
 # Zero inflation in baseline injury variables — all three groups
 inj_baseline %>%
-  left_join(OA_analysis %>% select(OA, treated_OA, control_group1_OA, control_group2_OA),
+  left_join(OA_analysis %>%dplyr:: select(OA, treated_OA, control_group1_OA, control_group2_OA),
             by = "OA") %>%
   group_by(treated_OA, control_group1_OA, control_group2_OA) %>%
   summarise(
@@ -559,8 +559,8 @@ cat("Expected (n_OA × n_qtr):",
 
 # Which OAs are in oa_scheme_lookup but never appeared in OA_injuries?
 missing_oas <- anti_join(
-  oa_scheme_lookup %>% select(OA),
-  OA_injuries %>% select(OA),
+  oa_scheme_lookup %>% dplyr:: select(OA),
+  OA_injuries %>% dplyr::select(OA),
   by = "OA"
 )
 nrow(missing_oas)

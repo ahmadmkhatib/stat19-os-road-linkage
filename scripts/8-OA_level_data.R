@@ -12,6 +12,7 @@
 library(tidyverse)
 library(sf)
 library(here)
+library(osmdata)
 
 lads_sub <- readRDS(here("data","processed","LADs_sub.rds"))
 
@@ -105,23 +106,102 @@ treated_LADs <- oa_sub %>%
   pull(LAD24CD)
 
 #============================================================
-# Distance to city centre
+# Distance measures
+# Three alternative urbanity proxies, each measuring distance
+# from each OA centroid to a different reference point:
+#   (a) LAD geometric centroid     — original
+#   (b) LAD population-weighted centroid — Census 2021
+#   (c) OS Built-Up Area centroid  — Ordnance Survey Open Data
 #============================================================
-
-city_centroids <- oa_sub %>%
-  group_by(LAD24CD) %>%
-  summarise(geometry = st_union(geometry), .groups="drop") %>%
-  st_centroid()
 
 oa_centroids <- st_centroid(oa_sub)
 
+# --- (a) Distance to LAD geometric centroid (original) ---
+lad_geom_centroids <- oa_sub |>
+  group_by(LAD24CD) |>
+  summarise(geometry = st_union(geometry), .groups = "drop") |>
+  st_centroid()
+
 dist_citycentre <- st_distance(
   st_geometry(oa_centroids),
-  city_centroids[match(oa_centroids$LAD24CD,
-                       city_centroids$LAD24CD),]$geometry,
-  by_element=TRUE
-) %>%
+  lad_geom_centroids[match(oa_centroids$LAD24CD,
+                           lad_geom_centroids$LAD24CD), ]$geometry,
+  by_element = TRUE
+) |>
   as.numeric()
+
+# --- (b) Distance to LAD population-weighted centroid ---
+# Uses Census 2021 OA population to weight OA centroids
+oa_census_pop <- readRDS(here("data", "processed", "OA_matching_census.rds")) |>
+  dplyr::select(OA, Total)
+
+oa_coords <- oa_centroids |>
+  mutate(
+    x = st_coordinates(geometry)[, 1],
+    y = st_coordinates(geometry)[, 2]
+  ) |>
+  st_drop_geometry() |>
+  left_join(oa_census_pop, by = "OA")
+
+lad_pwc <- oa_coords |>
+  filter(!is.na(Total), Total > 0) |>
+  group_by(LAD24CD) |>
+  summarise(
+    pwc_x = sum(x * Total) / sum(Total),
+    pwc_y = sum(y * Total) / sum(Total),
+    .groups = "drop"
+  )
+
+lad_pwc_sf <- st_as_sf(lad_pwc, coords = c("pwc_x", "pwc_y"), crs = 27700)
+
+dist_pop_centre <- st_distance(
+  st_geometry(oa_centroids),
+  lad_pwc_sf[match(oa_centroids$LAD24CD,
+                   lad_pwc_sf$LAD24CD), ] |>
+    st_geometry(),
+  by_element = TRUE
+) |>
+  as.numeric()
+
+# --- (c) Distance to OS Built-Up Area centroid ---
+# Source: OS Open Built Up Areas (Ordnance Survey, OGL v3)
+# Centroids of the named BUA polygon matching each LAD's main settlement.
+####   from https://osdatahub.os.uk/data/downloads/open/BuiltUpAreas
+os_bua_centres <- read_csv(
+  here("data", "processed", "os_bua_city_centres_BNG.csv"),
+  show_col_types = FALSE    
+)
+
+os_bua_sf <- st_as_sf(os_bua_centres, coords = c("easting", "northing"), crs = 27700)
+
+dist_BUA_centroid <- st_distance(
+  st_geometry(oa_centroids),
+  os_bua_sf[match(oa_centroids$LAD24CD, os_bua_sf$LAD24CD), ] |>
+    st_geometry(),
+  by_element = TRUE
+) |>
+  as.numeric()
+
+# --- (d) Compare the three measures ---
+cat("\n=== Distance measure comparison ===\n")
+comparison <- tibble(
+  OA        = oa_centroids$OA,
+  LAD24CD   = oa_centroids$LAD24CD,
+  geom      = dist_citycentre,
+  pwc       = dist_pop_centre,
+  os_bua    = dist_BUA_centroid
+)
+
+cat("Correlations:\n")
+cat("  geom  vs pwc:    ", round(cor(comparison$geom, comparison$pwc),    3), "\n")
+cat("  geom  vs os_bua: ", round(cor(comparison$geom, comparison$os_bua), 3), "\n")
+cat("  pwc   vs os_bua: ", round(cor(comparison$pwc,  comparison$os_bua), 3), "\n\n")
+
+comparison |>
+  summarise(
+    across(c(geom, pwc, os_bua), list(mean = mean, sd = sd), .names = "{.col}_{.fn}")
+  ) |>
+  print()
 
 #============================================================
 # OA classification
@@ -161,6 +241,8 @@ OA_analysis <- oa_sub %>%
   )
 
 OA_analysis$dist_citycentre <- dist_citycentre
+OA_analysis$dist_pop_centre <- dist_pop_centre
+OA_analysis$dist_BUA_centroid  <- dist_BUA_centroid
 
 nrow(OA_analysis)
 OA_analysis %>% distinct(OA) %>% nrow()
@@ -172,12 +254,16 @@ anti_join(
 ) %>% nrow()
 
 
-OA_analysis %>%  dplyr:: select(dist_citycentre) %>%   summary()
+OA_analysis |>
+  dplyr::select(dist_citycentre, dist_pop_centre, dist_BUA_centroid) |>
+  summary()
+
 table(OA_analysis$treated_OA)
 
-OA_analysis  %>% filter(treated_OA==1)%>% dplyr::select(dist_citycentre) %>%   summary()
-
-## # is this resonable 10K 
+OA_analysis |>
+  filter(treated_OA == 1) |>
+  dplyr::select(dist_citycentre, dist_pop_centre, dist_BUA_centroid) |>
+  summary()
 
 OA_analysis <- OA_analysis %>%
   mutate(
@@ -198,11 +284,12 @@ OA_analysis <- OA_analysis %>%
   )
 
 
-OA_analysis %>%
-  group_by(assignment) %>%
+OA_analysis |>
+  group_by(assignment) |>
   summarise(
-    max_dist = max(dist_citycentre),
-    median_dist = median(dist_citycentre)
+    median_geom   = median(dist_citycentre),
+    median_pwc    = median(dist_pop_centre),
+    median_os_bua = median(dist_BUA_centroid)
   )
 
 table(OA_analysis$assignment)

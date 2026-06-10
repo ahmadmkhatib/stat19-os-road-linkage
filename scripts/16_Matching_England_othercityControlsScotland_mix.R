@@ -56,7 +56,7 @@ OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds
 
 stage1_road     <- c("road_density_m_km2", "road_length_km",
                      "pct_A_road", "pct_B_road", "pct_minor_road")
-stage1_urban    <- c("dist_citycentre", "pop_density", "area_km2")
+stage1_urban    <- c("dist_BUA_centroid", "pop_density", "area_km2")
 stage1_business <- c("business_retail_per_km2")
 stage1_socdem   <- c(
   "IMD",
@@ -79,7 +79,7 @@ stage2_levels <- c(
 )
 stage2_vars <- c(stage2_trends, stage2_levels)
 
-log_transform_s1        <- c("road_length_km", "pop_density", "dist_citycentre",
+log_transform_s1        <- c("road_length_km", "pop_density", "dist_BUA_centroid",
                              "road_density_m_km2", "business_retail_per_km2")
 log_nozero_s1           <- c("area_km2")
 log_transform_s2_levels <- stage2_levels

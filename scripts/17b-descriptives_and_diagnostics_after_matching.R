@@ -160,7 +160,7 @@ stage1_road <- c(
 )
 
 stage1_urban <- c(
-  "log1p_dist_citycentre", "log1p_pop_density",
+  "log1p_dist_BUA_centroid", "log1p_pop_density",
   "log1p_business_retail_per_km2"
 )
 
@@ -202,12 +202,12 @@ var_labels <- c(
   pct_A_road = "% A-road",
   pct_B_road = "% B-road",
   pct_minor_road = "% Minor road",
-  log1p_dist_citycentre = "Distance to city centre (m)",
+  log1p_dist_BUA_centroid = "Dist. to BUA centroid (m)",
   log1p_pop_density = "Population density (persons/km\u00b2)",
   log1p_business_retail_per_km2 = "Retail businesses (per km\u00b2)",
   road_density_m_km2 = "Road density (m/km\u00b2)",
   road_length_km = "Road length (km)",
-  dist_citycentre = "Distance to city centre (m)",
+  dist_BUA_centroid = "Dist. to BUA centroid (m)",
   pop_density = "Population density (persons/km\u00b2)",
   area_km2 = "Area (km\u00b2)",
   business_retail_per_km2 = "Retail businesses (per km\u00b2)",
@@ -442,7 +442,7 @@ isolated_chars <- matched_England_treated %>%
     mean_pct_minor = round(mean(pct_minor_road, na.rm = TRUE), 1),
     mean_IMD = round(mean(IMD, na.rm = TRUE), 1),
     mean_Drive_Car_pct = round(mean(Drive_Car_pct, na.rm = TRUE), 1),
-    mean_dist_citycentre = round(mean(dist_citycentre, na.rm = TRUE), 0),
+    mean_dist_BUA_centroid = round(mean(dist_BUA_centroid, na.rm = TRUE), 0),
     mean_total_pkm = round(mean(mean_total_pkm, na.rm = TRUE), 5),
     .groups = "drop"
   ) %>%
@@ -505,7 +505,7 @@ skew_table <- map_df(
                               (median(x_raw, na.rm = TRUE) + 1e-9), 1),
       log_applied = v %in% c(
         "road_length_km", "pop_density",
-        "dist_citycentre", stage2_levels
+        "dist_BUA_centroid", stage2_levels
       )
     )
   }
@@ -585,7 +585,7 @@ unmatched_pool_log <- unmatched_pool |>
     log1p_road_length_km = log1p(pmax(road_length_km, 0)),
     log1p_road_density_m_km2 = log1p(pmax(road_density_m_km2, 0)),
     log_area_km2 = log(area_km2),
-    log1p_dist_citycentre = log1p(pmax(dist_citycentre, 0)),
+    log1p_dist_BUA_centroid = log1p(pmax(dist_BUA_centroid, 0)),
     log1p_pop_density = log1p(pmax(pop_density, 0)),
     log1p_business_retail_per_km2 = log1p(pmax(business_retail_per_km2, 0)),
     age_under15_pct = X4under_pct + X5to9_pct + X10to14_pct,
@@ -734,7 +734,7 @@ dist_road_vars <- c(
 )
 
 dist_urban_vars <- c(
-  "dist_citycentre", "pop_density", "business_retail_per_km2"
+  "dist_BUA_centroid", "pop_density", "business_retail_per_km2"
 )
 
 dist_socdem_vars <- c(
@@ -749,7 +749,7 @@ dist_socdem_vars <- c(
 
 log_s1 <- c(
   "road_length_km", "road_density_m_km2", "area_km2",
-  "dist_citycentre", "pop_density", "business_retail_per_km2"
+  "dist_BUA_centroid", "pop_density", "business_retail_per_km2"
 )
 
 road_plots <- map(c(dist_road_vars, dist_urban_vars), function(v) {

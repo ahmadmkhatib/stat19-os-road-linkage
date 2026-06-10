@@ -1,197 +1,197 @@
 scheme,variable,label,smd_before,smd_after
-Bath,log1p_road_length_km,Road length (log),-0.476,-0.144
-Bath,log1p_pop_density,Pop. density (log),0.5067,-0.1527
-Bath,log1p_dist_citycentre,Dist. city centre (log),1.4656,1.7021
-Bath,log1p_road_density_m_km2,Road density (log),0.3281,-0.3125
-Bath,log1p_business_retail_per_km2,Retail density (log),1.3373,0.4015
-Bath,log_area_km2,Area (log),-0.6595,-0.0535
-Bath,pct_A_road,% A road,0.9188,0.5743
-Bath,pct_B_road,% B road,-0.2135,-0.01
-Bath,pct_minor_road,% Minor road,-0.7584,-0.5402
-Bath,IMD,IMD,-0.5937,-0.5002
-Bath,cars_one_pct,% 1 car,-0.2042,-0.2599
-Bath,cars_twoPlus_pct,% 2+ cars,-1.4207,-0.5157
-Bath,Drive_Car_pct,% Drive to work,-2.1312,-1.2147
-Bath,Passenger_Car_pct,% Passenger car,-1.604,-0.9951
-Bath,Walk_pct,% Walk to work,3.0686,0.9785
-Bath,Bicycle_pct,% Cycle to work,-0.1606,-0.6018
-Bath,bus_Coach_pct,% Bus/coach,-0.5234,-0.498
-Bath,Train_pct,% Train,0.9932,0.5614
-Bath,Underground_train_tram_pct,% Underground/tram,-0.1689,0.1343
-Bath,Taxi_pct,% Taxi,-0.5315,-0.232
-Bath,workAthome_pct,% Work from home,1.2212,0.8909
-Bath,Other_pct,% Other commute,0.415,0.1042
-Bath,White_pct,% White,0.2464,0.1355
-Bath,Mixed_pct,% Mixed ethnicity,0.6357,0.27
-Bath,Asian_pct,% Asian,-0.2302,-0.0581
-Bath,Black_pct,% Black,-0.5494,-0.5501
-Bath,trend_total_pkm,Trend: total injuries/km,-0.0187,0.0237
-Bath,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.5826,-0.172
-Birmingham,log1p_road_length_km,Road length (log),-0.3166,-0.0378
-Birmingham,log1p_pop_density,Pop. density (log),0.7216,0.0715
-Birmingham,log1p_dist_citycentre,Dist. city centre (log),-0.4671,-0.0823
-Birmingham,log1p_road_density_m_km2,Road density (log),0.3779,-0.0608
-Birmingham,log1p_business_retail_per_km2,Retail density (log),2.2176,0.894
-Birmingham,log_area_km2,Area (log),-0.7787,-0.1702
-Birmingham,pct_A_road,% A road,0.2437,-0.1169
-Birmingham,pct_B_road,% B road,0.4508,0.0872
-Birmingham,pct_minor_road,% Minor road,-0.49,0.0474
-Birmingham,IMD,IMD,0.7567,0.2337
-Birmingham,cars_one_pct,% 1 car,-0.5208,0.0597
-Birmingham,cars_twoPlus_pct,% 2+ cars,-2.017,-0.6493
-Birmingham,Drive_Car_pct,% Drive to work,-1.8817,-0.3334
-Birmingham,Passenger_Car_pct,% Passenger car,-1.6146,-0.8985
-Birmingham,Walk_pct,% Walk to work,1.7327,0.4855
-Birmingham,Bicycle_pct,% Cycle to work,-0.6138,-0.85
-Birmingham,bus_Coach_pct,% Bus/coach,0.3741,-0.0321
+Bath,log1p_road_length_km,Road length (log),-0.476,-0.0737
+Bath,log1p_pop_density,Pop. density (log),0.5067,-0.3457
+Bath,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-2.1192,-0.9495
+Bath,log1p_road_density_m_km2,Road density (log),0.3281,-0.5181
+Bath,log1p_business_retail_per_km2,Retail density (log),1.3373,0.3856
+Bath,log_area_km2,Area (log),-0.6595,0.0832
+Bath,pct_A_road,% A road,0.9188,0.5644
+Bath,pct_B_road,% B road,-0.2135,0.1035
+Bath,pct_minor_road,% Minor road,-0.7584,-0.5606
+Bath,IMD,IMD,-0.5937,-0.3407
+Bath,cars_one_pct,% 1 car,-0.2042,-0.4552
+Bath,cars_twoPlus_pct,% 2+ cars,-1.4207,-0.6405
+Bath,Drive_Car_pct,% Drive to work,-2.1312,-1.2524
+Bath,Passenger_Car_pct,% Passenger car,-1.604,-0.9242
+Bath,Walk_pct,% Walk to work,3.0686,0.9527
+Bath,Bicycle_pct,% Cycle to work,-0.1606,-0.8493
+Bath,bus_Coach_pct,% Bus/coach,-0.5234,-0.226
+Bath,Train_pct,% Train,0.9932,0.6041
+Bath,Underground_train_tram_pct,% Underground/tram,-0.1689,0.1568
+Bath,Taxi_pct,% Taxi,-0.5315,-0.1754
+Bath,workAthome_pct,% Work from home,1.2212,0.7646
+Bath,Other_pct,% Other commute,0.415,0.2031
+Bath,White_pct,% White,0.2464,0.3002
+Bath,Mixed_pct,% Mixed ethnicity,0.6357,0.2535
+Bath,Asian_pct,% Asian,-0.2302,-0.1744
+Bath,Black_pct,% Black,-0.5494,-0.6505
+Bath,trend_total_pkm,Trend: total injuries/km,-0.0187,0.0052
+Bath,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.5826,-0.1107
+Birmingham,log1p_road_length_km,Road length (log),-0.3166,0.0081
+Birmingham,log1p_pop_density,Pop. density (log),0.7216,0.0302
+Birmingham,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8036,0.0106
+Birmingham,log1p_road_density_m_km2,Road density (log),0.3779,-0.058
+Birmingham,log1p_business_retail_per_km2,Retail density (log),2.2176,0.8699
+Birmingham,log_area_km2,Area (log),-0.7787,-0.1268
+Birmingham,pct_A_road,% A road,0.2437,-0.1063
+Birmingham,pct_B_road,% B road,0.4508,0.0637
+Birmingham,pct_minor_road,% Minor road,-0.49,0.0612
+Birmingham,IMD,IMD,0.7567,0.2301
+Birmingham,cars_one_pct,% 1 car,-0.5208,0.0502
+Birmingham,cars_twoPlus_pct,% 2+ cars,-2.017,-0.6843
+Birmingham,Drive_Car_pct,% Drive to work,-1.8817,-0.3642
+Birmingham,Passenger_Car_pct,% Passenger car,-1.6146,-0.9057
+Birmingham,Walk_pct,% Walk to work,1.7327,0.4865
+Birmingham,Bicycle_pct,% Cycle to work,-0.6138,-0.8627
+Birmingham,bus_Coach_pct,% Bus/coach,0.3741,-0.0663
 Birmingham,Train_pct,% Train,0.9168,0.5942
-Birmingham,Underground_train_tram_pct,% Underground/tram,0.3771,0.3647
-Birmingham,Taxi_pct,% Taxi,-0.0372,0.0601
-Birmingham,workAthome_pct,% Work from home,-0.301,0.0573
-Birmingham,Other_pct,% Other commute,0.0706,-0.0299
-Birmingham,White_pct,% White,-1.8349,-1.0571
-Birmingham,Mixed_pct,% Mixed ethnicity,1.1872,0.5955
-Birmingham,Asian_pct,% Asian,0.8168,0.61240000000000006
-Birmingham,Black_pct,% Black,1.4616,0.8623
-Birmingham,trend_total_pkm,Trend: total injuries/km,-0.0642,0.0015
-Birmingham,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.4334,0.3088
-Bradford,log1p_road_length_km,Road length (log),0.1177,0.2022
-Bradford,log1p_pop_density,Pop. density (log),0.5458,0.209
-Bradford,log1p_dist_citycentre,Dist. city centre (log),1.9069,1.8845
-Bradford,log1p_road_density_m_km2,Road density (log),0.7521,0.5206
-Bradford,log1p_business_retail_per_km2,Retail density (log),1.5105,0.675
-Bradford,log_area_km2,Area (log),-0.3752,-0.0813
-Bradford,pct_A_road,% A road,0.397,0.1137
-Bradford,pct_B_road,% B road,-0.1052,-0.123
-Bradford,pct_minor_road,% Minor road,-0.2892,-0.02
-Bradford,IMD,IMD,1.218,0.7367
-Bradford,cars_one_pct,% 1 car,-0.3711,-0.0696
-Bradford,cars_twoPlus_pct,% 2+ cars,-0.9213,-0.1618
-Bradford,Drive_Car_pct,% Drive to work,-1.3746,-0.5432
-Bradford,Passenger_Car_pct,% Passenger car,0.1293,0.2216
-Bradford,Walk_pct,% Walk to work,0.3676,-0.1395
-Bradford,Bicycle_pct,% Cycle to work,-0.8289,-0.9973
-Bradford,bus_Coach_pct,% Bus/coach,0.1329,-0.0319
-Bradford,Train_pct,% Train,0.2219,-0.0305
-Bradford,Underground_train_tram_pct,% Underground/tram,-0.2859,-0.1445
-Bradford,Taxi_pct,% Taxi,0.6983,0.49370000000000003
-Bradford,workAthome_pct,% Work from home,-0.5105,-0.2083
-Bradford,Other_pct,% Other commute,0.3055,0.2586
-Bradford,White_pct,% White,-2.1004,-1.2647
-Bradford,Mixed_pct,% Mixed ethnicity,0.0117,-0.24
-Bradford,Asian_pct,% Asian,2.0902,1.3225
-Bradford,Black_pct,% Black,0.1306,-0.1484
-Bradford,trend_total_pkm,Trend: total injuries/km,-0.0647,-0.0094
-Bradford,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7277,-0.1105
-Bristol,log1p_road_length_km,Road length (log),-0.3779,-0.0188
-Bristol,log1p_pop_density,Pop. density (log),0.7696,0.0492
-Bristol,log1p_dist_citycentre,Dist. city centre (log),1.8015,2.5656
-Bristol,log1p_road_density_m_km2,Road density (log),0.3993,-0.1107
-Bristol,log1p_business_retail_per_km2,Retail density (log),2.2337,0.665
-Bristol,log_area_km2,Area (log),-0.7613,-0.0502
-Bristol,pct_A_road,% A road,0.7426,0.1104
-Bristol,pct_B_road,% B road,0.2374,0.159
-Bristol,pct_minor_road,% Minor road,-0.8071,-0.1781
-Bristol,IMD,IMD,0.0475,-0.2635
-Bristol,cars_one_pct,% 1 car,-0.0671,0.2178
-Bristol,cars_twoPlus_pct,% 2+ cars,-1.7798,-0.4437
-Bristol,Drive_Car_pct,% Drive to work,-1.7257,-0.1328
-Bristol,Passenger_Car_pct,% Passenger car,-1.8354,-0.9272
-Bristol,Walk_pct,% Walk to work,3.2038,0.9821
-Bristol,Bicycle_pct,% Cycle to work,0.6951,0.5302
-Bristol,bus_Coach_pct,% Bus/coach,-0.3652,-0.6557
-Bristol,Train_pct,% Train,0.413,0.1866
-Bristol,Underground_train_tram_pct,% Underground/tram,-0.3018,-0.5772
-Bristol,Taxi_pct,% Taxi,-0.3067,-0.0094
-Bristol,workAthome_pct,% Work from home,0.3732,0.5831
-Bristol,Other_pct,% Other commute,0.4538,0.1118
-Bristol,White_pct,% White,-0.4261,-0.0201
-Bristol,Mixed_pct,% Mixed ethnicity,0.8728,0.2634
-Bristol,Asian_pct,% Asian,0.0944,0.0375
-Bristol,Black_pct,% Black,0.2688,-0.1383
-Bristol,trend_total_pkm,Trend: total injuries/km,-0.0231,0.0944
-Bristol,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.5926,-0.0383
-Newcastle,log1p_road_length_km,Road length (log),0.2924,0.3793
-Newcastle,log1p_pop_density,Pop. density (log),0.365,-0.303
-Newcastle,log1p_dist_citycentre,Dist. city centre (log),1.0946,1.4328
-Newcastle,log1p_road_density_m_km2,Road density (log),0.8143,0.3841
-Newcastle,log1p_business_retail_per_km2,Retail density (log),2.1168,0.1118
-Newcastle,log_area_km2,Area (log),-0.2883,0.2079
-Newcastle,pct_A_road,% A road,0.8508,0.2235
-Newcastle,pct_B_road,% B road,0.7013,0.747
-Newcastle,pct_minor_road,% Minor road,-1.3624,-0.7033
-Newcastle,IMD,IMD,0.4541,-0.0738
-Newcastle,cars_one_pct,% 1 car,-1.3265,-0.3463
-Newcastle,cars_twoPlus_pct,% 2+ cars,-2.2242,-0.6926
-Newcastle,Drive_Car_pct,% Drive to work,-2.5973,-0.3648
-Newcastle,Passenger_Car_pct,% Passenger car,-1.7305,-0.6293
-Newcastle,Walk_pct,% Walk to work,2.1884,0.3527
-Newcastle,Bicycle_pct,% Cycle to work,-0.7379,-0.7738
-Newcastle,bus_Coach_pct,% Bus/coach,0.1322,-0.1779
-Newcastle,Train_pct,% Train,-0.1747,-0.4407
-Newcastle,Underground_train_tram_pct,% Underground/tram,2.0206,1.0163
-Newcastle,Taxi_pct,% Taxi,-0.2702,-0.2789
-Newcastle,workAthome_pct,% Work from home,-0.3252,0.4255
-Newcastle,Other_pct,% Other commute,-0.0517,-0.1955
-Newcastle,White_pct,% White,-1.2093,-0.3024
-Newcastle,Mixed_pct,% Mixed ethnicity,0.0069,-0.6996
-Newcastle,Asian_pct,% Asian,1.0229,0.814
-Newcastle,Black_pct,% Black,0.1807,-0.6036
-Newcastle,trend_total_pkm,Trend: total injuries/km,-0.0102,0.0755
-Newcastle,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.4625,-0.0283
-Portsmouth,log1p_road_length_km,Road length (log),-0.6027,-0.5047
-Portsmouth,log1p_pop_density,Pop. density (log),1.0404,0.6185
-Portsmouth,log1p_dist_citycentre,Dist. city centre (log),-0.2504,0.0184
-Portsmouth,log1p_road_density_m_km2,Road density (log),0.6105,0.1919
-Portsmouth,log1p_business_retail_per_km2,Retail density (log),1.3088,0.4613
-Portsmouth,log_area_km2,Area (log),-0.9604,-0.6475
-Portsmouth,pct_A_road,% A road,0.2208,-0.1208
-Portsmouth,pct_B_road,% B road,0.0655,0.0365
-Portsmouth,pct_minor_road,% Minor road,-0.2163,0.1129
-Portsmouth,IMD,IMD,1.4575,0.6611
-Portsmouth,cars_one_pct,% 1 car,-0.946,-0.3182
-Portsmouth,cars_twoPlus_pct,% 2+ cars,-1.7102,-0.6501
-Portsmouth,Drive_Car_pct,% Drive to work,-2.0328,-0.6605
-Portsmouth,Passenger_Car_pct,% Passenger car,-0.4215,-0.1562
-Portsmouth,Walk_pct,% Walk to work,1.4089,0.4887
-Portsmouth,Bicycle_pct,% Cycle to work,0.7944,0.8196
-Portsmouth,bus_Coach_pct,% Bus/coach,-0.5954,-0.6586
-Portsmouth,Train_pct,% Train,-0.1898,0.2256
-Portsmouth,Underground_train_tram_pct,% Underground/tram,-0.3237,-0.2525
-Portsmouth,Taxi_pct,% Taxi,0.4109,0.3817
-Portsmouth,workAthome_pct,% Work from home,-0.7637,-0.1298
-Portsmouth,Other_pct,% Other commute,0.1416,0.0572
-Portsmouth,White_pct,% White,-0.4928,-0.3346
-Portsmouth,Mixed_pct,% Mixed ethnicity,0.1268,-0.1687
-Portsmouth,Asian_pct,% Asian,0.1292,0.23
-Portsmouth,Black_pct,% Black,0.6606,0.2916
-Portsmouth,trend_total_pkm,Trend: total injuries/km,-0.0747,-0.09
-Portsmouth,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.9179,-0.0096
-Sheffield,log1p_road_length_km,Road length (log),0.0292,0.2132
-Sheffield,log1p_pop_density,Pop. density (log),0.7798,0.0145
-Sheffield,log1p_dist_citycentre,Dist. city centre (log),1.4799,1.9871
-Sheffield,log1p_road_density_m_km2,Road density (log),0.9909,0.5908
-Sheffield,log1p_business_retail_per_km2,Retail density (log),2.1743,0.7755
-Sheffield,log_area_km2,Area (log),-0.6545,-0.0496
-Sheffield,pct_A_road,% A road,0.3192,0.0923
-Sheffield,pct_B_road,% B road,0.3492,0.0829
-Sheffield,pct_minor_road,% Minor road,-0.4876,-0.0967
-Sheffield,IMD,IMD,0.3483,-0.2568
-Sheffield,cars_one_pct,% 1 car,-1.5541,-0.4327
-Sheffield,cars_twoPlus_pct,% 2+ cars,-2.2806,-0.872
-Sheffield,Drive_Car_pct,% Drive to work,-2.5747,-0.5586
-Sheffield,Passenger_Car_pct,% Passenger car,-1.8629,-0.8023
-Sheffield,Walk_pct,% Walk to work,1.9422,0.4623
-Sheffield,Bicycle_pct,% Cycle to work,-0.6989,-0.7299
-Sheffield,bus_Coach_pct,% Bus/coach,-0.2165,-0.5375
-Sheffield,Train_pct,% Train,0.1849,0.108
-Sheffield,Underground_train_tram_pct,% Underground/tram,1.6407,1.1333
-Sheffield,Taxi_pct,% Taxi,-0.4057,-0.2372
-Sheffield,workAthome_pct,% Work from home,-0.5141,-0.0545
-Sheffield,Other_pct,% Other commute,-0.2303,-0.1578
-Sheffield,White_pct,% White,-1.5046,-0.5425
-Sheffield,Mixed_pct,% Mixed ethnicity,0.5324,-0.2529
-Sheffield,Asian_pct,% Asian,0.9703,0.7241
-Sheffield,Black_pct,% Black,0.6316,-0.0446
-Sheffield,trend_total_pkm,Trend: total injuries/km,-0.2239,0.0821
-Sheffield,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.1455,-0.135
+Birmingham,Underground_train_tram_pct,% Underground/tram,0.3771,0.3561
+Birmingham,Taxi_pct,% Taxi,-0.0372,0.0329
+Birmingham,workAthome_pct,% Work from home,-0.301,0.0316
+Birmingham,Other_pct,% Other commute,0.0706,-0.0232
+Birmingham,White_pct,% White,-1.8349,-1.0241
+Birmingham,Mixed_pct,% Mixed ethnicity,1.1872,0.5943
+Birmingham,Asian_pct,% Asian,0.8168,0.5527
+Birmingham,Black_pct,% Black,1.4616,0.8737
+Birmingham,trend_total_pkm,Trend: total injuries/km,-0.0642,0.0199
+Birmingham,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.4334,0.3031
+Bradford,log1p_road_length_km,Road length (log),0.1177,0.2741
+Bradford,log1p_pop_density,Pop. density (log),0.5458,0.141
+Bradford,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8537,-0.3534
+Bradford,log1p_road_density_m_km2,Road density (log),0.7521,0.494
+Bradford,log1p_business_retail_per_km2,Retail density (log),1.5105,0.6244
+Bradford,log_area_km2,Area (log),-0.3752,-0.0315
+Bradford,pct_A_road,% A road,0.397,0.1819
+Bradford,pct_B_road,% B road,-0.1052,-0.1081
+Bradford,pct_minor_road,% Minor road,-0.2892,-0.0938
+Bradford,IMD,IMD,1.218,0.735
+Bradford,cars_one_pct,% 1 car,-0.3711,-0.1497
+Bradford,cars_twoPlus_pct,% 2+ cars,-0.9213,-0.2957
+Bradford,Drive_Car_pct,% Drive to work,-1.3746,-0.6626
+Bradford,Passenger_Car_pct,% Passenger car,0.1293,0.0563
+Bradford,Walk_pct,% Walk to work,0.3676,-0.0205
+Bradford,Bicycle_pct,% Cycle to work,-0.8289,-0.9907
+Bradford,bus_Coach_pct,% Bus/coach,0.1329,-0.0822
+Bradford,Train_pct,% Train,0.2219,0.0126
+Bradford,Underground_train_tram_pct,% Underground/tram,-0.2859,-0.1983
+Bradford,Taxi_pct,% Taxi,0.6983,0.4052
+Bradford,workAthome_pct,% Work from home,-0.5105,-0.211
+Bradford,Other_pct,% Other commute,0.3055,0.1939
+Bradford,White_pct,% White,-2.1004,-0.9473
+Bradford,Mixed_pct,% Mixed ethnicity,0.0117,-0.1583
+Bradford,Asian_pct,% Asian,2.0902,1.0079
+Bradford,Black_pct,% Black,0.1306,-0.1993
+Bradford,trend_total_pkm,Trend: total injuries/km,-0.0647,0.0062
+Bradford,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7277,-0.0573
+Bristol,log1p_road_length_km,Road length (log),-0.3779,-0.0431
+Bristol,log1p_pop_density,Pop. density (log),0.7696,0.086
+Bristol,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.8162,-1.0028
+Bristol,log1p_road_density_m_km2,Road density (log),0.3993,-0.0243
+Bristol,log1p_business_retail_per_km2,Retail density (log),2.2337,0.6936
+Bristol,log_area_km2,Area (log),-0.7613,-0.1368
+Bristol,pct_A_road,% A road,0.7426,0.1321
+Bristol,pct_B_road,% B road,0.2374,0.1871
+Bristol,pct_minor_road,% Minor road,-0.8071,-0.2179
+Bristol,IMD,IMD,0.0475,-0.1637
+Bristol,cars_one_pct,% 1 car,-0.0671,0.2442
+Bristol,cars_twoPlus_pct,% 2+ cars,-1.7798,-0.6773
+Bristol,Drive_Car_pct,% Drive to work,-1.7257,-0.1878
+Bristol,Passenger_Car_pct,% Passenger car,-1.8354,-1.0213
+Bristol,Walk_pct,% Walk to work,3.2038,1.0487
+Bristol,Bicycle_pct,% Cycle to work,0.6951,0.4753
+Bristol,bus_Coach_pct,% Bus/coach,-0.3652,-0.5236
+Bristol,Train_pct,% Train,0.413,0.223
+Bristol,Underground_train_tram_pct,% Underground/tram,-0.3018,-0.4073
+Bristol,Taxi_pct,% Taxi,-0.3067,-0.0403
+Bristol,workAthome_pct,% Work from home,0.3732,0.6279
+Bristol,Other_pct,% Other commute,0.4538,0.2834
+Bristol,White_pct,% White,-0.4261,-0.1312
+Bristol,Mixed_pct,% Mixed ethnicity,0.8728,0.3131
+Bristol,Asian_pct,% Asian,0.0944,0.073
+Bristol,Black_pct,% Black,0.2688,-0.0404
+Bristol,trend_total_pkm,Trend: total injuries/km,-0.0231,-0.0372
+Bristol,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.5926,-0.0144
+Newcastle,log1p_road_length_km,Road length (log),0.2924,0.8966
+Newcastle,log1p_pop_density,Pop. density (log),0.365,-0.565
+Newcastle,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.5178,0.4136
+Newcastle,log1p_road_density_m_km2,Road density (log),0.8143,0.49
+Newcastle,log1p_business_retail_per_km2,Retail density (log),2.1168,0.1406
+Newcastle,log_area_km2,Area (log),-0.2883,0.5505
+Newcastle,pct_A_road,% A road,0.8508,0.09
+Newcastle,pct_B_road,% B road,0.7013,0.7932
+Newcastle,pct_minor_road,% Minor road,-1.3624,-0.5223
+Newcastle,IMD,IMD,0.4541,-0.1305
+Newcastle,cars_one_pct,% 1 car,-1.3265,-0.2632
+Newcastle,cars_twoPlus_pct,% 2+ cars,-2.2242,-0.5515
+Newcastle,Drive_Car_pct,% Drive to work,-2.5973,-0.4128
+Newcastle,Passenger_Car_pct,% Passenger car,-1.7305,-0.7736
+Newcastle,Walk_pct,% Walk to work,2.1884,0.3586
+Newcastle,Bicycle_pct,% Cycle to work,-0.7379,-1.0053
+Newcastle,bus_Coach_pct,% Bus/coach,0.1322,-0.5483
+Newcastle,Train_pct,% Train,-0.1747,-0.4842
+Newcastle,Underground_train_tram_pct,% Underground/tram,2.0206,0.9859
+Newcastle,Taxi_pct,% Taxi,-0.2702,-0.2469
+Newcastle,workAthome_pct,% Work from home,-0.3252,0.476
+Newcastle,Other_pct,% Other commute,-0.0517,-0.09
+Newcastle,White_pct,% White,-1.2093,-0.0976
+Newcastle,Mixed_pct,% Mixed ethnicity,0.0069,-0.6707
+Newcastle,Asian_pct,% Asian,1.0229,0.8834
+Newcastle,Black_pct,% Black,0.1807,-0.655
+Newcastle,trend_total_pkm,Trend: total injuries/km,-0.0102,-0.0729
+Newcastle,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.4625,-0.0638
+Portsmouth,log1p_road_length_km,Road length (log),-0.6027,-0.3017
+Portsmouth,log1p_pop_density,Pop. density (log),1.0404,0.468
+Portsmouth,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.6856,0.1524
+Portsmouth,log1p_road_density_m_km2,Road density (log),0.6105,0.216
+Portsmouth,log1p_business_retail_per_km2,Retail density (log),1.3088,0.3513
+Portsmouth,log_area_km2,Area (log),-0.9604,-0.4105
+Portsmouth,pct_A_road,% A road,0.2208,-0.0616
+Portsmouth,pct_B_road,% B road,0.0655,0.0504
+Portsmouth,pct_minor_road,% Minor road,-0.2163,0.063
+Portsmouth,IMD,IMD,1.4575,0.6919
+Portsmouth,cars_one_pct,% 1 car,-0.946,-0.2801
+Portsmouth,cars_twoPlus_pct,% 2+ cars,-1.7102,-0.5181
+Portsmouth,Drive_Car_pct,% Drive to work,-2.0328,-0.6539
+Portsmouth,Passenger_Car_pct,% Passenger car,-0.4215,-0.251
+Portsmouth,Walk_pct,% Walk to work,1.4089,0.3768
+Portsmouth,Bicycle_pct,% Cycle to work,0.7944,0.7545
+Portsmouth,bus_Coach_pct,% Bus/coach,-0.5954,-0.9524
+Portsmouth,Train_pct,% Train,-0.1898,0.0015
+Portsmouth,Underground_train_tram_pct,% Underground/tram,-0.3237,-0.2942
+Portsmouth,Taxi_pct,% Taxi,0.4109,0.4804
+Portsmouth,workAthome_pct,% Work from home,-0.7637,-0.2643
+Portsmouth,Other_pct,% Other commute,0.1416,0.1588
+Portsmouth,White_pct,% White,-0.4928,-0.286
+Portsmouth,Mixed_pct,% Mixed ethnicity,0.1268,-0.2091
+Portsmouth,Asian_pct,% Asian,0.1292,0.2833
+Portsmouth,Black_pct,% Black,0.6606,0.1622
+Portsmouth,trend_total_pkm,Trend: total injuries/km,-0.0747,-0.08
+Portsmouth,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.9179,-0.1511
+Sheffield,log1p_road_length_km,Road length (log),0.0292,0.3431
+Sheffield,log1p_pop_density,Pop. density (log),0.7798,-0.0358
+Sheffield,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.5261,-0.5253
+Sheffield,log1p_road_density_m_km2,Road density (log),0.9909,0.6274
+Sheffield,log1p_business_retail_per_km2,Retail density (log),2.1743,0.7421
+Sheffield,log_area_km2,Area (log),-0.6545,0.0278
+Sheffield,pct_A_road,% A road,0.3192,0.1127
+Sheffield,pct_B_road,% B road,0.3492,0.1559
+Sheffield,pct_minor_road,% Minor road,-0.4876,-0.1442
+Sheffield,IMD,IMD,0.3483,-0.3789
+Sheffield,cars_one_pct,% 1 car,-1.5541,-0.5341
+Sheffield,cars_twoPlus_pct,% 2+ cars,-2.2806,-0.9768
+Sheffield,Drive_Car_pct,% Drive to work,-2.5747,-0.5977
+Sheffield,Passenger_Car_pct,% Passenger car,-1.8629,-0.7761
+Sheffield,Walk_pct,% Walk to work,1.9422,0.6417
+Sheffield,Bicycle_pct,% Cycle to work,-0.6989,-0.8927
+Sheffield,bus_Coach_pct,% Bus/coach,-0.2165,-0.6291
+Sheffield,Train_pct,% Train,0.1849,0.2646
+Sheffield,Underground_train_tram_pct,% Underground/tram,1.6407,1.2622
+Sheffield,Taxi_pct,% Taxi,-0.4057,-0.3248
+Sheffield,workAthome_pct,% Work from home,-0.5141,0.0906
+Sheffield,Other_pct,% Other commute,-0.2303,-0.2714
+Sheffield,White_pct,% White,-1.5046,-0.269
+Sheffield,Mixed_pct,% Mixed ethnicity,0.5324,-0.2115
+Sheffield,Asian_pct,% Asian,0.9703,0.5901
+Sheffield,Black_pct,% Black,0.6316,-0.3099
+Sheffield,trend_total_pkm,Trend: total injuries/km,-0.2239,0.0727
+Sheffield,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.1455,-0.1171

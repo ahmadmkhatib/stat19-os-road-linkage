@@ -126,7 +126,7 @@ road_attributes_OA <- roads_oa %>%
     OA_analysis %>%
       arrange(OA) %>%
       distinct(OA, .keep_all = TRUE) %>%    
-      select(OA, assignment),
+      dplyr::select(OA, assignment),
     by = "OA"
   )
 

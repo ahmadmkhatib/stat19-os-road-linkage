@@ -548,10 +548,10 @@ OA_summary <- OA_analysis %>%
     n_buffer = sum(buffer_OA),
     n_control1 = sum(control_group1_OA),
     n_control2 = sum(control_group2_OA),
-    median_dist_to_centre = median(dist_citycentre),
-    mean_dist_to_centre = mean(dist_citycentre),
-    min_dist_to_centre = min(dist_citycentre),
-    max_dist_to_centre = max(dist_citycentre)
+    median_dist_to_centre = median(dist_BUA_centroid),
+    mean_dist_to_centre = mean(dist_BUA_centroid),
+    min_dist_to_centre = min(dist_BUA_centroid),
+    max_dist_to_centre = max(dist_BUA_centroid)
   )
 
 

@@ -39,6 +39,11 @@ OA_matching_dataset <- readRDS(
   here("data","processed","OA_matching_dataset.rds")
 )
 
+# Backward-compat: rename dist_os_centre → dist_BUA_centroid if needed
+if ("dist_os_centre" %in% names(OA_matching_dataset) && !"dist_BUA_centroid" %in% names(OA_matching_dataset)) {
+  names(OA_matching_dataset)[names(OA_matching_dataset) == "dist_os_centre"] <- "dist_BUA_centroid"
+}
+
 # 
 # OA shapefile and compute area
 # ------------------------------------------------------------
@@ -110,7 +115,7 @@ OA_char_raw_renamed <- OA_char_raw %>%
 names(OA_char_percent)
 OA_char_pct_renamed <- OA_char_percent %>%
   rename_with(~ paste0(.x,"_pct"), all_of(vars_to_rename)) %>%
-  select(-country,-Total,-IMD)
+  dplyr::select(-country,-Total,-IMD)
 
 # Merge census tables
 # ------------------------
@@ -140,7 +145,7 @@ OA_matching_census <- OA_matching_census %>%
   left_join(
     oa_sub %>%
       st_drop_geometry() %>%
-      select(OA, area_km2),
+    dplyr::  select(OA, area_km2),
     by = "OA"
   ) %>%
   mutate(
@@ -279,7 +284,7 @@ cat("\n[5] Stage 1 variable completeness (treated OAs)\n")
 
 stage1_expected <- c(
   "road_density_m_km2", "road_length_km", "pct_A_road", "pct_B_road", "pct_minor_road",
-  "dist_citycentre", "pop_density",
+  "dist_BUA_centroid", "pop_density",
   "IMD", "cars_none_pct", "Drive_Car_pct", "Walk_pct",
   "Bicycle_pct", "X65plus_pct", "X5to19_pct", "X20to24_pct"
 )
@@ -423,7 +428,7 @@ names(OA_matching_census)
 # ---------------------------------
 
 OA_matching_census_sf <- oa_sub %>%
-  select(OA, geometry) %>%
+  dplyr::select(OA, geometry) %>%
   left_join(OA_matching_census, by="OA") %>%
   st_as_sf()
 

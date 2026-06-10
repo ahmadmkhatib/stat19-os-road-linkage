@@ -152,7 +152,7 @@
   stage1_road   <- c("log1p_road_length_km", "log1p_road_density_m_km2",
                      "log_area_km2",
                      "pct_A_road", "pct_B_road", "pct_minor_road")
-  stage1_urban  <- c("log1p_dist_citycentre", "log1p_pop_density",
+  stage1_urban  <- c("log1p_dist_BUA_centroid", "log1p_pop_density",
                      "log1p_business_retail_per_km2")
   stage1_socdem <- c("IMD",
                      "cars_one_pct", "cars_twoPlus_pct",
@@ -179,7 +179,7 @@
   # Raw Stage 1 names — for descriptive tables only (human-readable scale)
   stage1_road_raw   <- c("road_length_km", "road_density_m_km2", "area_km2",
                          "pct_A_road", "pct_B_road", "pct_minor_road")
-  stage1_urban_raw  <- c("dist_citycentre", "pop_density", "business_retail_per_km2")
+  stage1_urban_raw  <- c("dist_BUA_centroid", "pop_density", "business_retail_per_km2")
   stage1_socdem_raw <- c("IMD",
                          "cars_one_pct", "cars_twoPlus_pct",
                          "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
@@ -210,13 +210,13 @@
     pct_B_road                           = "% B-road",
     pct_minor_road                       = "% Minor road",
     # Stage 1 — urban
-    log1p_dist_citycentre                = "Distance to city centre (m)",
+    log1p_dist_BUA_centroid                = "Dist. to BUA centroid (m)",
     log1p_pop_density                    = "Population density (persons/km\u00b2)",
     log1p_business_retail_per_km2        = "Retail businesses (per km\u00b2)",
     # Stage 1 — raw (for desc tables)
     road_density_m_km2                   = "Road density (m/km\u00b2)",
     road_length_km                       = "Road length (km)",
-    dist_citycentre                      = "Distance to city centre (m)",
+    dist_BUA_centroid                      = "Dist. to BUA centroid (m)",
     pop_density                          = "Population density (persons/km\u00b2)",
     area_km2                             = "Area (km\u00b2)",
     business_retail_per_km2              = "Retail businesses (per km\u00b2)",
@@ -280,7 +280,7 @@
       log1p_road_length_km          = log1p(pmax(road_length_km,          0)),
       log1p_road_density_m_km2      = log1p(pmax(road_density_m_km2,      0)),
       log_area_km2                  = log(area_km2),
-      log1p_dist_citycentre         = log1p(pmax(dist_citycentre,         0)),
+      log1p_dist_BUA_centroid         = log1p(pmax(dist_BUA_centroid,         0)),
       log1p_pop_density             = log1p(pmax(pop_density,             0)),
       log1p_business_retail_per_km2 = log1p(pmax(business_retail_per_km2, 0)),
       age_under15_pct = X4under_pct  + X5to9_pct   + X10to14_pct,
@@ -654,7 +654,7 @@
       mean_pct_A_road       = round(mean(pct_A_road,         na.rm = TRUE), 1),
       mean_pct_minor        = round(mean(pct_minor_road,     na.rm = TRUE), 1),
       mean_pop_density      = round(mean(pop_density,        na.rm = TRUE), 0),
-      mean_dist_citycentre  = round(mean(dist_citycentre,    na.rm = TRUE), 0),
+      mean_dist_BUA_centroid  = round(mean(dist_BUA_centroid,    na.rm = TRUE), 0),
       mean_IMD              = round(mean(IMD,                na.rm = TRUE), 1),
       mean_Drive_Car_pct    = round(mean(Drive_Car_pct,      na.rm = TRUE), 1),
       mean_Walk_pct         = round(mean(Walk_pct,           na.rm = TRUE), 1),
@@ -686,7 +686,7 @@
       mean_pct_minor       = round(mean(pct_minor_road,     na.rm = TRUE), 1),
       mean_IMD             = round(mean(IMD,                na.rm = TRUE), 1),
       mean_Drive_Car_pct   = round(mean(Drive_Car_pct,      na.rm = TRUE), 1),
-      mean_dist_citycentre = round(mean(dist_citycentre,    na.rm = TRUE), 0),
+      mean_dist_BUA_centroid = round(mean(dist_BUA_centroid,    na.rm = TRUE), 0),
       mean_total_pkm       = round(mean(mean_total_pkm,     na.rm = TRUE), 5),
       pct_scotland         = round(100 * mean(country == "Scotland"),       1),
       .groups              = "drop"
@@ -1033,7 +1033,7 @@
       pct_of_total         = round(100 * n() / nrow(matched_A_treated), 1),
       mean_road_length_km  = round(mean(road_length_km,     na.rm = TRUE), 3),
       mean_pop_density     = round(mean(pop_density,        na.rm = TRUE), 0),
-      mean_dist_citycentre = round(mean(dist_citycentre,    na.rm = TRUE), 0),
+      mean_dist_BUA_centroid = round(mean(dist_BUA_centroid,    na.rm = TRUE), 0),
       mean_IMD             = round(mean(IMD,                na.rm = TRUE), 1),
       mean_Drive_Car_pct   = round(mean(Drive_Car_pct,      na.rm = TRUE), 1),
       mean_Walk_pct        = round(mean(Walk_pct,           na.rm = TRUE), 1),

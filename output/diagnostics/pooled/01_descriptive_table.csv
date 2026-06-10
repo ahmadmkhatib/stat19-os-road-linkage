@@ -1,34 +1,34 @@
 variable,label,treated_mean,treated_sd,control_mean,control_sd
-road_density_m_km2,road_density_m_km2,21861.1259,9018.1927,19383.5833,7610.2025
-road_length_km,road_length_km,1.2407,1.389,1.0474,1.052
-pct_A_road,% A road,13.4777,17.3159,12.0275,16.8654
-pct_B_road,% B road,4.165,10.1069,4.2402,10.8231
-pct_minor_road,% Minor road,81.9726,19.6137,83.0885,19.7904
-dist_citycentre,dist_citycentre,8258.323,3713.5847,4628.2568,2665.844
-pop_density,pop_density,10475.0914,7288.1253,9160.2253,6185.0035
-area_km2,area_km2,0.0657,0.0831,0.066,0.1184
-business_retail_per_km2,business_retail_per_km2,36.4643,22.6506,26.0168,22.9376
-IMD,IMD,40.416,18.0499,34.2029,16.6408
-cars_one_pct,% 1 car,37.4858,10.1685,38.7734,9.3182
-cars_twoPlus_pct,% 2+ cars,13.3736,9.8492,16.7816,11.7117
-Drive_Car_pct,% Drive to work,18.7977,8.0991,23.8856,11.2103
-Passenger_Car_pct,% Passenger car,2.7103,1.915,3.0306,1.7113
-Walk_pct,% Walk to work,15.669,8.3261,14.1964,7.9148
-Bicycle_pct,% Cycle to work,1.2761,1.6904,2.0796,1.7342
-bus_Coach_pct,% Bus/coach,6.1235,3.2717,6.7742000000000004,3.6866
-Train_pct,% Train,3.6347,3.5596,3.0213,3.4254
-Underground_train_tram_pct,% Underground/tram,0.5364,1.0757,0.3259,0.7979
-Taxi_pct,% Taxi,0.6073,0.6705,0.4346,0.5393
-workAthome_pct,% Work from home,2.1992,1.8513,2.1736,1.7774
-Other_pct,% Other commute,0.4794,0.4938,0.4217,0.4684
-White_pct,% White,48.7277,26.9084,70.0371,21.1772
-Mixed_pct,% Mixed ethnicity,4.0169,2.4015,4.0322,2.1722
-Asian_pct,% Asian,33.3229,26.1654,14.7285,15.3346
-Black_pct,% Black,7.3754,7.7616,6.5687,7.0196
-age_under15_pct,% Under 15,15.8345,10.5329,13.9078,8.2304
-age_15to24_pct,% 15-24,22.9989,14.6237,21.724,16.4651
-age_25to44_pct,% 25-44,34.8935,12.3409,32.3392,11.9205
-age_45to64_pct,% 45-64,16.7002,7.2858,19.5501,7.9386
-age_65to84_pct,% 65-84,6.9702,6.1336,9.3972,7.3005
-trend_total_pkm,Trend: total injuries/km,-0.0178,0.1039,-0.0162,0.1051
-mean_total_pkm,mean_total_pkm,0.3681,0.2863,0.356,0.2671
+road_density_m_km2,road_density_m_km2,21861.1259,9018.1927,19232.0677,7910.2861
+road_length_km,road_length_km,1.2407,1.389,1.0813,1.1973
+pct_A_road,% A road,13.4777,17.3159,11.1909,16.0724
+pct_B_road,% B road,4.165,10.1069,3.9355,10.6457
+pct_minor_road,% Minor road,81.9726,19.6137,84.2718,19.1022
+dist_BUA_centroid,dist_BUA_centroid,1956.4343,1140.9275,2661.3388,2010.1376
+pop_density,pop_density,10475.0914,7288.1253,9070.7392,6103.7131
+area_km2,area_km2,0.0657,0.0831,0.0737,0.1779
+business_retail_per_km2,business_retail_per_km2,36.4643,22.6506,25.7845,22.3676
+IMD,IMD,40.416,18.0499,34.6591,16.3008
+cars_one_pct,% 1 car,37.4858,10.1685,39.4079,8.7972
+cars_twoPlus_pct,% 2+ cars,13.3736,9.8492,19.1982,12.6094
+Drive_Car_pct,% Drive to work,18.7977,8.0991,25.6503,11.3123
+Passenger_Car_pct,% Passenger car,2.7103,1.915,3.4103,1.8593
+Walk_pct,% Walk to work,15.669,8.3261,12.302,7.5675
+Bicycle_pct,% Cycle to work,1.2761,1.6904,1.7348,1.5183
+bus_Coach_pct,% Bus/coach,6.1235,3.2717,7.0011,3.7888
+Train_pct,% Train,3.6347,3.5596,3.0525,3.5561
+Underground_train_tram_pct,% Underground/tram,0.5364,1.0757,0.2614,0.6263
+Taxi_pct,% Taxi,0.6073,0.6705,0.5205,0.6119
+workAthome_pct,% Work from home,2.1992,1.8513,2.0619,1.5908
+Other_pct,% Other commute,0.4794,0.4938,0.4175,0.4598
+White_pct,% White,48.7277,26.9084,62.3493,25.1631
+Mixed_pct,% Mixed ethnicity,4.0169,2.4015,3.8643,2.1764
+Asian_pct,% Asian,33.3229,26.1654,22.2818,22.0776
+Black_pct,% Black,7.3754,7.7616,6.675,6.7944
+age_under15_pct,% Under 15,15.8345,10.5329,16.3209,8.3632
+age_15to24_pct,% 15-24,22.9989,14.6237,18.854,14.1079
+age_25to44_pct,% 25-44,34.8935,12.3409,32.5457,10.7121
+age_45to64_pct,% 45-64,16.7002,7.2858,20.1774,7.01
+age_65to84_pct,% 65-84,6.9702,6.1336,9.5615,6.8088
+trend_total_pkm,Trend: total injuries/km,-0.0178,0.1039,-0.0168,0.1037
+mean_total_pkm,mean_total_pkm,0.3681,0.2863,0.3392,0.2637

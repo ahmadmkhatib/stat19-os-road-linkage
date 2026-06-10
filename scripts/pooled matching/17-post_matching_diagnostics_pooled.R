@@ -2,8 +2,7 @@
 # POST-MATCHING DIAGNOSTICS & DESCRIPTIVES — POOLED MATCHING
 # =============================================================================
 #
-# Combined diagnostics script (replaces scripts 17 + 18b) for the pooled
-# matching pipeline (total injuries only, England only).
+## matching pipeline (total injuries only, England only).
 #
 # PART A — Overall diagnostics (script 17 equivalent):
 #   1. Descriptive summary tables (treated vs control)
@@ -59,17 +58,40 @@ COL_CONTROL <- "#2E6FAB"
 COL_BEFORE  <- "#E74C3C"
 COL_AFTER   <- "#2ECC71"
 
-theme_diag <- function(base_size = 13) {
+# Central text-size constants — change these to rescale everything uniformly
+BASE_SIZE       <- 16   # base for theme_diag (axis text, strip text, etc.)
+TITLE_SIZE      <- 19   # plot titles
+SUBTITLE_SIZE   <- 15   # plot subtitles
+CAPTION_SIZE    <- 13   # captions
+AXIS_TITLE_SIZE <- 15   # axis titles
+AXIS_TEXT_SIZE  <- 14   # axis tick labels
+STRIP_TEXT_SIZE <- 15   # facet strip labels
+LEGEND_TEXT_SIZE <- 14  # legend text
+CELL_LABEL_SIZE <- 5    # geom_text inside heatmap tiles (in ggplot units)
+POINT_SIZE      <- 4    # geom_point size for love plots / distance plots
+
+theme_diag <- function(base_size = BASE_SIZE) {
   theme_minimal(base_size = base_size) %+replace%
     theme(
-      plot.title       = element_text(size = base_size + 1, face = "bold",
-                                      colour = "#1A2E5A", margin = margin(b = 6)),
-      plot.subtitle    = element_text(size = base_size - 2, colour = "#555555",
-                                      margin = margin(b = 10)),
-      plot.caption     = element_text(size = base_size - 3, colour = "#888888",
-                                      hjust = 0, margin = margin(t = 6)),
-      strip.text       = element_text(face = "bold", colour = "#1A2E5A"),
+      # Titles
+      plot.title       = element_text(size = TITLE_SIZE,    face = "bold",
+                                      colour = "#1A2E5A",   margin = margin(b = 8)),
+      plot.subtitle    = element_text(size = SUBTITLE_SIZE, colour = "#555555",
+                                      margin = margin(b = 12)),
+      plot.caption     = element_text(size = CAPTION_SIZE,  colour = "#888888",
+                                      hjust = 0,            margin = margin(t = 8)),
+      # Axes
+      axis.title       = element_text(size = AXIS_TITLE_SIZE),
+      axis.text        = element_text(size = AXIS_TEXT_SIZE),
+      # Strips
+      strip.text       = element_text(size = STRIP_TEXT_SIZE, face = "bold",
+                                      colour = "#1A2E5A"),
       strip.background = element_rect(fill = "#EEF2F8", colour = NA),
+      # Legend
+      legend.text      = element_text(size = LEGEND_TEXT_SIZE),
+      legend.title     = element_text(size = LEGEND_TEXT_SIZE, face = "bold"),
+      legend.key.size  = unit(1.1, "lines"),
+      # Grid
       panel.grid.minor = element_blank()
     )
 }
@@ -82,7 +104,7 @@ theme_diag <- function(base_size = 13) {
 stage1_vars_raw <- c(
   "road_density_m_km2", "road_length_km",
   "pct_A_road", "pct_B_road", "pct_minor_road",
-  "dist_citycentre", "pop_density", "area_km2",
+  "dist_BUA_centroid", "pop_density", "area_km2",
   "business_retail_per_km2", "IMD",
   "cars_one_pct", "cars_twoPlus_pct",
   "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
@@ -93,8 +115,8 @@ stage1_vars_raw <- c(
   "age_45to64_pct", "age_65to84_pct"
 )
 
-log_transform_s1 <- c("road_length_km", "pop_density", "dist_citycentre",
-                       "road_density_m_km2", "business_retail_per_km2")
+log_transform_s1 <- c("road_length_km", "pop_density", "dist_BUA_centroid",
+                      "road_density_m_km2", "business_retail_per_km2")
 log_nozero_s1    <- c("area_km2")
 
 stage1_vars_log <- c(
@@ -118,7 +140,7 @@ var_labels <- c(
   "pct_A_road"                 = "% A road",
   "pct_B_road"                 = "% B road",
   "pct_minor_road"             = "% Minor road",
-  "log1p_dist_citycentre"      = "Dist. city centre (log)",
+  "log1p_dist_BUA_centroid"      = "Dist. to BUA centroid (log)",
   "log1p_pop_density"          = "Pop. density (log)",
   "log1p_business_retail_per_km2" = "Retail density (log)",
   "IMD"                        = "IMD",
@@ -233,6 +255,38 @@ cat("PART A — OVERALL POST-MATCHING DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
 
 # =============================================================================
+# 0. SCHEME-LEVEL MATCHING SUMMARY
+# =============================================================================
+
+cat("--- 0. Scheme-level matching summary ---\n")
+
+scheme_summary_table <- map_df(seq_along(all_results), function(i) {
+  md <- all_results[[i]]$matched_data
+  m  <- all_results[[i]]$matchit_s2
+  n_t <- sum(md$treat_indicator == 1)
+  tibble(
+    scheme          = unique(md$scheme[!is.na(md$scheme)]),
+    treated         = n_t,
+    unique_controls = n_distinct(md$OA[md$treat_indicator == 0]),
+    total_pairs     = n_t * m$info$ratio,
+    ratio           = paste0("1:", m$info$ratio)
+  )
+})
+
+scheme_summary_table <- bind_rows(
+  scheme_summary_table,
+  tibble(scheme = "Total",
+         treated = sum(scheme_summary_table$treated),
+         unique_controls = sum(scheme_summary_table$unique_controls),
+         total_pairs = sum(scheme_summary_table$total_pairs),
+         ratio = "")
+)
+
+print(scheme_summary_table)
+write_csv(scheme_summary_table, file.path(outdir, "00_scheme_matching_summary.csv"))
+cat("  Saved: 00_scheme_matching_summary.csv\n\n")
+
+# =============================================================================
 # 1. DESCRIPTIVE SUMMARY TABLE
 # =============================================================================
 
@@ -292,13 +346,13 @@ make_love_plot <- function(smd_df, title, subtitle = "") {
       timing = if_else(timing == "smd_before", "Before matching", "After matching"),
       timing = factor(timing, levels = c("Before matching", "After matching"))
     )
-
+  
   ggplot(plot_data,
          aes(x = abs(smd), y = label, colour = timing, shape = timing)) +
     geom_vline(xintercept = 0.10, linetype = "dashed", colour = "#999999") +
     geom_vline(xintercept = 0, colour = "#DDDDDD") +
     geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.3) +
-    geom_point(size = 3) +
+    geom_point(size = POINT_SIZE) +
     scale_colour_manual(values = c("Before matching" = COL_BEFORE,
                                    "After matching"  = COL_AFTER)) +
     scale_shape_manual(values = c("Before matching" = 16,
@@ -398,7 +452,7 @@ cat("--- 5. Stratum characteristics ---\n")
 
 stratum_vars <- intersect(
   c("mean_total_pkm", "road_length_km", "road_density_m_km2",
-    "pop_density", "dist_citycentre", "IMD",
+    "pop_density", "dist_BUA_centroid", "IMD",
     "pct_A_road", "pct_minor_road", "Drive_Car_pct", "Walk_pct"),
   names(matched_full)
 )
@@ -431,7 +485,7 @@ if (n_isolated > 0) {
   isolated_oas <- isolated_flags %>%
     filter(structurally_isolated) %>%
     pull(treated_OA)
-
+  
   iso_compare <- matched_full %>%
     filter(treat_indicator == 1) %>%
     mutate(isolated = OA %in% isolated_oas) %>%
@@ -439,11 +493,11 @@ if (n_isolated > 0) {
     summarise(
       n = n(),
       across(all_of(intersect(c("mean_total_pkm", "road_length_km",
-                                  "pop_density", "IMD"), names(.))),
+                                "pop_density", "IMD"), names(.))),
              ~ round(mean(., na.rm = TRUE), 3)),
       .groups = "drop"
     )
-
+  
   write_csv(iso_compare, file.path(outdir, "06a_isolated_OA_characteristics.csv"))
   print(iso_compare)
 }
@@ -466,10 +520,10 @@ if ("mdist" %in% names(matched_full)) {
       pct_le10   = round(100 * mean(mdist <= 10), 1),
       pct_gt20   = round(100 * mean(mdist > 20), 1)
     )
-
+  
   cat("  Distance summary (treated OAs):\n")
   print(dist_summary)
-
+  
   p_mdist <- ggplot(matched_full %>% filter(!is.na(mdist)),
                     aes(x = mdist, colour = factor(treat_indicator))) +
     stat_ecdf(linewidth = 0.8) +
@@ -486,7 +540,7 @@ if ("mdist" %in% names(matched_full)) {
     ) +
     theme_diag() +
     theme(legend.position = "bottom")
-
+  
   save_fig(p_mdist, "fig07_mahalanobis_distance.png", width = 10, height = 7)
 } else {
   cat("  No mdist column in matched data — skipping.\n")
@@ -509,7 +563,7 @@ if (length(trend_vars) > 0) {
       group = if_else(treat_indicator == 1, "Treated", "Control"),
       label = coalesce(var_labels[variable], variable)
     )
-
+  
   p_trends <- ggplot(trend_data, aes(x = value, fill = group, colour = group)) +
     geom_density(alpha = 0.3, linewidth = 0.7) +
     geom_vline(xintercept = 0, linetype = "dashed", colour = "#888888") +
@@ -524,9 +578,9 @@ if (length(trend_vars) > 0) {
     ) +
     theme_diag() +
     theme(legend.position = "bottom")
-
+  
   save_fig(p_trends, "fig14_parallel_trends.png", width = 10, height = 7)
-
+  
   # Per-scheme version
   trend_scheme_data <- matched_full %>%
     select(OA, treat_indicator, scheme, all_of(trend_vars)) %>%
@@ -535,7 +589,7 @@ if (length(trend_vars) > 0) {
       group = if_else(treat_indicator == 1, "Treated", "Control"),
       label = coalesce(var_labels[variable], variable)
     )
-
+  
   p_trends_scheme <- ggplot(trend_scheme_data,
                             aes(x = value, fill = group, colour = group)) +
     geom_density(alpha = 0.3, linewidth = 0.7) +
@@ -551,20 +605,20 @@ if (length(trend_vars) > 0) {
     ) +
     theme_diag() +
     theme(legend.position = "bottom")
-
+  
   save_fig(p_trends_scheme, "fig14b_parallel_trends_per_scheme.png",
            width = 16, height = 12)
-
+  
   # Per-scheme pre-treatment time series
   library(zoo)
-
+  
   oa_q <- readRDS(here("data", "processed", "OA_injuries_quarterly.rds")) %>%
     mutate(quarter_year = as.yearqtr(quarter_year))
-
+  
   scheme_starts <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%
     distinct(scheme, caz_start_q) %>%
     filter(!is.na(scheme))
-
+  
   oa_panel <- oa_q %>%
     inner_join(
       matched_full %>%
@@ -573,7 +627,7 @@ if (length(trend_vars) > 0) {
     ) %>%
     left_join(scheme_starts, by = "scheme") %>%
     mutate(injuries_per_km = total_injuries / pmax(road_length_km, 0.001))
-
+  
   oa_pre_quarterly <- oa_panel %>%
     filter(quarter_year < caz_start_q) %>%
     group_by(scheme, quarter_year, treat_indicator) %>%
@@ -585,18 +639,18 @@ if (length(trend_vars) > 0) {
       group  = if_else(treat_indicator == 1, "Treated", "Matched control"),
       q_date = as.Date(quarter_year)
     )
-
+  
   vline_data <- scheme_starts %>%
     filter(scheme %in% unique(oa_pre_quarterly$scheme)) %>%
     mutate(start_date = as.Date(caz_start_q))
-
+  
   p_ts_scheme <- ggplot(
     oa_pre_quarterly %>%
       mutate(group = factor(group, levels = c("Treated", "Matched control"))),
     aes(x = q_date, y = wtd_mean_inj, colour = group, linetype = group)
   ) +
     geom_line(linewidth = 0.9) +
-    geom_point(size = 1.5, alpha = 0.7) +
+    geom_point(size = POINT_SIZE - 1, alpha = 0.7) +
     geom_vline(
       data = vline_data,
       aes(xintercept = start_date),
@@ -618,26 +672,26 @@ if (length(trend_vars) > 0) {
     theme_diag() +
     theme(
       legend.position = "bottom",
-      axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
-      strip.text      = element_text(size = 10, face = "bold"),
+      axis.text.x     = element_text(size = AXIS_TEXT_SIZE - 2, angle = 45, hjust = 1),
+      strip.text      = element_text(size = STRIP_TEXT_SIZE,     face = "bold"),
       panel.spacing   = unit(0.6, "lines")
     )
-
+  
   save_fig(p_ts_scheme, "fig14c_parallel_trends_timeseries_per_scheme.png",
            width = 16, height = 14)
-
+  
   # All schemes combined: treated vs control LOESS trajectories
   p_loess_all <- ggplot(
     oa_pre_quarterly %>%
       mutate(group = factor(group, levels = c("Treated", "Matched control"))),
     aes(x = q_date, y = wtd_mean_inj, colour = group, fill = group)
   ) +
-    geom_point(size = 1, alpha = 0.2) +
+    geom_point(size = POINT_SIZE - 1, alpha = 0.2) +
     geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.2) +
     scale_colour_manual(values = c("Treated" = COL_TREATED,
-                                    "Matched control" = COL_CONTROL)) +
+                                   "Matched control" = COL_CONTROL)) +
     scale_fill_manual(values = c("Treated" = COL_TREATED,
-                                  "Matched control" = COL_CONTROL)) +
+                                 "Matched control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment injury trajectories: treated vs matched controls (all schemes)",
       subtitle = "LOESS smoother \u00b1 SE | parallel smoothers = parallel trends supported",
@@ -646,23 +700,23 @@ if (length(trend_vars) > 0) {
     ) +
     theme_diag() +
     theme(legend.position = "bottom")
-
+  
   save_fig(p_loess_all, "fig14f_parallel_trends_loess_all_schemes.png",
            width = 12, height = 8)
-
+  
   # Per-scheme LOESS: treated vs control trajectories
   p_loess_scheme <- ggplot(
     oa_pre_quarterly %>%
       mutate(group = factor(group, levels = c("Treated", "Matched control"))),
     aes(x = q_date, y = wtd_mean_inj, colour = group, fill = group)
   ) +
-    geom_point(size = 1, alpha = 0.3) +
+    geom_point(size = POINT_SIZE - 1, alpha = 0.3) +
     geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1.1) +
     facet_wrap(~scheme, ncol = 3, scales = "free_y") +
     scale_colour_manual(values = c("Treated" = COL_TREATED,
-                                    "Matched control" = COL_CONTROL)) +
+                                   "Matched control" = COL_CONTROL)) +
     scale_fill_manual(values = c("Treated" = COL_TREATED,
-                                  "Matched control" = COL_CONTROL)) +
+                                 "Matched control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment injury trajectories: treated vs matched controls",
       subtitle = "LOESS smoother \u00b1 SE | parallel smoothers = parallel trends supported",
@@ -672,11 +726,11 @@ if (length(trend_vars) > 0) {
     theme_diag() +
     theme(
       legend.position = "bottom",
-      axis.text.x     = element_text(size = 8, angle = 45, hjust = 1),
-      strip.text      = element_text(size = 10, face = "bold"),
+      axis.text.x     = element_text(size = AXIS_TEXT_SIZE - 2, angle = 45, hjust = 1),
+      strip.text      = element_text(size = STRIP_TEXT_SIZE,     face = "bold"),
       panel.spacing   = unit(0.6, "lines")
     )
-
+  
   save_fig(p_loess_scheme, "fig14d_parallel_trends_loess_per_scheme.png",
            width = 16, height = 14)
 }
@@ -715,23 +769,23 @@ smd_for_scheme <- function(scheme_name, vars) {
   treated_oas <- matched_full %>%
     filter(scheme == scheme_name, treat_indicator == 1) %>%
     pull(OA)
-
+  
   control_oas <- ctrl_scheme_lookup %>%
     filter(scheme == scheme_name) %>%
     pull(OA)
-
+  
   # Before: this scheme's treated vs full unmatched control pool
   before_df <- unmatched_pool %>%
     filter(treated_OA == 1 & OA %in% treated_oas | control_group2_OA == 1) %>%
     mutate(treat_indicator = as.integer(OA %in% treated_oas))
-
+  
   # After: this scheme's treated + their matched controls
   after_df <- matched_full %>%
     filter(OA %in% c(treated_oas, control_oas)) %>%
     mutate(treat_indicator = as.integer(OA %in% treated_oas))
-
+  
   vars_avail <- intersect(vars, intersect(names(before_df), names(after_df)))
-
+  
   map_df(vars_avail, function(v) {
     tibble(
       scheme     = scheme_name,
@@ -760,7 +814,7 @@ cat("\n--- 10. Per-scheme love plots ---\n")
 key_vars <- c("trend_total_pkm", "log1p_mean_total_pkm",
               "log1p_road_density_m_km2", "log1p_road_length_km",
               "pct_A_road", "pct_minor_road",
-              "log1p_dist_citycentre", "log1p_pop_density", "IMD")
+              "log1p_dist_BUA_centroid", "log1p_pop_density", "IMD")
 
 love_scheme_data <- smd_all_schemes %>%
   filter(variable %in% key_vars) %>%
@@ -778,7 +832,7 @@ p_love_scheme <- ggplot(
   geom_vline(xintercept = 0.10, linetype = "dashed", colour = "#999999") +
   geom_vline(xintercept = 0, colour = "#DDDDDD") +
   geom_line(aes(group = label), colour = "#DDDDDD", linewidth = 0.3) +
-  geom_point(size = 2.5) +
+  geom_point(size = POINT_SIZE) +
   scale_colour_manual(values = c("Before" = COL_BEFORE, "After" = COL_AFTER)) +
   scale_shape_manual(values = c("Before" = 16, "After" = 17)) +
   facet_wrap(~scheme, ncol = 4) +
@@ -788,9 +842,11 @@ p_love_scheme <- ggplot(
     x = "|SMD|", y = NULL, colour = NULL, shape = NULL,
     caption = "Dashed = 0.10 threshold"
   ) +
-  theme_diag(base_size = 11) +
-  theme(legend.position = "bottom",
-        axis.text.y = element_text(size = 8))
+  theme_diag() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y     = element_text(size = AXIS_TEXT_SIZE - 1)
+  )
 
 save_fig(p_love_scheme, "fig10_love_plots_per_scheme.png",
          width = 16, height = 10)
@@ -817,7 +873,8 @@ s2_trend_heatmap <- smd_all_schemes %>%
 p_heatmap <- ggplot(s2_trend_heatmap,
                     aes(x = scheme, y = label, fill = smd_band)) +
   geom_tile(colour = "white", linewidth = 0.8) +
-  geom_text(aes(label = cell_label), size = 3, colour = "#222222") +
+  geom_text(aes(label = cell_label), size = CELL_LABEL_SIZE, colour = "#222222",
+            fontface = "bold") +
   scale_fill_manual(
     values = setNames(smd_colours, smd_labels),
     name   = "|SMD| after matching",
@@ -830,20 +887,21 @@ p_heatmap <- ggplot(s2_trend_heatmap,
     x = NULL, y = NULL,
     caption  = "Green < 0.05  \u00b7  yellow 0.05-0.10  \u00b7  orange 0.10-0.15  \u00b7  red > 0.20"
   ) +
-  theme_diag(base_size = 12) +
+  theme_diag() +
   theme(
     panel.grid       = element_blank(),
     panel.border     = element_blank(),
-    axis.text.x      = element_text(size = 11, face = "bold"),
-    axis.text.y      = element_text(size = 10),
+    axis.text.x      = element_text(size = AXIS_TEXT_SIZE, face = "bold"),
+    axis.text.y      = element_text(size = AXIS_TEXT_SIZE),
     legend.position  = "bottom",
-    legend.key.width = unit(1.2, "cm")
+    legend.key.width = unit(1.4, "cm"),
+    legend.text      = element_text(size = LEGEND_TEXT_SIZE)
   )
 
 save_fig(p_heatmap, "fig11_smd_heatmap_per_scheme.png",
          width = max(8, length(schemes) * 1.6 + 4), height = 7)
 
-# Full heatmap (all matching variables — same layout as non-pooled script)
+# Full heatmap (all matching variables)
 full_heatmap <- smd_all_schemes %>%
   filter(!is.na(smd_after)) %>%
   mutate(
@@ -852,8 +910,8 @@ full_heatmap <- smd_all_schemes %>%
       variable %in% paste0("log1p_", log_transform_s1) |
         variable %in% paste0("log_", log_nozero_s1) |
         variable %in% c("pct_A_road", "pct_B_road", "pct_minor_road") ~ "Road network",
-      variable %in% c("log1p_dist_citycentre", "log1p_pop_density",
-                       "log1p_business_retail_per_km2") ~ "Urban form",
+      variable %in% c("log1p_dist_BUA_centroid", "log1p_pop_density",
+                      "log1p_business_retail_per_km2") ~ "Urban form",
       TRUE ~ "Sociodemographic"
     ),
     var_group = factor(var_group,
@@ -866,9 +924,10 @@ full_heatmap <- smd_all_schemes %>%
   )
 
 p_heatmap_full <- ggplot(full_heatmap,
-                          aes(x = scheme, y = label, fill = smd_band)) +
+                         aes(x = scheme, y = label, fill = smd_band)) +
   geom_tile(colour = "white", linewidth = 0.4) +
-  geom_text(aes(label = cell_label), size = 2.2, colour = "#222222") +
+  geom_text(aes(label = cell_label), size = CELL_LABEL_SIZE - 0.5,
+            colour = "#222222", fontface = "bold") +
   scale_fill_manual(
     values = setNames(smd_colours, smd_labels),
     name   = "|SMD| after matching",
@@ -882,14 +941,17 @@ p_heatmap_full <- ggplot(full_heatmap,
     x = NULL, y = NULL,
     caption  = "per-scheme |SMD| after matching"
   ) +
-  theme_diag(base_size = 10) +
-  theme(axis.text.x  = element_text(size = 10, face = "bold"),
-        axis.text.y  = element_text(size = 7),
-        panel.grid   = element_blank(),
-        panel.border = element_blank(),
-        strip.text   = element_text(size = 10, face = "bold"),
-        legend.position  = "bottom",
-        legend.key.width = unit(1.2, "cm"))
+  theme_diag() +
+  theme(
+    axis.text.x      = element_text(size = AXIS_TEXT_SIZE, face = "bold"),
+    axis.text.y      = element_text(size = AXIS_TEXT_SIZE - 2),
+    panel.grid       = element_blank(),
+    panel.border     = element_blank(),
+    strip.text       = element_text(size = STRIP_TEXT_SIZE, face = "bold"),
+    legend.position  = "bottom",
+    legend.key.width = unit(1.4, "cm"),
+    legend.text      = element_text(size = LEGEND_TEXT_SIZE)
+  )
 
 save_fig(p_heatmap_full, "fig11b_smd_heatmap_full.png",
          width = 14, height = 22)

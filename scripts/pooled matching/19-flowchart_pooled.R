@@ -65,7 +65,7 @@ n_zero_inj   <- sum(OA_matching_dataset$country == "England" &
                       OA_matching_dataset$zero_injury_OA == 1)
 
 # Stage 1 donor pool: unique controls retained across all schemes
-# (each scheme keeps up to 50 nearest per treated OA, then deduplicates)
+# (each scheme keeps up to 30 nearest per treated OA, then deduplicates)
 # We approximate from the matched dataset + the fact that Stage 2 selects from
 # the Stage 1 pool. The Stage 1 pool is larger than the final controls.
 # Use the actual number from the matching run.
@@ -183,7 +183,7 @@ draw_arrow(0.45, y_positions[2] - box_h/2,
 
 # Stage 1 label on arrow
 grid.text(
-  "Stage 1: Mahalanobis matching\nroad, urban, sociodemographic (1:50)",
+  "Stage 1: Mahalanobis matching\nroad, urban, sociodemographic (1:30)",
   x = unit(0.45, "npc"),
   y = unit((y_positions[2] + y_positions[3]) / 2, "npc"),
   gp = gpar(fontsize = 8, col = "#27AE60", fontface = "italic",
@@ -194,7 +194,7 @@ grid.text(
 draw_box(0.45, y_positions[3], box_w, box_h,
          paste0("Stage 1 donor pool (per scheme)\n",
                 formatC(n_treated, big.mark = ","),
-                " treated OAs + up to 50 nearest controls each"),
+                " treated OAs + up to 30 nearest controls each"),
          fill = COL_STAGE, text_size = 9)
 
 draw_arrow(0.45, y_positions[3] - box_h/2,

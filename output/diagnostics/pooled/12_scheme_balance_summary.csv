@@ -1,8 +1,8 @@
 scheme,mean_trend_smd_before,mean_trend_smd_after,max_trend_smd_after,n_trends_imbalanced,all_trends_balanced,n_treated,n_controls
-Bath,0.0187,0.0237,0.0237,0,TRUE,49,319
-Birmingham,0.0642,0.0015,0.0015,0,TRUE,125,722
-Bradford,0.0647,0.0094,0.0094,0,TRUE,265,466
-Bristol,0.0231,0.0944,0.0944,0,TRUE,48,87
-Newcastle,0.0102,0.0755,0.0755,0,TRUE,27,74
-Portsmouth,0.0747,0.09,0.09,0,TRUE,58,331
-Sheffield,0.2239,0.0821,0.0821,0,TRUE,41,107
+Bath,0.0187,0.0052,0.0052,0,TRUE,49,87
+Birmingham,0.0642,0.0199,0.0199,0,TRUE,125,724
+Bradford,0.0647,0.0062,0.0062,0,TRUE,265,1242
+Bristol,0.0231,0.0372,0.0372,0,TRUE,48,89
+Newcastle,0.0102,0.0729,0.0729,0,TRUE,27,25
+Portsmouth,0.0747,0.08,0.08,0,TRUE,58,107
+Sheffield,0.2239,0.0727,0.0727,0,TRUE,41,72
