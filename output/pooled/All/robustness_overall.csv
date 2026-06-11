@@ -1,0 +1,9 @@
+Spec,Estimate,p
+C&S adj,0.1173,0.036
+C&S unadj,0.0987,0.059
+C&S adj >=10m,0.0982,0.094
+C&S adj no24,0.1095,0.076
+C&S adj noCOV,0.0203,0.736
+PPML,+1.2%,0.814
+PPML >=10m,+2.8%,0.601
+PPML no24,-6.2%,0.301

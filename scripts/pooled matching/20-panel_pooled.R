@@ -7,7 +7,8 @@
 # unique panel_id so att_gt() treats them as separate units.
 # OA-level clustering absorbs within-OA correlation.
 #
-# Outcome: total adjusted injuries only (no severity / mode).
+# Outcomes: total, vehicle (car/van + other), and active travel
+# (cyclist + pedestrian) adjusted injuries.
 #
 # Inputs:
 #   road_panel_dataset/           (parquet)
@@ -34,14 +35,13 @@ library(here)
 road_panel <- arrow::open_dataset(
   here("data", "processed", "road_panel_dataset")
 ) %>%
-  # Keep only the columns we need (total injuries, identifiers, treatment flags)
   dplyr::select(
     identifier, quarter_year,
     treated_any, treated_50pct,
     treated_group_any, treated_group_50pct,
     scheme, caz_start_q,
     control_group1, control_group2, control_group3_mixed,
-    total_inj_adj_All
+    starts_with("total_inj_adj_")
   ) %>%
   collect()
 
@@ -214,8 +214,13 @@ road_panel_matched <- road_panel_matched %>%
     road_class,
     length,
 
-    # Outcome — total adjusted injuries only
-    total_inj_adj_All
+    # Outcomes — mode-specific + aggregated
+    starts_with("total_inj_adj_")
+  ) %>%
+  # Create vehicle vs active travel aggregates
+  mutate(
+    total_inj_adj_Vehicle      = total_inj_adj_Car.Van + total_inj_adj_Other,
+    total_inj_adj_ActiveTravel = total_inj_adj_Cyclist + total_inj_adj_Pedestrian
   )
 
 # ============================================================
