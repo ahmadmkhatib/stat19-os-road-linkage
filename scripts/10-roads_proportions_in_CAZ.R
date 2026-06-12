@@ -54,7 +54,17 @@ roads_caz_props <- roads_caz %>%
       st_drop_geometry() %>%
       dplyr:: select(scheme, startDt) %>%
       distinct(scheme, .keep_all = TRUE) %>%
-      mutate(caz_start_q =as.yearqtr(dmy(startDt))),
+      mutate(
+        start_date  = dmy(startDt),
+        raw_q       = as.yearqtr(start_date),
+        q_start     = as.Date(raw_q),
+        q_end       = as.Date(raw_q + 0.25) - 1,
+        q_mid       = q_start + as.integer(difftime(q_end, q_start, units = "days")) / 2,
+        # Majority rule: if treatment started past the quarter midpoint,
+        # most of that quarter was pre-treatment → assign to next quarter
+        caz_start_q = if_else(start_date > q_mid, raw_q + 0.25, raw_q)
+      ) %>%
+      select(scheme, startDt, caz_start_q),
     by = "scheme"
   )
 
