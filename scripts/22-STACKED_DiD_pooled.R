@@ -1,49 +1,31 @@
 # =============================================================================
-# CAZ DiD ANALYSIS — CLEAN PRIMARY PIPELINE
+# CAZ DiD ANALYSIS — MAIN PPML ANALYSIS SCRIPT
 # =============================================================================
 #
-# Aim:
-#   Estimate the effect of CAZ schemes on road traffic injuries using a
-#   road-link × quarter panel.
+# Main framework:
+#   Matched stacked Difference-in-Differences estimated using PPML.
 #
-# Main model:
-#   Stacked event-study Difference-in-Differences estimated using PPML.
+# Model structure:
+#   1. Pooled average treatment effect across all schemes
+#   2. Pooled dynamic event-study effects and parallel-trends assessment
+#   3. Scheme-specific average treatment effects
+#   4. Scheme-specific dynamic event-study effects
 #
-# Why:
-#   - Injury outcome is a rare count with many zeros.
-#   - CAZ timing differs across schemes.
-#   - Effects may vary over time.
-#   - Effects may differ by scheme.
-#   - Treated roads had different COVID lockdown/recovery patterns.
-#
-# Main outputs:
-#   1. Overall PPML IRR
-#   2. Overall PPML dynamic event-study plot
-#   3. Scheme-specific PPML event-study plots
-#   4. C&S robustness event-study plot
-#   5. Final summary table
+# Notes:
+#   - Outcome is a sparse count, so models are estimated with Poisson
+#     pseudo-maximum likelihood (PPML).
+#   - Standard errors are clustered at OA level.
+#   - COVID lockdown/recovery interactions are included in the main models.
+#   - Robustness, sensitivity, C&S checks, sparsity diagnostics, and alternative
+#     clustering checks should be kept in a separate script.
 # =============================================================================
-
-
-# =============================================================================
-# 0. PACKAGES
-# =============================================================================
-# Load only packages needed for the cleaned analysis.
-
 library(tidyverse)
 library(arrow)
 library(here)
 library(zoo)
 library(lubridate)
 library(fixest)
-library(did)
 library(patchwork)
-
-
-# =============================================================================
-# 1. SETTINGS
-# =============================================================================
-# Define the outcome, event-study window, and output folder.
 
 outcome_var <- "total_inj_adj_All"
 
@@ -53,22 +35,19 @@ L <- 8L   # quarters after CAZ implementation
 outdir <- here("output", "pooled", "All_clean")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
-
 # =============================================================================
-# 2. HELPER FUNCTIONS
+# HELPER FUNCTIONS
 # =============================================================================
-# These functions keep the rest of the code short and readable.
+# Extract event-study coefficients from fixest objects without using broom,
+# then convert log-rate coefficients to IRRs and percentage changes.
 
-# Extract event-study coefficients from fixest models.
-# This avoids memory-heavy broom::tidy(conf.int = TRUE).
 extract_fixest_event_study <- function(model) {
-  
   ct <- coeftable(model)
   
   tibble(
-    term     = rownames(ct),
+    term = rownames(ct),
     estimate = ct[, "Estimate"],
-    se       = ct[, "Std. Error"]
+    se = ct[, "Std. Error"]
   ) %>%
     filter(str_detect(term, "event_time_f::")) %>%
     mutate(
@@ -85,10 +64,7 @@ extract_fixest_event_study <- function(model) {
     arrange(event_time)
 }
 
-
-# Plot event-study coefficients on the log-IRR or ATT scale.
 plot_event_study <- function(df, title, subtitle, ylab, colour = "#E74C3C") {
-  
   ggplot(df, aes(x = event_time, y = estimate)) +
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
     geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
@@ -106,69 +82,19 @@ plot_event_study <- function(df, title, subtitle, ylab, colour = "#E74C3C") {
     theme(panel.grid.minor = element_blank())
 }
 
-
-# Run C&S as a robustness check.
-run_cs <- function(data, xformla = NULL) {
-  
-  att <- att_gt(
-    yname         = "outcome_raw",
-    tname         = "qtr_int",
-    idname        = "uid_int",
-    gname         = "g",
-    data          = data,
-    control_group = "notyettreated",
-    xformla       = xformla,
-    bstrap        = TRUE,
-    anticipation  = 0,
-    panel         = TRUE
-  )
-  
-  agg <- aggte(att, type = "simple", na.rm = TRUE)
-  dyn <- aggte(att, type = "dynamic", na.rm = TRUE)
-  
-  list(att = att, agg = agg, dyn = dyn)
-}
-
-
-# Extract C&S dynamic effects into a plotting table.
-extract_cs_event_study <- function(dyn, trim = c(-12, 12)) {
-  
-  tibble(
-    event_time = dyn$egt,
-    estimate   = dyn$att.egt,
-    se         = dyn$se.egt
-  ) %>%
-    mutate(
-      ci_lo = estimate - 1.96 * se,
-      ci_hi = estimate + 1.96 * se
-    ) %>%
-    filter(event_time >= trim[1], event_time <= trim[2])
-}
-
-
 # =============================================================================
-# 3. LOAD ROAD-LINK PANEL
+# data
 # =============================================================================
-# Load matched road-link × quarter data and convert quarter variables.
+# Load the matched road-link × quarter panel and apply a majority-quarter rule:
+# if a CAZ starts in the second half of a quarter, treatment starts next quarter.
 
 road_panel <- arrow::read_parquet(
   here("data", "processed", "road_panel_matched_pooled.parquet")
 ) %>%
   mutate(
     quarter_year = as.yearqtr(quarter_year),
-    caz_start_q  = as.yearqtr(caz_start_q)
+    caz_start_q = as.yearqtr(caz_start_q)
   )
-
-cat("Loaded rows:", nrow(road_panel), "\n")
-cat("Road links:", n_distinct(road_panel$identifier), "\n")
-cat("Quarters:", n_distinct(road_panel$quarter_year), "\n")
-
-
-# =============================================================================
-# 4. ADJUST CAZ START QUARTERS
-# =============================================================================
-# If a CAZ started in the second half of a quarter, assign treatment to the
-# next quarter. This avoids treating a mostly pre-policy quarter as post-policy.
 
 road_caz_props <- readRDS(here("data", "processed", "roads_caz_props.rds"))
 
@@ -195,15 +121,16 @@ scheme_timing <- road_panel %>%
   distinct(scheme, caz_start_q) %>%
   arrange(caz_start_q)
 
+cat("\nScheme timing after majority-quarter adjustment:\n")
 print(scheme_timing)
 
 rm(road_caz_props, scheme_start)
 
-
 # =============================================================================
-# 5. LOAD OA COVARIATES
+# OA COVARIATES
 # =============================================================================
-# These are time-invariant covariates used only for C&S robustness adjustment.
+# Time-invariant OA covariates are retained in the model panel so they are
+# available for robustness analyses, especially C&S checks in the separate script.
 
 matched_covars <- readRDS(
   here("data", "processed", "OA_matched_full_pooled.rds")
@@ -215,15 +142,13 @@ matched_covars <- readRDS(
   select(OA, log1p_pop_density, IMD, log1p_road_density_m_km2) %>%
   distinct(OA, .keep_all = TRUE)
 
-
 # =============================================================================
-# 6. BUILD MODEL PANEL
+# 4. BUILD MODEL PANEL
 # =============================================================================
-# Create the main analysis panel:
-#   - one road-link × scheme × quarter row
-#   - treatment timing
-#   - event-time variables
-#   - COVID treated-road interactions
+# Construct the road-link × scheme × quarter panel for modelling.
+# COVID periods are coded from visual inspection:
+#   Lockdown/disruption: 2020 Q1–2021 Q1
+#   Recovery:            2021 Q2–2021 Q4
 
 min_qtr <- min(as.numeric(road_panel$quarter_year), na.rm = TRUE)
 
@@ -270,12 +195,11 @@ rm(road_panel)
 
 schemes_all <- sort(unique(model_panel$scheme))
 
-
 # =============================================================================
-# 7. BASIC CHECKS
+# BASIC SAMPLE CHECKS
 # =============================================================================
-# Confirm sample size, sparsity, treatment/control counts, and duplicated
-# controls from matching multiplicity.
+# Confirm sample size, sparsity, number of OAs/road links, treatment/control
+# counts, and duplicate control rows arising from matching with replacement.
 
 summary_by_group <- model_panel %>%
   group_by(group) %>%
@@ -287,7 +211,11 @@ summary_by_group <- model_panel %>%
     .groups = "drop"
   )
 
+cat("\nSummary by group:\n")
 print(summary_by_group)
+
+cat("\nNumber of OAs:", n_distinct(model_panel$OA), "\n")
+cat("Number of road links:", n_distinct(model_panel$identifier), "\n")
 
 summary_by_scheme <- model_panel %>%
   distinct(scheme, uid_int, treat_group) %>%
@@ -298,13 +226,12 @@ summary_by_scheme <- model_panel %>%
     .groups = "drop"
   )
 
+cat("\nSummary by scheme:\n")
 print(summary_by_scheme)
 
-duplicate_controls <- model_panel %>%
+duplicate_summary <- model_panel %>%
   count(identifier, scheme, quarter_year, treat_group, name = "n_rows") %>%
-  filter(n_rows > 1)
-
-duplicate_summary <- duplicate_controls %>%
+  filter(n_rows > 1) %>%
   group_by(treat_group) %>%
   summarise(
     duplicated_cells = n(),
@@ -313,13 +240,13 @@ duplicate_summary <- duplicate_controls %>%
     .groups = "drop"
   )
 
+cat("\nDuplicate rows from matched-control reuse:\n")
 print(duplicate_summary)
 
-
 # =============================================================================
-# 8. RAW TREND PLOT
+# RAW TREND PLOT
 # =============================================================================
-# Shows treated/control raw injury trends and highlights COVID periods.
+# Plot raw treated/control trends and shade the COVID periods used in models.
 
 trend_df <- model_panel %>%
   group_by(group, quarter_year) %>%
@@ -328,24 +255,26 @@ trend_df <- model_panel %>%
 p_trend <- ggplot(trend_df, aes(x = as.Date(quarter_year), y = mean_injury, colour = group)) +
   annotate(
     "rect",
-    xmin = as.Date(as.yearqtr("2020 Q2")),
+    xmin = as.Date(as.yearqtr("2020 Q1")),
     xmax = as.Date(as.yearqtr("2021 Q1") + 0.25),
-    ymin = -Inf, ymax = Inf,
+    ymin = -Inf,
+    ymax = Inf,
     alpha = 0.08,
     fill = "grey50"
   ) +
   annotate(
     "rect",
     xmin = as.Date(as.yearqtr("2021 Q2")),
-    xmax = as.Date(as.yearqtr("2022 Q1") + 0.25),
-    ymin = -Inf, ymax = Inf,
+    xmax = as.Date(as.yearqtr("2021 Q4") + 0.25),
+    ymin = -Inf,
+    ymax = Inf,
     alpha = 0.06,
     fill = "grey70"
   ) +
   geom_line(linewidth = 0.9) +
   labs(
     title = "Mean injuries over time",
-    subtitle = "Shaded periods: COVID lockdown and recovery",
+    subtitle = "Shaded periods: COVID lockdown/disruption and recovery",
     x = NULL,
     y = "Mean injuries per road-link-quarter",
     colour = NULL
@@ -354,19 +283,22 @@ p_trend <- ggplot(trend_df, aes(x = as.Date(quarter_year), y = mean_injury, colo
   theme(legend.position = "bottom")
 
 print(p_trend)
-ggsave(file.path(outdir, "01_raw_trends.png"), p_trend, width = 10, height = 6, dpi = 300)
 
+ggsave(
+  file.path(outdir, "00_raw_trends.png"),
+  p_trend,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
 
 # =============================================================================
-# 9. BUILD STACKED EVENT-STUDY DATA
+# BUILD STACKED DATA
 # =============================================================================
-# For each scheme:
-#   - keep treated roads and matched controls for that scheme
-#   - restrict to K quarters before and L quarters after implementation
-#   - define event time relative to implementation quarter
+# Each CAZ scheme becomes a separate matched DiD stack. The same control road
+# can appear in more than one stack, but receives a stack-specific unit ID.
 
 stacked <- map_dfr(schemes_all, function(sc) {
-  
   sc_start <- scheme_timing %>%
     filter(scheme == sc) %>%
     pull(caz_start_q)
@@ -388,22 +320,19 @@ stacked <- map_dfr(schemes_all, function(sc) {
       uid_stack = paste0(uid_int, "_", sc),
       post_stack = as.integer(treat_group == 1 & event_time >= 0)
     )
-})
+}) %>%
+  mutate(stack_scheme = factor(stack_scheme))
 
-cat("Stacked rows:", nrow(stacked), "\n")
+cat("\nStacked rows:", nrow(stacked), "\n")
 cat("Stacked units:", n_distinct(stacked$uid_stack), "\n")
 
-
 # =============================================================================
-# 10. PRIMARY MODEL SELECTION: WITHOUT VS WITH COVID INTERACTIONS
+# MODEL 1 — POOLED AVERAGE TREATMENT EFFECT
 # =============================================================================
-# We first estimate the stacked PPML model without COVID interaction terms.
-# Then we estimate the same model with treated × COVID lockdown/recovery terms.
-# The comparison checks whether the CAZ estimate is sensitive to differential
-# COVID disruption among treated roads.
+# This model estimates one average post-treatment CAZ effect across all schemes.
+# A no-COVID version is fitted only to show sensitivity to COVID adjustment.
 
-# Model A: no COVID interactions
-m_ppml_no_covid <- feglm(
+m1_no_covid <- feglm(
   outcome_raw ~ post_stack |
     uid_stack + stack_scheme[qtr_int],
   data = stacked,
@@ -412,8 +341,7 @@ m_ppml_no_covid <- feglm(
   lean = TRUE
 )
 
-# Model B: with COVID interactions
-m_ppml_covid <- feglm(
+m1_covid <- feglm(
   outcome_raw ~ post_stack +
     covid_lockdown_treated + covid_recovery_treated |
     uid_stack + stack_scheme[qtr_int],
@@ -423,11 +351,11 @@ m_ppml_covid <- feglm(
   lean = TRUE
 )
 
-# Compare models in regression table
+cat("\nModel 1: pooled average effect, with and without COVID interactions\n")
 etable(
-  m_ppml_no_covid,
-  m_ppml_covid,
-  headers = c("No COVID interactions", "With COVID interactions"),
+  m1_no_covid,
+  m1_covid,
+  headers = c("No COVID interactions", "COVID-adjusted"),
   dict = c(
     "post_stack" = "CAZ post-treatment",
     "covid_lockdown_treated" = "Treated × COVID lockdown",
@@ -435,16 +363,15 @@ etable(
   )
 )
 
-# Extract comparable IRRs
-compare_covid_models <- tibble(
-  model = c("No COVID interactions", "With COVID interactions"),
+model1_results <- tibble(
+  model = c("No COVID interactions", "COVID-adjusted"),
   estimate_log_irr = c(
-    coef(m_ppml_no_covid)["post_stack"],
-    coef(m_ppml_covid)["post_stack"]
+    coef(m1_no_covid)["post_stack"],
+    coef(m1_covid)["post_stack"]
   ),
   se = c(
-    se(m_ppml_no_covid)["post_stack"],
-    se(m_ppml_covid)["post_stack"]
+    se(m1_no_covid)["post_stack"],
+    se(m1_covid)["post_stack"]
   )
 ) %>%
   mutate(
@@ -458,70 +385,44 @@ compare_covid_models <- tibble(
     pct_hi = 100 * (irr_hi - 1)
   )
 
-print(compare_covid_models)
+print(model1_results)
 
-write_csv(
-  compare_covid_models,
-  file.path(outdir, "covid_model_comparison.csv")
-)
-
-# Plot comparison
-p_covid_compare <- ggplot(
-  compare_covid_models,
+p_model1 <- ggplot(
+  model1_results,
   aes(x = pct_change, y = fct_reorder(model, pct_change))
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
   geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
   geom_point(size = 3) +
   labs(
-    title = "Sensitivity to COVID adjustment",
+    title = "Model 1: pooled average CAZ effect",
     subtitle = "Stacked PPML estimates with and without treated-road COVID interactions",
     x = "% change in injuries",
     y = NULL
   ) +
   theme_minimal(base_size = 12)
 
-print(p_covid_compare)
+print(p_model1)
 
 ggsave(
-  file.path(outdir, "covid_model_comparison.png"),
-  p_covid_compare,
+  file.path(outdir, "01_model1_pooled_average_effect.png"),
+  p_model1,
   width = 8,
   height = 4.5,
   dpi = 300
 )
 
-# Use the COVID-adjusted model as the primary model for the rest of the analysis.
-# This is preferred because the trend plot showed treated roads had a different
-# COVID lockdown/recovery pattern from controls.
-m_ppml <- m_ppml_covid
-
-overall_ppml <- tibble(
-  model = "Stacked PPML, COVID-adjusted",
-  estimate_log_irr = coef(m_ppml)["post_stack"],
-  se = se(m_ppml)["post_stack"]
-) %>%
-  mutate(
-    ci_lo = estimate_log_irr - 1.96 * se,
-    ci_hi = estimate_log_irr + 1.96 * se,
-    irr = exp(estimate_log_irr),
-    irr_lo = exp(ci_lo),
-    irr_hi = exp(ci_hi),
-    pct_change = 100 * (irr - 1),
-    pct_lo = 100 * (irr_lo - 1),
-    pct_hi = 100 * (irr_hi - 1)
-  )
-
-print(overall_ppml)
+# Main headline estimate from Model 1.
+m1_main <- m1_covid
+model1_main_result <- model1_results %>% filter(model == "COVID-adjusted")
 
 # =============================================================================
-# 11. PRIMARY MODEL: OVERALL EVENT STUDY
+#  MODEL 2 — POOLED DYNAMIC EVENT STUDY
 # =============================================================================
-# Estimates dynamic effects by event time, averaged across all schemes.
-# Negative event times test anticipation/pre-trends.
-# Positive event times show how the effect evolves after implementation.
+# This is the primary dynamic model. It estimates pooled lead and lag effects
+# relative to quarter -1 and is used for parallel-trends assessment.
 
-m_ppml_es <- feglm(
+m2_event <- feglm(
   outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
     covid_lockdown_treated + covid_recovery_treated |
     uid_stack + stack_scheme[qtr_int],
@@ -531,222 +432,82 @@ m_ppml_es <- feglm(
   lean = TRUE
 )
 
-ppml_es <- extract_fixest_event_study(m_ppml_es)
+model2_results <- extract_fixest_event_study(m2_event)
 
-p_ppml_es <- plot_event_study(
-  ppml_es,
-  title = "Stacked PPML event study",
-  subtitle = "Log incidence rate ratios; reference = quarter -1",
+p_model2 <- plot_event_study(
+  model2_results,
+  title = "Model 2: pooled stacked PPML event study",
+  subtitle = "Primary dynamic model; reference period = quarter -1",
   ylab = "Log incidence rate ratio"
 )
 
-print(p_ppml_es)
-ggsave(file.path(outdir, "02_ppml_event_study_overall.png"), p_ppml_es, width = 10, height = 7, dpi = 300)
+print(p_model2)
 
+ggsave(
+  file.path(outdir, "02_model2_pooled_event_study.png"),
+  p_model2,
+  width = 10,
+  height = 7,
+  dpi = 300
+)
+
+# Parallel-trends diagnostics from the primary PPML event-study.
+# The closest pre-treatment window is the most relevant diagnostic.
+pt_8_2 <- wald(
+  m2_event,
+  keep = "event_time_f::-(8|7|6|5|4|3|2):treat_group"
+)
+
+pt_6_2 <- wald(
+  m2_event,
+  keep = "event_time_f::-(6|5|4|3|2):treat_group"
+)
+
+pt_4_2 <- wald(
+  m2_event,
+  keep = "event_time_f::-(4|3|2):treat_group"
+)
+
+cat("\nParallel-trends tests from Model 2:\n")
+print(pt_8_2)
+print(pt_6_2)
+print(pt_4_2)
 
 # =============================================================================
-# 12. SCHEME-SPECIFIC EVENT STUDIES
+# MODEL 3 — SCHEME-SPECIFIC AVERAGE TREATMENT EFFECTS
 # =============================================================================
-# Runs the same PPML event-study separately for each CAZ scheme.
-# This is memory-efficient and directly answers whether effects differ by scheme.
+# This model estimates one formal average post-treatment effect for each scheme.
 
-run_scheme_ppml <- function(sc) {
-  
-  d <- stacked %>%
-    filter(stack_scheme == sc) %>%
-    droplevels()
-  
-  fit <- tryCatch(
-    feglm(
-      outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
-        covid_lockdown_treated + covid_recovery_treated |
-        uid_stack + qtr_int,
-      data = d,
-      family = "poisson",
-      cluster = ~OA,
-      lean = TRUE
+stacked <- stacked %>%
+  mutate(
+    scheme_post = if_else(
+      treat_group == 1 & post_stack == 1,
+      as.character(stack_scheme),
+      "control"
     ),
-    error = function(e) NULL
-  )
-  
-  if (is.null(fit)) return(NULL)
-  
-  extract_fixest_event_study(fit) %>%
-    mutate(scheme = sc)
-}
-
-scheme_es <- map_dfr(schemes_all, run_scheme_ppml)
-
-p_scheme_es <- ggplot(scheme_es, aes(x = event_time, y = estimate)) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
-  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15) +
-  geom_line(linewidth = 0.6) +
-  geom_point(size = 1.2) +
-  facet_wrap(~scheme, scales = "free_y", ncol = 2) +
-  labs(
-    title = "Scheme-specific PPML event studies",
-    subtitle = "Each panel estimates dynamic effects for one CAZ scheme",
-    x = "Quarters relative to CAZ implementation",
-    y = "Log incidence rate ratio"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(panel.grid.minor = element_blank(),
-        strip.text = element_text(face = "bold"))
-
-print(p_scheme_es)
-ggsave(file.path(outdir, "03_ppml_event_study_by_scheme.png"), p_scheme_es, width = 12, height = 10, dpi = 300)
-
-
-# =============================================================================
-# 13. SCHEME-SPECIFIC SUMMARY EFFECTS
-# =============================================================================
-# Summarises each scheme's average post-treatment effect from the scheme-specific
-# event-study coefficients.
-
-scheme_summary <- scheme_es %>%
-  filter(event_time >= 0) %>%
-  group_by(scheme) %>%
-  summarise(
-    mean_log_irr = mean(estimate, na.rm = TRUE),
-    se_log_irr = sd(estimate, na.rm = TRUE) / sqrt(n()),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    ci_lo = mean_log_irr - 1.96 * se_log_irr,
-    ci_hi = mean_log_irr + 1.96 * se_log_irr,
-    irr = exp(mean_log_irr),
-    irr_lo = exp(ci_lo),
-    irr_hi = exp(ci_hi),
-    pct_change = 100 * (irr - 1),
-    pct_lo = 100 * (irr_lo - 1),
-    pct_hi = 100 * (irr_hi - 1)
-  )
-
-print(scheme_summary)
-
-p_scheme_summary <- ggplot(scheme_summary, aes(x = pct_change, y = fct_reorder(scheme, pct_change))) +
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
-  geom_point(size = 3) +
-  labs(
-    title = "Average post-CAZ effect by scheme",
-    subtitle = "Based on average post-treatment PPML event-study coefficients",
-    x = "% change in injuries",
-    y = NULL
-  ) +
-  theme_minimal(base_size = 12)
-
-print(p_scheme_summary)
-ggsave(file.path(outdir, "04_scheme_summary_effects.png"), p_scheme_summary, width = 9, height = 6, dpi = 300)
-
-
-
-
-# =============================================================================
-# 14. C&S ROBUSTNESS CHECK
-# =============================================================================
-# C&S is used as a robustness check on the additive injury-count scale.
-# Zero-only road-link series are removed because they provide no identifying
-# information for this estimator.
-
-cs_data <- model_panel %>%
-  group_by(uid_int) %>%
-  filter(sum(outcome_raw, na.rm = TRUE) > 0) %>%
-  ungroup() %>%
-  mutate(uid_int = as.integer(factor(uid_int)))
-
-# =============================================================================
-# FORMAL SCHEME-SPECIFIC STACKED PPML EFFECTS
-# =============================================================================
-# This estimates one average post-treatment effect for each CAZ scheme.
-# Coefficients are log incidence rate ratios.
-# exp(coef) gives the IRR; (exp(coef)-1)*100 gives % change in injuries.
-
-stacked <- stacked %>%
-  mutate(
-    stack_scheme = factor(stack_scheme),
-    scheme_post = if_else(treat_group == 1 & post_stack == 1,
-                          as.character(stack_scheme),
-                          "control"),
     scheme_post = factor(scheme_post, levels = c("control", schemes_all))
   )
 
-m_ppml_scheme <- feglm(
+m3_scheme <- feglm(
   outcome_raw ~ i(scheme_post, ref = "control") +
     covid_lockdown_treated + covid_recovery_treated |
     uid_stack + stack_scheme[qtr_int],
-  data    = stacked,
-  family  = "poisson",
+  data = stacked,
+  family = "poisson",
   cluster = ~OA,
-  lean    = TRUE
+  lean = TRUE
 )
 
-etable(m_ppml_scheme)
+cat("\nModel 3: scheme-specific average effects\n")
+etable(m3_scheme)
 
-cs_fit <- run_cs(
-  cs_data,
-  xformla = ~ log1p_pop_density + IMD + log1p_road_density_m_km2
-)
+ct_m3 <- coeftable(m3_scheme)
 
-summary(cs_fit$agg)
-summary(cs_fit$att)
-
-cs_es <- extract_cs_event_study(cs_fit$dyn)
-
-p_cs_es <- plot_event_study(
-  cs_es,
-  title = "Callaway & Sant'Anna robustness event study",
-  subtitle = "ATT on additive injury-count scale",
-  ylab = "ATT, injury count",
-  colour = "#2E6FAB"
-)
-
-print(p_cs_es)
-ggsave(file.path(outdir, "05_cs_event_study.png"), p_cs_es, width = 10, height = 7, dpi = 300)
-
-
-# =============================================================================
-# SCHEME-SPECIFIC STACKED PPML EFFECTS
-# =============================================================================
-# This estimates one average post-treatment effect for each CAZ scheme.
-# Coefficients are log incidence rate ratios.
-# exp(coef) gives the IRR; (exp(coef)-1)*100 gives % change in injuries.
-
-stacked <- stacked %>%
-  mutate(
-    stack_scheme = factor(stack_scheme),
-    scheme_post = if_else(treat_group == 1 & post_stack == 1,
-                          as.character(stack_scheme),
-                          "control"),
-    scheme_post = factor(scheme_post, levels = c("control", schemes_all))
-  )
-
-m_ppml_scheme <- feglm(
-  outcome_raw ~ i(scheme_post, ref = "control") +
-    covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + stack_scheme[qtr_int],
-  data    = stacked,
-  family  = "poisson",
-  cluster = ~OA,
-  lean    = TRUE
-)
-
-etable(m_ppml_scheme)
-
-
-
-# =============================================================================
-# EXTRACT SCHEME-SPECIFIC IRRs
-# =============================================================================
-
-ct <- coeftable(m_ppml_scheme)
-
-scheme_ppml_table <- tibble(
-  term = rownames(ct),
-  estimate_log_irr = ct[, "Estimate"],
-  se = ct[, "Std. Error"],
-  p_value = ct[, "Pr(>|z|)"]
+model3_results <- tibble(
+  term = rownames(ct_m3),
+  estimate_log_irr = ct_m3[, "Estimate"],
+  se = ct_m3[, "Std. Error"],
+  p_value = ct_m3[, "Pr(>|z|)"]
 ) %>%
   filter(str_detect(term, "scheme_post::")) %>%
   mutate(
@@ -759,11 +520,11 @@ scheme_ppml_table <- tibble(
     pct_change = 100 * (irr - 1),
     pct_lo = 100 * (irr_lo - 1),
     pct_hi = 100 * (irr_hi - 1),
-    result = case_when(
+    sig = case_when(
       p_value < 0.001 ~ "***",
-      p_value < 0.01  ~ "**",
-      p_value < 0.05  ~ "*",
-      p_value < 0.10  ~ ".",
+      p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*",
+      p_value < 0.10 ~ ".",
       TRUE ~ ""
     )
   ) %>%
@@ -778,91 +539,132 @@ scheme_ppml_table <- tibble(
     pct_lo,
     pct_hi,
     p_value,
-    result
+    sig
   ) %>%
   arrange(pct_change)
 
-print(scheme_ppml_table)
+print(model3_results)
 
+p_model3 <- ggplot(
+  model3_results,
+  aes(x = pct_change, y = fct_reorder(scheme, pct_change))
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Model 3: scheme-specific average CAZ effects",
+    subtitle = "Formal scheme-specific stacked PPML estimates",
+    x = "% change in injuries",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12)
 
-#Sheffield changed most:
-# the above table averaged the post-event-study coefficients, which can be distorted by noisy event-time estimates 
-#and does not account properly for covariance across event-time coefficients. 
-#This directly estimates the average post-period contrast, somore stable.
+print(p_model3)
 
-# =============================================================================
-# 15. FINAL COMPARISON TABLE
-# =============================================================================
-# Presents the main PPML estimate and C&S robustness estimate side by side.
-
-cs_summary <- tibble(
-  model = "Callaway & Sant'Anna",
-  estimate = cs_fit$agg$overall.att,
-  se = cs_fit$agg$overall.se,
-  ci_lo = estimate - 1.96 * se,
-  ci_hi = estimate + 1.96 * se,
-  scale = "Additive injury-count scale"
+ggsave(
+  file.path(outdir, "03_model3_scheme_average_effects.png"),
+  p_model3,
+  width = 9,
+  height = 6,
+  dpi = 300
 )
 
-ppml_summary <- overall_ppml %>%
-  transmute(
-    model,
-    estimate = estimate_log_irr,
-    se,
-    ci_lo,
-    ci_hi,
-    scale = "Log-IRR; exponentiate for IRR"
+# =============================================================================
+# MODEL 4 — SCHEME-SPECIFIC DYNAMIC EVENT STUDIES
+# =============================================================================
+# This runs the event-study model separately for each scheme. These estimates
+# show whether the timing and shape of effects differ across CAZ schemes.
+
+run_scheme_event_ppml <- function(sc) {
+  d <- stacked %>%
+    filter(stack_scheme == sc) %>%
+    droplevels()
+  
+  fit <- tryCatch(
+    feglm(
+      outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
+        covid_lockdown_treated + covid_recovery_treated |
+        uid_stack + qtr_int,
+      data = d,
+      family = "poisson",
+      cluster = ~OA,
+      lean = TRUE
+    ),
+    error = function(e) {
+      cat("Scheme event study failed for:", sc, "\n")
+      NULL
+    }
+  )
+  
+  if (is.null(fit)) return(NULL)
+  
+  extract_fixest_event_study(fit) %>%
+    mutate(scheme = sc)
+}
+
+model4_results <- map_dfr(schemes_all, run_scheme_event_ppml)
+
+p_model4 <- ggplot(model4_results, aes(x = event_time, y = estimate)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
+  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15) +
+  geom_line(linewidth = 0.6) +
+  geom_point(size = 1.2) +
+  facet_wrap(~scheme, scales = "free_y", ncol = 2) +
+  labs(
+    title = "Model 4: scheme-specific PPML event studies",
+    subtitle = "Dynamic effects estimated separately for each CAZ scheme",
+    x = "Quarters relative to CAZ implementation",
+    y = "Log incidence rate ratio"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold")
   )
 
-final_results <- bind_rows(ppml_summary, cs_summary)
+print(p_model4)
 
-print(final_results)
-
-write_csv(final_results, file.path(outdir, "final_results_overall.csv"))
-write_csv(scheme_summary, file.path(outdir, "final_results_by_scheme.csv"))
-write_csv(ppml_es, file.path(outdir, "ppml_event_study_overall.csv"))
-write_csv(scheme_es, file.path(outdir, "ppml_event_study_by_scheme.csv"))
-write_csv(cs_es, file.path(outdir, "cs_event_study.csv"))
-
-
-# =============================================================================
-# 16. FINAL COMBINED FIGURE
-# =============================================================================
-# Combines primary PPML and C&S robustness event-study plots.
-
-p_final <- p_ppml_es / p_cs_es +
-  plot_annotation(
-    title = "CAZ effects on road traffic injuries",
-    subtitle = "Primary stacked PPML model and C&S robustness check",
-    caption = "PPML uses log incidence rate ratios; C&S uses additive injury-count ATT."
-  )
-
-print(p_final)
-ggsave(file.path(outdir, "06_final_combined_event_studies.png"), p_final, width = 10, height = 12, dpi = 300)
-
+ggsave(
+  file.path(outdir, "04_model4_scheme_event_studies.png"),
+  p_model4,
+  width = 12,
+  height = 10,
+  dpi = 300
+)
 
 # =============================================================================
-# 17. SAVE CORE DATA AND RESULTS
+#  OUTPUTS
 # =============================================================================
-# Saves only what is needed for reproducibility and reporting.
+write_csv(model1_results, file.path(outdir, "model1_pooled_average_effect.csv"))
+write_csv(model2_results, file.path(outdir, "model2_pooled_event_study.csv"))
+write_csv(model3_results, file.path(outdir, "model3_scheme_average_effects.csv"))
+write_csv(model4_results, file.path(outdir, "model4_scheme_event_studies.csv"))
 
 arrow::write_parquet(
   model_panel,
-  here("data", "processed", "final_model_data_clean_All.parquet")
+  here("data", "processed", "final_model_panel_main.parquet")
+)
+
+arrow::write_parquet(
+  stacked,
+  here("data", "processed", "final_stacked_data_main.parquet")
 )
 
 saveRDS(
   list(
-    overall_ppml = overall_ppml,
-    ppml_event_study = ppml_es,
-    scheme_event_study = scheme_es,
-    scheme_summary = scheme_summary,
-    cs_event_study = cs_es,
-    cs_summary = cs_summary,
-    final_results = final_results
+    model1_results = model1_results,
+    model1_main_result = model1_main_result,
+    model2_results = model2_results,
+    model3_results = model3_results,
+    model4_results = model4_results,
+    pt_8_2 = pt_8_2,
+    pt_6_2 = pt_6_2,
+    pt_4_2 = pt_4_2
   ),
-  here("data", "processed", "caz_did_results_clean_All.rds")
+  here("data", "processed", "caz_ppml_main_results.rds")
 )
 
-cat("\nAnalysis complete.\n")
+cat("\nMAIN PPML ANALYSIS COMPLETE.\n")
 cat("Outputs saved to:", outdir, "\n")
