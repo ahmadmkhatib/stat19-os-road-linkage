@@ -44,7 +44,8 @@ dir.create(here("output", "diagnostics", "pooled"),
 outdir <- here("output", "diagnostics", "pooled")
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
-
+glimpse(OA_matching_dataset
+        )
 # =============================================================================
 # VARIABLE DEFINITIONS
 # =============================================================================
@@ -59,7 +60,7 @@ stage1_socdem   <- c(
   "cars_one_pct", "cars_twoPlus_pct",
   "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
   "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
-  "Taxi_pct", "workAthome_pct", "Other_pct",
+  "Taxi_pct", "workAthome_pct","Motorcycle_pct", "Other_pct",
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
   "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
   "age_45to64_pct", "age_65to84_pct"
@@ -385,6 +386,15 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
                                  as.numeric(trow[s1v]), S_s1))
     })
   })
+  cat("  Treated:", nrow(treated_s1),
+      "| Unique controls in pool:", nrow(controls_s1), "\n")
+  
+  stage1_summary <- tibble(
+      n_treated_input         = sum(data_clean$treat_indicator == 1),
+    n_controls_input        = sum(data_clean$treat_indicator == 0),
+    n_treated_retained_s1   = nrow(treated_s1),
+    n_controls_retained_s1  = nrow(controls_s1)
+  )
 
   min_dist <- dist_s1 %>%
     group_by(treated_OA) %>%
@@ -474,7 +484,8 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   })
 
   list(matched_data = matched_data, isolated_OAs = isolated_OAs,
-       matchit_s2 = m_s2, dist_s2 = dist_s2, pairs = pairs)
+       matchit_s2 = m_s2, dist_s2 = dist_s2, pairs = pairs,
+       stage1_summary = stage1_summary)
 }
 
 # =============================================================================
@@ -754,3 +765,217 @@ cat("  OA_ratio_selection_pooled.rds\n")
 cat("  OA_balance_tests_pooled.rds\n")
 cat("  OA_matching_pairs_pooled.rds\n")
 cat("  fig_ratio_selection_pooled.png\n")
+
+
+
+
+# =============================================================================
+# STAGE 1 MATCHING SUMMARY — TEXT FOR METHODS / RESULTS
+# =============================================================================
+
+library(glue)
+
+# ---- Optional: readable labels for output text -------------------------------
+
+var_labels <- c(
+  road_density_m_km2 = "road density",
+  road_length_km = "road length",
+  pct_A_road = "percentage of A roads",
+  pct_B_road = "percentage of B roads",
+  pct_minor_road = "percentage of minor roads",
+  dist_BUA_centroid = "distance to BUA centroid",
+  pop_density = "population density",
+  area_km2 = "OA area",
+  business_retail_per_km2 = "retail business density",
+  IMD = "Index of Multiple Deprivation",
+  cars_one_pct = "percentage with one car",
+  cars_twoPlus_pct = "percentage with 2+ cars",
+  Drive_Car_pct = "percentage commuting by car",
+  Passenger_Car_pct = "percentage commuting as car passenger",
+  Walk_pct = "percentage walking to work",
+  Bicycle_pct = "percentage cycling to work",
+  bus_Coach_pct = "percentage commuting by bus/coach",
+  Train_pct = "percentage commuting by train",
+  Underground_train_tram_pct = "percentage commuting by underground/train/tram",
+  Taxi_pct = "percentage commuting by taxi",
+  workAthome_pct = "percentage working at home",
+  Motorcycle_pct = "percentage commuting by motorcycle",
+  Other_pct = "percentage commuting by other mode",
+  White_pct = "percentage of White residents",
+  Mixed_pct = "percentage of Mixed residents",
+  Asian_pct = "percentage of Asian residents",
+  Black_pct = "percentage of Black residents",
+  age_under15_pct = "percentage aged under 15",
+  age_15to24_pct = "percentage aged 15–24",
+  age_25to44_pct = "percentage aged 25–44",
+  age_45to64_pct = "percentage aged 45–64",
+  age_65to84_pct = "percentage aged 65–84",
+  log1p_road_density_m_km2 = "road density",
+  log1p_road_length_km = "road length",
+  log1p_pop_density = "population density",
+  log_area_km2 = "OA area",
+  log1p_dist_BUA_centroid = "distance to BUA centroid",
+  log1p_business_retail_per_km2 = "retail business density"
+)
+
+pretty_var <- function(x) {
+  out <- var_labels[x]
+  ifelse(is.na(out), x, out)
+}
+
+# ---- Run pooled Stage 1 diagnostic matching ---------------------------------
+# This is a diagnostic summary of Stage 1 balance across all English treated OAs
+# and the shared other-city control pool.
+
+stage1_diag_data <- data_england %>%
+  winsorise_and_log_s1(
+    raw_vars        = stage1_vars,
+    log_vars        = log_transform_s1,
+    log_nozero_vars = log_nozero_s1
+  )
+
+stage1_diag_vars <- check_vars(
+  stage1_diag_data,
+  stage1_vars_log,
+  label = "Stage 1 pooled diagnostic"
+)
+
+formula_s1_diag <- reformulate(stage1_diag_vars, response = "treat_indicator")
+
+m_s1_diag <- matchit(
+  formula_s1_diag,
+  data     = stage1_diag_data,
+  method   = "nearest",
+  distance = "mahalanobis",
+  ratio    = 50,
+  replace  = TRUE
+)
+
+# ---- Number of retained controls --------------------------------------------
+
+mm_s1_diag <- m_s1_diag$match.matrix
+
+stage1_control_idx <- unique(as.integer(mm_s1_diag[!is.na(mm_s1_diag)]))
+
+n_controls_input_s1 <- stage1_diag_data %>%
+  filter(treat_indicator == 0) %>%
+  summarise(n = n_distinct(OA)) %>%
+  pull(n)
+
+n_controls_retained_s1 <- stage1_diag_data[stage1_control_idx, ] %>%
+  summarise(n = n_distinct(OA)) %>%
+  pull(n)
+
+# ---- Balance table -----------------------------------------------------------
+
+stage1_balance <- bal.tab(
+  m_s1_diag,
+  un    = TRUE,
+  stats = "mean.diffs"
+)$Balance %>%
+  as.data.frame() %>%
+  rownames_to_column("variable") %>%
+  as_tibble() %>%
+  mutate(
+    abs_smd_before = abs(Diff.Un),
+    abs_smd_after  = abs(Diff.Adj),
+    improvement_pct = 100 * (abs_smd_before - abs_smd_after) / abs_smd_before,
+    variable_label = pretty_var(variable)
+  ) %>%
+  arrange(desc(abs_smd_after))
+
+# ---- Overall improvement -----------------------------------------------------
+
+mean_smd_before <- mean(stage1_balance$abs_smd_before, na.rm = TRUE)
+mean_smd_after  <- mean(stage1_balance$abs_smd_after,  na.rm = TRUE)
+
+max_smd_before <- max(stage1_balance$abs_smd_before, na.rm = TRUE)
+max_smd_after  <- max(stage1_balance$abs_smd_after,  na.rm = TRUE)
+
+mean_reduction_pct <- 100 * (mean_smd_before - mean_smd_after) / mean_smd_before
+max_reduction_pct  <- 100 * (max_smd_before  - max_smd_after)  / max_smd_before
+
+# ---- Key pre-matching imbalanced variables ----------------------------------
+
+top_pre_imbalance <- stage1_balance %>%
+  arrange(desc(abs_smd_before)) %>%
+  slice_head(n = 5) %>%
+  transmute(
+    text = glue("{variable_label} (SMD = {round(abs_smd_before, 2)})")
+  ) %>%
+  pull(text)
+
+# ---- Residual imbalance after matching --------------------------------------
+
+residual_imbalance <- stage1_balance %>%
+  filter(abs_smd_after > 0.25) %>%
+  arrange(desc(abs_smd_after))
+
+n_residual_imbalance <- nrow(residual_imbalance)
+
+top_residual_imbalance <- residual_imbalance %>%
+  slice_head(n = 6) %>%
+  transmute(
+    text = glue("{variable_label} (SMD = {round(abs_smd_after, 2)})")
+  ) %>%
+  pull(text)
+
+# ---- Specific variable checks, if present -----------------------------------
+
+specific_vars <- c(
+  "Drive_Car_pct",
+  "log1p_business_retail_per_km2",
+  "White_pct",
+  "cars_twoPlus_pct",
+  "Asian_pct",
+  "log1p_dist_BUA_centroid"
+)
+
+specific_stage1_smds <- stage1_balance %>%
+  filter(variable %in% specific_vars) %>%
+  select(
+    variable,
+    variable_label,
+    smd_before = abs_smd_before,
+    smd_after  = abs_smd_after
+  ) %>%
+  arrange(desc(smd_after))
+
+print(specific_stage1_smds)
+
+# ---- Create text paragraph ---------------------------------------------------
+
+stage1_text <- glue(
+  "Stage 1 matching retained {format(n_controls_retained_s1, big.mark = ',')} unique control OAs ",
+  "(out of {format(n_controls_input_s1, big.mark = ',')}) and reduced the mean |SMD| by ",
+  "{round(mean_reduction_pct, 1)}% (from {round(mean_smd_before, 2)} to {round(mean_smd_after, 2)}), ",
+  "and the maximum |SMD| dropped by {round(max_reduction_pct, 1)}% ",
+  "(from {round(max_smd_before, 2)} to {round(max_smd_after, 2)}). ",
+  "Pre-matching imbalance was large for several covariates, such as ",
+  "{paste(top_pre_imbalance[1:2], collapse = ' and ')}. ",
+  "After matching, balance improved for nearly all covariates, though residual imbalance remains above the 0.25 threshold for ",
+  "{n_residual_imbalance} variables, including ",
+  "{paste(top_residual_imbalance, collapse = ', ')}."
+)
+
+cat("\n=== STAGE 1 SUMMARY TEXT ===\n")
+cat(stage1_text, "\n")
+
+# ---- Save outputs ------------------------------------------------------------
+
+saveRDS(
+  stage1_balance,
+  here("data", "processed", "OA_stage1_balance_summary_pooled.rds")
+)
+
+write_csv(
+  stage1_balance,
+  here("output", "diagnostics", "pooled", "OA_stage1_balance_summary_pooled.csv")
+)
+
+writeLines(
+  stage1_text,
+  here("output", "diagnostics", "pooled", "OA_stage1_summary_text.txt")
+)
+
+

@@ -8,120 +8,95 @@ library(here)
 library(sf)
 library(naniar)
 
-### census OA data 
+### census OA data -----------------------------------------------
 OA_char_raw <- read.csv(here("data","processed","outputArea_raw.csv"))
-OA_char_percent <- read.csv(here("data","processed","outputArea_percent.csv"))
 
 miss_var_summary(OA_char_raw)
-miss_var_summary(OA_char_percent)
 
+# NOTE: outputArea_percent.csv is no longer used. Its travel-mode percentages
+# were computed against `allInWork`, which for England & Wales does not equal
+# the sum of the eleven travel-mode counts (it appears to come from a different,
+# workplace-based population base). That made travel_mode_pct columns sum to
+# ~65% instead of 100% for ~189k EW rows. Every percentage column below is now
+# derived directly from outputArea_raw.csv with a denominator that is
+# guaranteed to be internally consistent with its own numerators.
 
-OA_char_percent <-  OA_char_percent %>% filter(!is.na(Bicycle))
+eth_cols    <- c("White","Mixed","Asian","Black","Other_ethnicity")
+age_fine    <- c("X4under","X5to9","X10to14","X15to19","X20to24","X25to29",
+                 "X30to34","X35to39","X40to44","X45to49","X50to54","X55to59",
+                 "X60to64","X65to69","X70to74","X75to79","X80to84","X85plus")
+age_agg     <- c("X5to19","X20to64","X65plus")
+cars_cols   <- c("cars_none","cars_one","cars_two","cars_threePlus")  # mutually exclusive, exhaustive
+travel_cols <- c("workAthome","Underground_train_tram","Train","bus_Coach","Taxi",
+                 "Motorcycle","Drive_Car","Passenger_Car","Bicycle","Walk","Other")
 
-### business  OA data 
-OA__EW_businesses <- read.csv(here("data","processed","OA_EW_businesses.csv"))
-OA__scot_businesses<- read.csv(here("data","processed","OA_Sco_businesses.csv"))
+OA_char_fixed <- OA_char_raw %>%
+  mutate(
+    travel_base_n          = rowSums(across(all_of(travel_cols)), na.rm = TRUE),
+    travel_base_zero_flag  = as.integer(travel_base_n == 0)
+  ) %>%
+  mutate(across(all_of(eth_cols),              ~ .x / Total * 100,            .names = "{.col}_pct")) %>%
+  mutate(across(all_of(c(age_fine, age_agg)),  ~ .x / Total * 100,            .names = "{.col}_pct")) %>%
+  mutate(across(all_of(cars_cols),             ~ .x / totalHouseholds * 100,  .names = "{.col}_pct")) %>%
+  mutate(cars_twoPlus_pct = cars_twoPlus / totalHouseholds * 100) %>%   # informational only — overlaps cars_two + cars_threePlus
+  mutate(across(
+    all_of(travel_cols),
+    ~ if_else(travel_base_n == 0, NA_real_, .x / travel_base_n * 100),
+    .names = "{.col}_pct"
+  ))
 
-
-OA_EW_businesses_clean <- OA__EW_businesses %>%
-  rename(OA = OA21CD)
-OA_Sco_businesses_clean <- OA__scot_businesses %>%
-  rename(OA = OA22) 
-
-# Combine datasets
-OA_businesses <- bind_rows(
-  OA_EW_businesses_clean,
-  OA_Sco_businesses_clean
+# Sanity check before merging any further
+travel_pct_cols <- paste0(travel_cols, "_pct")
+stopifnot(
+  OA_char_fixed %>%
+    filter(travel_base_zero_flag == 0) %>%
+    transmute(s = rowSums(across(all_of(travel_pct_cols)))) %>%
+    pull(s) %>%
+    {all(abs(. - 100) < 1e-6)}
 )
 
+### business OA data ------------------------------------------------
+OA__EW_businesses  <- read.csv(here("data","processed","OA_EW_businesses.csv"))
+OA__scot_businesses <- read.csv(here("data","processed","OA_Sco_businesses.csv"))
 
-OA_matching_dataset <- readRDS(
-  here("data","processed","OA_matching_dataset.rds")
-)
+OA_EW_businesses_clean  <- OA__EW_businesses  %>% rename(OA = OA21CD)
+OA_Sco_businesses_clean <- OA__scot_businesses %>% rename(OA = OA22)
 
-# Backward-compat: rename dist_os_centre → dist_BUA_centroid if needed
+OA_businesses <- bind_rows(OA_EW_businesses_clean, OA_Sco_businesses_clean)
+
+OA_matching_dataset <- readRDS(here("data","processed","OA_matching_dataset.rds"))
+
 if ("dist_os_centre" %in% names(OA_matching_dataset) && !"dist_BUA_centroid" %in% names(OA_matching_dataset)) {
   names(OA_matching_dataset)[names(OA_matching_dataset) == "dist_os_centre"] <- "dist_BUA_centroid"
 }
 
-# 
-# OA shapefile and compute area
-# ------------------------------------------------------------
-
-oa_sub <- st_read(
-  here("data","processed","shp_files","OA_subset.shp"),
-  quiet = TRUE
-) %>%
-    st_transform(27700) %>%
-  st_make_valid() %>%
+oa_sub <- st_read(here("data","processed","shp_files","OA_subset.shp"), quiet = TRUE) %>%
   st_transform(27700) %>%
   st_make_valid() %>%
-  mutate(
-    area_m2 = as.numeric(st_area(.)),
-    area_km2 = area_m2 / 1e6
-  )
+  mutate(area_m2 = as.numeric(st_area(.)), area_km2 = area_m2 / 1e6)
 
-# --------------- 
-# checks
-# -------------- 
-
-cat("OA_matching_dataset rows:", nrow(OA_matching_dataset), "\n")
-cat("OA_char_raw rows:", nrow(OA_char_raw), "\n")
-cat("OA_char_percent rows:", nrow(OA_char_percent), "\n")
-
-cat("OA_char_raw dups:",
-    OA_char_raw %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
-
-cat("OA_char_percent dups:",
-    OA_char_percent %>% count(OA) %>% filter(n > 1) %>% nrow(), "\n")
-cat("OA__EW_businesses dups:",
-    OA__EW_businesses %>% count(OA21CD) %>% filter(n > 1) %>% nrow(), "\n")
-
-OA_businesses %>% count(OA) %>% filter(n > 1)%>% nrow()
-
-
-OA_businesses %>% 
-  count(OA, sort = TRUE)
-
-OA_businesses %>% 
-  filter(OA %in% (OA_businesses %>% count(OA) %>% filter(n > 1) %>% pull(OA))) %>%
-  head(20)
-
-OA_businesses <- OA_businesses %>% distinct()
-
-OA_businesses %>% 
-  count(OA) %>% 
-  filter(n > 1)
-
-### still 4 duplicates 
 OA_businesses <- OA_businesses %>%
+  distinct() %>%
   group_by(OA) %>%
   summarise(
-    business_retail_per_km2 = sum(business_retail_per_km2, na.rm = TRUE),
+    business_retail_per_km2             = sum(business_retail_per_km2, na.rm = TRUE),
     business_accommodation_food_per_km2 = sum(business_accommodation_food_per_km2, na.rm = TRUE),
     .groups = "drop"
   )
 
-
-
-vars_to_rename <- setdiff(
-  names(OA_char_raw),
-  c("OA","country","Total","IMD")
-)
+# Rename raw counts with _n suffix, same convention as before
+vars_to_rename <- setdiff(names(OA_char_raw), c("OA","country","Total","IMD"))
 
 OA_char_raw_renamed <- OA_char_raw %>%
-  rename_with(~ paste0(.x,"_n"), all_of(vars_to_rename))
+  rename_with(~ paste0(.x, "_n"), all_of(vars_to_rename))
 
-names(OA_char_percent)
-OA_char_pct_renamed <- OA_char_percent %>%
-  rename_with(~ paste0(.x,"_pct"), all_of(vars_to_rename)) %>%
-  dplyr::select(-country,-Total,-IMD)
-
-# Merge census tables
-# ------------------------
+# Pull just the OA key + the corrected _pct columns + the travel diagnostics
+OA_char_pct_fixed <- OA_char_fixed %>%
+  select(OA, ends_with("_pct"), travel_base_n, travel_base_zero_flag)
 
 OA_census <- OA_char_raw_renamed %>%
-  left_join(OA_char_pct_renamed, by="OA")
+  left_join(OA_char_pct_fixed, by = "OA")
+
 
 # ------------------------------------------------------------
 # Merge census onto OA matching dataset
@@ -440,5 +415,82 @@ st_write(
 
 
 
+travel_mode  <- c("Drive_Car_pct",
+                  "Passenger_Car_pct",
+                  "Walk_pct",
+                  "Bicycle_pct",
+                  "bus_Coach_pct",
+                  "Train_pct",
+                  "Underground_train_tram_pct",
+                  "Taxi_pct",
+                  "workAthome_pct",
+                  "Other_pct",
+                  "Motorcycle_pct")
 
+
+OA_matching_dataset <- OA_matching_dataset %>%
+  mutate(travel_mode_sum = rowSums(across(all_of(travel_mode)), na.rm = TRUE))
+
+# Overall summary
+OA_matching_dataset %>%
+  summarise(
+    min_sum  = min(travel_mode_sum, na.rm = TRUE),
+    max_sum  = max(travel_mode_sum, na.rm = TRUE),
+    mean_sum = mean(travel_mode_sum, na.rm = TRUE),
+    n_off    = sum(abs(travel_mode_sum - 100) > 0.01, na.rm = TRUE)
+  )
+
+# Look at the rows that don't sum to ~100 (allowing tiny floating point rounding)
+OA_matching_dataset %>%
+  filter(abs(travel_mode_sum - 100) > 0.01) %>%
+  select(OA, all_of(travel_mode), travel_mode_sum)
+
+travel_mode_n <- c("Drive_Car_n","Passenger_Car_n","Walk_n","Bicycle_n",
+                   "bus_Coach_n","Train_n","Underground_train_tram_n",
+                   "Taxi_n","workAthome_n","Other_n","Motorcycle_n")
+
+OA_matching_dataset <- OA_matching_dataset %>%
+  mutate(
+    travel_mode_n_sum = rowSums(across(all_of(travel_mode_n)), na.rm = TRUE),
+    gap = allInWork_n - travel_mode_n_sum
+  )
+
+OA_matching_dataset %>%
+  select(OA, allInWork_n, travel_mode_n_sum, gap, travel_mode_sum) %>%
+  head(10)
+
+summary(OA_matching_dataset$gap)
+
+OA_matching_dataset <- OA_matching_dataset %>%
+  mutate(gap_pct = gap / allInWork_n * 100)
+
+summary(OA_matching_dataset$gap_pct)
+
+# Is the missing % roughly constant, or does it vary a lot?
+ggplot(OA_matching_dataset, aes(gap_pct)) + geom_histogram(bins = 50)
+
+# Does the gap scale linearly with allInWork_n? (slope tells you if it's a fixed proportion)
+cor(OA_matching_dataset$allInWork_n, OA_matching_dataset$gap)
+lm(gap ~ allInWork_n, data = OA_matching_dataset) %>% summary()
+
+
+
+
+# ── Travel mode percentages sum to 100 ────────────────────────────────────
+cat("\n[11] Travel mode percentage consistency\n")
+
+travel_pct_cols <- c("Drive_Car_pct","Passenger_Car_pct","Walk_pct","Bicycle_pct",
+                     "bus_Coach_pct","Train_pct","Underground_train_tram_pct",
+                     "Taxi_pct","workAthome_pct","Other_pct","Motorcycle_pct")
+
+travel_check <- OA_matching_census %>%
+  filter(travel_base_zero_flag == 0) %>%
+  mutate(travel_mode_sum = rowSums(across(all_of(travel_pct_cols)), na.rm = TRUE))
+
+n_bad <- sum(abs(travel_check$travel_mode_sum - 100) > 0.01)
+if (n_bad == 0) {
+  qa_ok(sprintf("All %d OAs have travel-mode percentages summing to 100", nrow(travel_check)))
+} else {
+  qa_fail(sprintf("%d OAs have travel-mode percentages not summing to 100", n_bad))
+}
 

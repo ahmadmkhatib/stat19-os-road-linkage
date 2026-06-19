@@ -100,7 +100,7 @@ theme_diag <- function(base_size = BASE_SIZE) {
 # VARIABLE DEFINITIONS
 # =============================================================================
 
-# Stage 1 (same as original script 16)
+# Stage 1 (same as script 16)
 stage1_vars_raw <- c(
   "road_density_m_km2", "road_length_km",
   "pct_A_road", "pct_B_road", "pct_minor_road",
@@ -109,7 +109,7 @@ stage1_vars_raw <- c(
   "cars_one_pct", "cars_twoPlus_pct",
   "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
   "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
-  "Taxi_pct", "workAthome_pct", "Other_pct",
+  "Taxi_pct", "workAthome_pct", "Motorcycle_pct", "Other_pct",
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
   "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
   "age_45to64_pct", "age_65to84_pct"
