@@ -143,14 +143,24 @@ matched_covars <- readRDS(
   distinct(OA, .keep_all = TRUE)
 
 # =============================================================================
-# 4. BUILD MODEL PANEL
+#  BUILD MODEL PANEL
 # =============================================================================
 # Construct the road-link × scheme × quarter panel for modelling.
 # COVID periods are coded from visual inspection:
 #   Lockdown/disruption: 2020 Q1–2021 Q1
-#   Recovery:            2021 Q2–2021 Q4
+#   Recovery:            2021 Q2–2021 Q3
 
 min_qtr <- min(as.numeric(road_panel$quarter_year), na.rm = TRUE)
+
+    # -----------------------------------------------------------------
+    # COVID period: single three-level factor
+    #   pre_covid  = before Q2 2020             (reference)
+    #   lockdown   = Q2 2020 – Q1 2021          (first full lockdown quarter
+    #                                            through end of third lockdown)
+    #   recovery   = Q2 2021 – Q3 2021          (restrictions mostly lifted
+    #                                            by August 2021)
+    # Anything from Q4 2021 onward = pre_covid  (back to baseline)
+    # -----------------------------------------------------------------
 
 model_panel <- road_panel %>%
   select(
@@ -161,7 +171,7 @@ model_panel <- road_panel %>%
   left_join(scheme_timing %>% rename(ref_start = caz_start_q), by = "scheme") %>%
   left_join(matched_covars, by = "OA") %>%
   mutate(
-    uid = paste0(panel_id, "_", scheme),
+    uid     = paste0(panel_id, "_", scheme),
     uid_int = as.integer(factor(uid)),
     
     qtr_int = as.integer(round((as.numeric(quarter_year) - min_qtr) * 4)) + 1L,
@@ -174,23 +184,27 @@ model_panel <- road_panel %>%
     
     post_flag = as.integer(treat_group == 1 & quarter_year >= ref_start),
     
-    covid_lockdown = as.integer(
-      quarter_year >= as.yearqtr("2020 Q1") &
-        quarter_year <= as.yearqtr("2021 Q1")
-    ),
-    
-    covid_recovery = as.integer(
+    covid_period = case_when(
+      quarter_year >= as.yearqtr("2020 Q2") &
+        quarter_year <= as.yearqtr("2021 Q1") ~ "lockdown",
+      
       quarter_year >= as.yearqtr("2021 Q2") &
-        quarter_year <= as.yearqtr("2021 Q4")
+        quarter_year <= as.yearqtr("2021 Q3") ~ "recovery",
+      
+      TRUE ~ "pre_covid"
     ),
     
-    covid_lockdown_treated = covid_lockdown * treat_group,
-    covid_recovery_treated = covid_recovery * treat_group,
+    covid_period = factor(
+      covid_period,
+      levels = c("pre_covid", "lockdown", "recovery")
+    ),
+    
+    covid_lockdown_treated = as.integer(covid_period == "lockdown") * treat_group,
+    covid_recovery_treated = as.integer(covid_period == "recovery") * treat_group,
     
     group = if_else(treat_group == 1, "CAZ roads", "Matched controls")
   ) %>%
   filter(!is.na(outcome_raw))
-
 rm(road_panel)
 
 schemes_all <- sort(unique(model_panel$scheme))
@@ -255,12 +269,12 @@ trend_df <- model_panel %>%
 p_trend <- ggplot(trend_df, aes(x = as.Date(quarter_year), y = mean_injury, colour = group)) +
   annotate(
     "rect",
-    xmin = as.Date(as.yearqtr("2020 Q1")),
-    xmax = as.Date(as.yearqtr("2021 Q1") + 0.25),
+    xmin = as.Date(as.yearqtr("2020 Q2")),
+    xmax = as.Date(as.yearqtr("2021 Q3") + 0.25),
     ymin = -Inf,
     ymax = Inf,
     alpha = 0.08,
-    fill = "grey50"
+    fill = "grey70"
   ) +
   annotate(
     "rect",
@@ -326,6 +340,11 @@ stacked <- map_dfr(schemes_all, function(sc) {
 cat("\nStacked rows:", nrow(stacked), "\n")
 cat("Stacked units:", n_distinct(stacked$uid_stack), "\n")
 
+###    stackes fixed effects 
+stacked <- stacked %>%
+  mutate(stack_time_fe = interaction(stack_scheme, qtr_int, drop = TRUE))
+
+
 # =============================================================================
 # MODEL 1 — POOLED AVERAGE TREATMENT EFFECT
 # =============================================================================
@@ -334,7 +353,7 @@ cat("Stacked units:", n_distinct(stacked$uid_stack), "\n")
 
 m1_no_covid <- feglm(
   outcome_raw ~ post_stack |
-    uid_stack + stack_scheme[qtr_int],
+    uid_stack + + stack_time_fe,
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -344,7 +363,7 @@ m1_no_covid <- feglm(
 m1_covid <- feglm(
   outcome_raw ~ post_stack +
     covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + stack_scheme[qtr_int],
+    uid_stack + + stack_time_fe,
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -425,7 +444,7 @@ model1_main_result <- model1_results %>% filter(model == "COVID-adjusted")
 m2_event <- feglm(
   outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
     covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + stack_scheme[qtr_int],
+    uid_stack + + stack_time_fe,
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -491,7 +510,7 @@ stacked <- stacked %>%
 m3_scheme <- feglm(
   outcome_raw ~ i(scheme_post, ref = "control") +
     covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + stack_scheme[qtr_int],
+    uid_stack + stack_time_fe,
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -585,7 +604,7 @@ run_scheme_event_ppml <- function(sc) {
     feglm(
       outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
         covid_lockdown_treated + covid_recovery_treated |
-        uid_stack + qtr_int,
+        uid_stack + stack_time_fe,
       data = d,
       family = "poisson",
       cluster = ~OA,

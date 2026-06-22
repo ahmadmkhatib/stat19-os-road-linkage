@@ -253,41 +253,71 @@ cat("\n")
 cat(paste(rep("=", 70), collapse = ""), "\n")
 cat("PART A — OVERALL POST-MATCHING DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
-
 # =============================================================================
-# 0. SCHEME-LEVEL MATCHING SUMMARY
+# SCHEME-LEVEL MATCHING SUMMARY
 # =============================================================================
 
 cat("--- 0. Scheme-level matching summary ---\n")
 
-scheme_summary_table <- map_df(seq_along(all_results), function(i) {
-  md <- all_results[[i]]$matched_data
-  m  <- all_results[[i]]$matchit_s2
-  n_t <- sum(md$treat_indicator == 1)
-  tibble(
-    scheme          = unique(md$scheme[!is.na(md$scheme)]),
-    treated         = n_t,
-    unique_controls = n_distinct(md$OA[md$treat_indicator == 0]),
-    total_pairs     = n_t * m$info$ratio,
-    ratio           = paste0("1:", m$info$ratio)
+# Check matching_pairs column names
+print(names(matching_pairs))
+
+# Detect treated/control OA column names
+pair_treated_col <- case_when(
+  "treated_OA"  %in% names(matching_pairs) ~ "treated_OA",
+  "treated_oa"  %in% names(matching_pairs) ~ "treated_oa",
+  "treated"     %in% names(matching_pairs) ~ "treated",
+  "OA_treated"  %in% names(matching_pairs) ~ "OA_treated",
+  TRUE ~ NA_character_
+)
+
+pair_control_col <- case_when(
+  "control_OA"  %in% names(matching_pairs) ~ "control_OA",
+  "control_oa"  %in% names(matching_pairs) ~ "control_oa",
+  "control"     %in% names(matching_pairs) ~ "control",
+  "OA_control"  %in% names(matching_pairs) ~ "OA_control",
+  TRUE ~ NA_character_
+)
+
+if (is.na(pair_treated_col) | is.na(pair_control_col)) {
+  stop(
+    "Could not find treated/control OA columns in matching_pairs. ",
+    "Run names(matching_pairs) and update pair_treated_col / pair_control_col manually."
   )
-})
+}
+
+scheme_summary_table <- matching_pairs %>%
+  group_by(scheme) %>%
+  summarise(
+    treated         = n_distinct(.data[[pair_treated_col]]),
+    unique_controls = n_distinct(.data[[pair_control_col]]),
+    total_pairs     = n(),
+    ratio           = paste0("1:", round(total_pairs / treated, 1)),
+    .groups = "drop"
+  )
 
 scheme_summary_table <- bind_rows(
   scheme_summary_table,
-  tibble(scheme = "Total",
-         treated = sum(scheme_summary_table$treated),
-         unique_controls = sum(scheme_summary_table$unique_controls),
-         total_pairs = sum(scheme_summary_table$total_pairs),
-         ratio = "")
+  tibble(
+    scheme = "Total",
+    treated = sum(scheme_summary_table$treated, na.rm = TRUE),
+    unique_controls = sum(scheme_summary_table$unique_controls, na.rm = TRUE),
+    total_pairs = sum(scheme_summary_table$total_pairs, na.rm = TRUE),
+    ratio = paste0("1:", round(
+      sum(scheme_summary_table$total_pairs, na.rm = TRUE) /
+        sum(scheme_summary_table$treated, na.rm = TRUE), 1
+    ))
+  )
 )
 
 print(scheme_summary_table)
-write_csv(scheme_summary_table, file.path(outdir, "00_scheme_matching_summary.csv"))
-cat("  Saved: 00_scheme_matching_summary.csv\n\n")
 
-# =============================================================================
-# 1. DESCRIPTIVE SUMMARY TABLE
+write_csv(
+  scheme_summary_table,
+  file.path(outdir, "00_scheme_matching_summary.csv")
+)
+
+cat("  Saved: 00_scheme_matching_summary.csv\n\n")# 1. DESCRIPTIVE SUMMARY TABLE
 # =============================================================================
 
 cat("--- 1. Descriptive summary ---\n")
@@ -300,7 +330,7 @@ write_csv(desc_table, file.path(outdir, "01_descriptive_table.csv"))
 cat("  Saved: 01_descriptive_table.csv\n")
 
 # =============================================================================
-# 2. SMD TABLES
+# SMD TABLES
 # =============================================================================
 
 cat("--- 2. SMD tables ---\n")
@@ -331,7 +361,7 @@ cat("  Stage 2: mean |SMD| before =", round(mean(abs(smd_s2$smd_before), na.rm =
 cat("  Stage 2 all balanced (<0.10):", all(smd_s2$balanced, na.rm = TRUE), "\n\n")
 
 # =============================================================================
-# 3. LOVE PLOTS
+#  LOVE PLOTS
 # =============================================================================
 
 cat("--- 3. Love plots ---\n")
