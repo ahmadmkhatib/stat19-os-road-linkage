@@ -52,3 +52,4 @@ rsconnect/
 data/
 
 .positai
+output/pooled/All_clean/stratified_model1/model1_stratified_active_vs_motor_fits.rds 
