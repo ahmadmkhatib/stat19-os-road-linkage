@@ -62,13 +62,30 @@ scheme_timing <- panel %>%
 panel <- panel %>%
   left_join(scheme_timing %>% rename(ref_start = caz_start_q), by = "scheme")
 
+
+
+# =============================================================================
+# OA COVARIATES
+# =============================================================================
+# Time-invariant OA covariates are retained in the model panel so they are
+# available for robustness analyses, especially C&S checks in the separate script.
+
+matched_covars <- readRDS(
+  here("data", "processed", "OA_matched_full_pooled.rds")
+) %>%
+  mutate(
+    log1p_pop_density = log1p(pmax(pop_density, 0)),
+    log1p_road_density_m_km2 = log1p(pmax(road_density_m_km2, 0))
+  ) %>%
+  select(OA, log1p_pop_density, IMD, log1p_road_density_m_km2) %>%
+  distinct(OA, .keep_all = TRUE)
+
+
+
 # =============================================================================
 # 1. PANEL STRUCTURE
 # =============================================================================
 
-cat("================================================================\n")
-cat("1. PANEL STRUCTURE\n")
-cat("================================================================\n\n")
 
 n_roads <- n_distinct(panel$identifier)
 n_qtrs  <- n_distinct(panel$quarter_year)
@@ -94,7 +111,7 @@ panel %>%
 cat("\n")
 
 # =============================================================================
-# 2. PRE-TREATMENT DISTRIBUTIONS
+# PRE-TREATMENT DISTRIBUTIONS
 # =============================================================================
 
 cat("================================================================\n")

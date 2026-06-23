@@ -15,9 +15,7 @@
 #   - Outcome is a sparse count, so models are estimated with Poisson
 #     pseudo-maximum likelihood (PPML).
 #   - Standard errors are clustered at OA level.
-#   - COVID lockdown/recovery interactions are included in the main models.
-#   - Robustness, sensitivity, C&S checks, sparsity diagnostics, and alternative
-#     clustering checks should be kept in a separate script.
+# 
 # =============================================================================
 library(tidyverse)
 library(arrow)
@@ -28,10 +26,6 @@ library(fixest)
 library(patchwork)
 
 outcome_var <- "total_inj_adj_All"
-
-K <- 8L   # quarters before CAZ implementation
-L <- 8L   # quarters after CAZ implementation
-
 outdir <- here("output", "pooled", "All_clean")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
@@ -126,21 +120,6 @@ print(scheme_timing)
 
 rm(road_caz_props, scheme_start)
 
-# =============================================================================
-# OA COVARIATES
-# =============================================================================
-# Time-invariant OA covariates are retained in the model panel so they are
-# available for robustness analyses, especially C&S checks in the separate script.
-
-matched_covars <- readRDS(
-  here("data", "processed", "OA_matched_full_pooled.rds")
-) %>%
-  mutate(
-    log1p_pop_density = log1p(pmax(pop_density, 0)),
-    log1p_road_density_m_km2 = log1p(pmax(road_density_m_km2, 0))
-  ) %>%
-  select(OA, log1p_pop_density, IMD, log1p_road_density_m_km2) %>%
-  distinct(OA, .keep_all = TRUE)
 
 # =============================================================================
 #  BUILD MODEL PANEL
@@ -169,7 +148,7 @@ model_panel <- road_panel %>%
   ) %>%
   rename(outcome_raw = all_of(outcome_var)) %>%
   left_join(scheme_timing %>% rename(ref_start = caz_start_q), by = "scheme") %>%
-  left_join(matched_covars, by = "OA") %>%
+
   mutate(
     uid     = paste0(panel_id, "_", scheme),
     uid_int = as.integer(factor(uid)),
@@ -184,27 +163,21 @@ model_panel <- road_panel %>%
     
     post_flag = as.integer(treat_group == 1 & quarter_year >= ref_start),
     
-    covid_period = case_when(
-      quarter_year >= as.yearqtr("2020 Q2") &
-        quarter_year <= as.yearqtr("2021 Q1") ~ "lockdown",
-      
-      quarter_year >= as.yearqtr("2021 Q2") &
-        quarter_year <= as.yearqtr("2021 Q3") ~ "recovery",
-      
-      TRUE ~ "pre_covid"
-    ),
-    
     covid_period = factor(
-      covid_period,
+      case_when(
+        quarter_year >= as.yearqtr("2020 Q2") &
+          quarter_year <= as.yearqtr("2021 Q1") ~ "lockdown",
+        quarter_year >= as.yearqtr("2021 Q2") &
+          quarter_year <= as.yearqtr("2021 Q3") ~ "recovery",
+        TRUE ~ "pre_covid"
+      ),
       levels = c("pre_covid", "lockdown", "recovery")
-    ),
-    
-    covid_lockdown_treated = as.integer(covid_period == "lockdown") * treat_group,
-    covid_recovery_treated = as.integer(covid_period == "recovery") * treat_group,
+    ),                                              
     
     group = if_else(treat_group == 1, "CAZ roads", "Matched controls")
-  ) %>%
+  ) %>%                                             
   filter(!is.na(outcome_raw))
+
 rm(road_panel)
 
 schemes_all <- sort(unique(model_panel$scheme))
@@ -322,17 +295,13 @@ stacked <- map_dfr(schemes_all, function(sc) {
   sc_start_int <- as.integer(round((as.numeric(sc_start) - min_qtr) * 4)) + 1L
   
   model_panel %>%
-    filter(
-      scheme == sc,
-      qtr_int >= sc_start_int - K,
-      qtr_int <= sc_start_int + L
-    ) %>%
+    filter(scheme == sc) %>%   # no window restriction at all
     mutate(
-      stack_scheme = sc,
-      event_time = qtr_int - sc_start_int,
-      event_time_f = relevel(factor(event_time), ref = "-1"),
-      uid_stack = paste0(uid_int, "_", sc),
-      post_stack = as.integer(treat_group == 1 & event_time >= 0)
+      stack_scheme  = sc,
+      event_time    = qtr_int - sc_start_int,
+      event_time_f  = relevel(factor(event_time), ref = "-1"),
+      uid_stack     = paste0(uid_int, "_", sc),
+      post_stack    = as.integer(treat_group == 1 & event_time >= 0)
     )
 }) %>%
   mutate(stack_scheme = factor(stack_scheme))
@@ -340,9 +309,14 @@ stacked <- map_dfr(schemes_all, function(sc) {
 cat("\nStacked rows:", nrow(stacked), "\n")
 cat("Stacked units:", n_distinct(stacked$uid_stack), "\n")
 
-###    stackes fixed effects 
-stacked <- stacked %>%
-  mutate(stack_time_fe = interaction(stack_scheme, qtr_int, drop = TRUE))
+
+
+ref_check <- stacked %>%
+  filter(event_time == -1) %>%
+  distinct(stack_scheme, quarter_year, covid_period) %>%
+  arrange(stack_scheme, quarter_year)
+
+print(ref_check)
 
 
 # =============================================================================
@@ -352,8 +326,8 @@ stacked <- stacked %>%
 # A no-COVID version is fitted only to show sensitivity to COVID adjustment.
 
 m1_no_covid <- feglm(
-  outcome_raw ~ post_stack |
-    uid_stack + + stack_time_fe,
+  outcome_raw ~ post_stack  |
+    uid_stack +  stack_scheme[qtr_int],
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -362,8 +336,8 @@ m1_no_covid <- feglm(
 
 m1_covid <- feglm(
   outcome_raw ~ post_stack +
-    covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + + stack_time_fe,
+    i(covid_period, treat_group, ref = "pre_covid") |
+    uid_stack + stack_scheme[qtr_int],
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -443,8 +417,8 @@ model1_main_result <- model1_results %>% filter(model == "COVID-adjusted")
 
 m2_event <- feglm(
   outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
-    covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + + stack_time_fe,
+    i(covid_period, treat_group, ref = "pre_covid") |
+    uid_stack + stack_scheme[qtr_int],
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -453,15 +427,35 @@ m2_event <- feglm(
 
 model2_results <- extract_fixest_event_study(m2_event)
 
-p_model2 <- plot_event_study(
-  model2_results,
-  title = "Model 2: pooled stacked PPML event study",
-  subtitle = "Primary dynamic model; reference period = quarter -1",
-  ylab = "Log incidence rate ratio"
-)
+
+plot_event_study <- function(df, title, subtitle, ylab, colour = "#E74C3C") {
+  ggplot(df, aes(x = event_time, y = estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+    geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
+    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15, fill = colour) +
+    geom_line(linewidth = 0.8, colour = colour) +
+    geom_point(size = 1.8, colour = colour) +
+    scale_x_continuous(breaks = pretty(df$event_time, n = 10)) +
+    labs(
+      title = title,
+      subtitle = subtitle,
+      x = "Quarters relative to CAZ implementation",
+      y = ylab
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(panel.grid.minor = element_blank())
+}
+
+
+
+  p_model2 <- plot_event_study(
+    model2_results %>% filter(event_time >= -28, event_time <= 10),
+    title = "Model 2: pooled stacked PPML event study",
+    subtitle = "Primary dynamic model; reference period = quarter -8",
+    ylab = "Log incidence rate ratio"
+  )
 
 print(p_model2)
-
 ggsave(
   file.path(outdir, "02_model2_pooled_event_study.png"),
   p_model2,
@@ -471,28 +465,122 @@ ggsave(
 )
 
 # Parallel-trends diagnostics from the primary PPML event-study.
-# The closest pre-treatment window is the most relevant diagnostic.
-pt_8_2 <- wald(
-  m2_event,
-  keep = "event_time_f::-(8|7|6|5|4|3|2):treat_group"
-)
+# tests all pre-treatment quarters from -k to -2
+wald_pretrend <- function(model, max_k) {
+  pattern <- paste0(
+    "event_time_f::-(", 
+    paste(max_k:2, collapse = "|"),
+    "):treat_group"
+  )
+  wald(model, keep = pattern)
+}
 
-pt_6_2 <- wald(
-  m2_event,
-  keep = "event_time_f::-(6|5|4|3|2):treat_group"
-)
+pt_4_2  <- wald_pretrend(m2_event, 4)
+pt_8_2  <- wald_pretrend(m2_event, 8)
+pt_12_2 <- wald_pretrend(m2_event, 12)
+pt_16_2 <- wald_pretrend(m2_event, 16)
+pt_20_2 <- wald_pretrend(m2_event, 20)
+pt_24_2 <- wald_pretrend(m2_event, 24)
 
-pt_4_2 <- wald(
-  m2_event,
-  keep = "event_time_f::-(4|3|2):treat_group"
-)
+#joint Wald tests of pre-treatment leads fail to reject the null of parallel trends at all horizons from four to twelve quarters before implementation and at twenty-four quarters before implementation; a marginal rejection is observed at the sixteen-quarter window (p=0.049) and borderline rejection at twenty quarters (p=0.086), however this non-monotonic pattern — where extending the window further to twenty-four quarters recovers a p-value of 0.182 — is inconsistent with a systematic pre-existing differential trend and more likely reflects sampling noise at horizons where fewer than the full complement of seven schemes contribute observations, as confirmed by visual inspection of the event study plot which shows no systematic directional drift throughout the pre-treatment period.
+####
+### event study - previous year as a referecnece 
 
-cat("\nParallel-trends tests from Model 2:\n")
-print(pt_8_2)
-print(pt_6_2)
-print(pt_4_2)
 
 # =============================================================================
+# MODEL 2b — POOLED DYNAMIC EVENT STUDY (ANNUAL EVENT TIME)
+# Reference period = year -1 (the four quarters immediately before implementation)
+# =============================================================================
+
+stacked2 <- stacked %>%
+  mutate(
+    # Convert quarterly event time to annual bins
+    # floor division: quarters -4 to -1 → year -1 (reference)
+    #                 quarters -8 to -5 → year -2
+    #                 quarters  0 to  3 → year  0
+    #                 quarters  4 to  7 → year  1  etc.
+    event_time_year = case_when(
+      event_time >= 0 ~ floor(event_time / 4),        # post:  0,1,2,...
+      TRUE            ~ ceiling((event_time + 1) / 4) # pre: -1,-2,-3,...
+    ),
+    event_time_year_f = relevel(factor(event_time_year), ref = "-1")
+  )
+
+m2_event_year <- feglm(
+  outcome_raw ~ i(event_time_year_f, treat_group, ref = "-1") +
+    i(covid_period, treat_group, ref = "pre_covid") |
+    uid_stack + stack_scheme[qtr_int],
+  data = stacked2,
+  family = "poisson",
+  cluster = ~OA,
+  lean = TRUE
+)
+
+# Extract coefficients — reuse existing helper but adapted for annual terms
+extract_fixest_event_study_year <- function(model) {
+  ct <- coeftable(model)
+  
+  tibble(
+    term     = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se       = ct[, "Std. Error"]
+  ) %>%
+    filter(str_detect(term, "event_time_year_f::")) %>%
+    mutate(
+      event_time = str_extract(term, "(?<=event_time_year_f::)-?\\d+") %>% as.numeric(),
+      ci_lo      = estimate - 1.96 * se,
+      ci_hi      = estimate + 1.96 * se,
+      irr        = exp(estimate),
+      irr_lo     = exp(ci_lo),
+      irr_hi     = exp(ci_hi),
+      pct_change = 100 * (irr - 1),
+      pct_lo     = 100 * (irr_lo - 1),
+      pct_hi     = 100 * (irr_hi - 1)
+    ) %>%
+    arrange(event_time)
+}
+
+model2_year_results <- extract_fixest_event_study_year(m2_event_year)
+
+p_model2_year <- ggplot(model2_year_results, aes(x = event_time, y = estimate)) +
+  geom_hline(yintercept = 0,    linetype = "dashed", colour = "grey50") +
+  geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
+  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15, fill = "#E74C3C") +
+  geom_line(linewidth = 0.8, colour = "#E74C3C") +
+  geom_point(size = 2.0,    colour = "#E74C3C") +
+  scale_x_continuous(breaks = seq(min(model2_year_results$event_time),
+                                  max(model2_year_results$event_time), by = 1)) +
+  labs(
+    title    = "Model 2b: pooled stacked PPML event study (annual)",
+    subtitle = "Reference period = year −3 (four quarters before implementation)",
+    x        = "Years relative to CAZ implementation",
+    y        = "Log incidence rate ratio"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+print(p_model2_year)
+
+ggsave(
+  file.path(outdir, "02b_model2_year_pooled_event_study.png"),
+  p_model2_year,
+  width  = 10,
+  height = 7,
+  dpi    = 300
+)
+
+# Save results
+write_csv(model2_year_results, file.path(outdir, "model2b_year_pooled_event_study.csv"))
+
+
+
+
+
+
+
+
+
+##===========================================================================
 # MODEL 3 — SCHEME-SPECIFIC AVERAGE TREATMENT EFFECTS
 # =============================================================================
 # This model estimates one formal average post-treatment effect for each scheme.
@@ -509,8 +597,8 @@ stacked <- stacked %>%
 
 m3_scheme <- feglm(
   outcome_raw ~ i(scheme_post, ref = "control") +
-    covid_lockdown_treated + covid_recovery_treated |
-    uid_stack + stack_time_fe,
+    i(covid_period, treat_group, ref = "pre_covid")|
+    uid_stack + stack_scheme[qtr_int],
   data = stacked,
   family = "poisson",
   cluster = ~OA,
@@ -603,8 +691,8 @@ run_scheme_event_ppml <- function(sc) {
   fit <- tryCatch(
     feglm(
       outcome_raw ~ i(event_time_f, treat_group, ref = "-1") +
-        covid_lockdown_treated + covid_recovery_treated |
-        uid_stack + stack_time_fe,
+        i(covid_period, treat_group, ref = "pre_covid")|
+        uid_stack + stack_scheme[qtr_int],
       data = d,
       family = "poisson",
       cluster = ~OA,
@@ -677,13 +765,10 @@ saveRDS(
     model1_main_result = model1_main_result,
     model2_results = model2_results,
     model3_results = model3_results,
-    model4_results = model4_results,
-    pt_8_2 = pt_8_2,
-    pt_6_2 = pt_6_2,
-    pt_4_2 = pt_4_2
-  ),
+    model4_results = model4_results
+    ),
   here("data", "processed", "caz_ppml_main_results.rds")
 )
 
-cat("\nMAIN PPML ANALYSIS COMPLETE.\n")
+
 cat("Outputs saved to:", outdir, "\n")

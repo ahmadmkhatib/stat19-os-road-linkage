@@ -1,0 +1,3 @@
+group,units,observations,total_inj_adj_ActiveTravel_new_mean,total_inj_adj_ActiveTravel_new_pct_zero,total_inj_adj_Vehicle_new_mean,total_inj_adj_Vehicle_new_pct_zero
+CAZ roads,21037,841480,0.004855677140276657,99.51811094737842,0.008278634821980317,99.44205447544802
+Matched controls,69717,2788680,0.005024270586800938,99.50012192148256,0.008628941043791303,99.39200625385487
