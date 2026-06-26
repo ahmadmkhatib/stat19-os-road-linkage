@@ -8,8 +8,16 @@ library(here)
 library(sf)
 library(naniar)
 
+
+
 ### census OA data -----------------------------------------------
 OA_char_raw <- read.csv(here("data","processed","outputArea_raw.csv"))
+
+select <- dplyr::select
+filter <- dplyr::filter
+count  <- dplyr::count
+rename <- dplyr::rename
+
 
 miss_var_summary(OA_char_raw)
 

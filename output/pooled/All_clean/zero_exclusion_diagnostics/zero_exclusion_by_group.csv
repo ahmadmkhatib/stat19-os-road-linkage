@@ -1,0 +1,5 @@
+group,zero_dropped,link_stack_units,unique_road_links,OAs,mean_quarters_observed,pct_within_group
+CAZ roads,FALSE,5216,5216,569,40,23.93319262182252
+CAZ roads,TRUE,16578,16578,585,40,76.06680737817749
+Matched controls,FALSE,11917,9071,1295,40,22.41427953429759
+Matched controls,TRUE,41250,33319,1335,40,77.58572046570241

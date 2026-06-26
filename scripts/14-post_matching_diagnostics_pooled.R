@@ -1,10 +1,10 @@
 # =============================================================================
-# POST-MATCHING DIAGNOSTICS & DESCRIPTIVES — POOLED MATCHING
+# POST-MATCHING DIAGNOSTICS & DESCRIPTIVES â€” POOLED MATCHING
 # =============================================================================
 #
 ## matching pipeline (total injuries only, England only).
 #
-# PART A — Overall diagnostics (script 17 equivalent):
+# PART A â€” Overall diagnostics (script 17 equivalent):
 #   1. Descriptive summary tables (treated vs control)
 #   2. SMD tables (Stage 1 + Stage 2)
 #   3. Love plots (Stage 1 + Stage 2)
@@ -14,7 +14,7 @@
 #   7. Mahalanobis distance diagnostics
 #   8. Parallel trends density plots
 #
-# PART B — Per-scheme diagnostics (script 18b equivalent):
+# PART B â€” Per-scheme diagnostics (script 18b equivalent):
 #   9. Per-scheme SMD computation
 #  10. Per-scheme love plots (faceted)
 #  11. SMD heatmap across schemes
@@ -58,7 +58,7 @@ COL_CONTROL <- "#2E6FAB"
 COL_BEFORE  <- "#E74C3C"
 COL_AFTER   <- "#2ECC71"
 
-# Central text-size constants — change these to rescale everything uniformly
+# Central text-size constants â€” change these to rescale everything uniformly
 BASE_SIZE       <- 16   # base for theme_diag (axis text, strip text, etc.)
 TITLE_SIZE      <- 19   # plot titles
 SUBTITLE_SIZE   <- 15   # plot subtitles
@@ -125,8 +125,12 @@ stage1_vars_log <- c(
   setdiff(stage1_vars_raw, c(log_transform_s1, log_nozero_s1))
 )
 
-# Stage 2 — pooled (only 2 variables)
-stage2_trends <- "trend_total_pkm"
+# Stage 2 - pooled outcome-history variables
+stage2_trends <- c(
+  "trend_total_pkm"
+  #,  "recent_minus_mid_total_pkm",
+#  "mid_minus_early_total_pkm"
+)
 stage2_levels <- "mean_total_pkm"
 stage2_vars_log <- c(stage2_trends, paste0("log1p_", stage2_levels))
 
@@ -166,6 +170,8 @@ var_labels <- c(
   "age_45to64_pct"             = "% 45-64",
   "age_65to84_pct"             = "% 65-84",
   "trend_total_pkm"            = "Trend: total injuries/km",
+  "recent_minus_mid_total_pkm" = "Recent - mid injuries/km",
+  "mid_minus_early_total_pkm"  = "Mid - early injuries/km",
   "log1p_mean_total_pkm"       = "Level: mean total injuries/km (log)"
 )
 
@@ -204,6 +210,17 @@ add_log_vars <- function(data) {
 
 matched_full <- add_log_vars(matched_full)
 
+required_stage2_diag_vars <- c(stage2_trends, paste0("log1p_", stage2_levels))
+missing_stage2_diag_vars <- setdiff(required_stage2_diag_vars, names(matched_full))
+
+if (length(missing_stage2_diag_vars) > 0) {
+  stop(
+    "Missing Stage 2 diagnostic variables in matched_full: ",
+    paste(missing_stage2_diag_vars, collapse = ", "),
+    "\nRegenerate the matching-variable dataset, merge census data, and rerun matching first."
+  )
+}
+
 # Unmatched pool (for before-matching comparisons)
 unmatched_pool <- full_data %>%
   filter(
@@ -212,10 +229,21 @@ unmatched_pool <- full_data %>%
     control_group1_OA == 0,
     buffer_OA == 0,
     n_roads   > 0,
-    !(treated_OA == 1 & zero_injury_OA == 1)
+    !(treated_OA == 1 & zero_injury_OA == 1),
+    !(control_group2_OA == 1 & zero_injury_OA == 1)
   ) %>%
   mutate(treat_indicator = as.integer(treated_OA == 1)) %>%
   add_log_vars()
+
+missing_stage2_unmatched_vars <- setdiff(required_stage2_diag_vars, names(unmatched_pool))
+
+if (length(missing_stage2_unmatched_vars) > 0) {
+  stop(
+    "Missing Stage 2 diagnostic variables in unmatched_pool: ",
+    paste(missing_stage2_unmatched_vars, collapse = ", "),
+    "\nRegenerate OA_matching_census.rds before running diagnostics."
+  )
+}
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -245,13 +273,13 @@ desc_stats <- function(data, var) {
   )
 }
 
-# ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                     PART A — OVERALL DIAGNOSTICS                    ║
-# ╚═══════════════════════════════════════════════════════════════════════╝
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘                     PART A â€” OVERALL DIAGNOSTICS                    â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 cat("\n")
 cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("PART A — OVERALL POST-MATCHING DIAGNOSTICS\n")
+cat("PART A â€” OVERALL POST-MATCHING DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
 # =============================================================================
 # SCHEME-LEVEL MATCHING SUMMARY
@@ -397,17 +425,17 @@ make_love_plot <- function(smd_df, title, subtitle = "") {
 
 p_love_s1 <- make_love_plot(
   smd_s1,
-  "Stage 1 balance — structural & sociodemographic covariates",
+  "Stage 1 balance â€” structural & sociodemographic covariates",
   "Pooled matching (England, other-city controls only)"
 )
 save_fig(p_love_s1, "fig01_love_plot_stage1.png", width = 14, height = 16)
 
 p_love_s2 <- make_love_plot(
   smd_s2,
-  "Stage 2 balance — total injury trend + level",
-  "Pooled matching — 2 variables (trend_total_pkm + log1p_mean_total_pkm)"
+  "Stage 2 balance - total injury trajectory + level",
+  "Pooled matching - pre-COVID trend, trajectory-shape, and level variables"
 )
-save_fig(p_love_s2, "fig02_love_plot_stage2.png", width = 10, height = 5)
+save_fig(p_love_s2, "fig02_love_plot_stage2.png", width = 12, height = 6)
 
 # =============================================================================
 # 4. WEIGHT DISTRIBUTION
@@ -564,7 +592,7 @@ if ("mdist" %in% names(matched_full)) {
                         labels = c("Control", "Treated")) +
     labs(
       title = "Mahalanobis distance ECDF (Stage 2)",
-      subtitle = "2 Stage 2 variables",
+      subtitle = "Stage 2 variables: trend, trajectory-shape, and level",
       x = "Mahalanobis distance", y = "Cumulative proportion",
       colour = NULL
     ) +
@@ -573,7 +601,7 @@ if ("mdist" %in% names(matched_full)) {
   
   save_fig(p_mdist, "fig07_mahalanobis_distance.png", width = 10, height = 7)
 } else {
-  cat("  No mdist column in matched data — skipping.\n")
+  cat("  No mdist column in matched data â€” skipping.\n")
 }
 cat("\n")
 
@@ -583,7 +611,14 @@ cat("\n")
 
 cat("--- 8. Parallel trends distributions ---\n")
 
-trend_vars <- intersect(c("trend_total_pkm"), names(matched_full))
+trend_vars <- intersect(
+  c(
+    "trend_total_pkm",
+    "recent_minus_mid_total_pkm",
+    "mid_minus_early_total_pkm"
+  ),
+  names(matched_full)
+)
 
 if (length(trend_vars) > 0) {
   trend_data <- matched_full %>%
@@ -602,8 +637,8 @@ if (length(trend_vars) > 0) {
     scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment trend distributions: treated vs matched controls",
-      subtitle = "total injuries per road-km",
-      x = "Pre-treatment slope", y = "Density",
+      subtitle = "Pre-COVID slope and trajectory-shape variables",
+      x = "Pre-treatment trend/shape value", y = "Density",
       fill = NULL, colour = NULL
     ) +
     theme_diag() +
@@ -629,8 +664,8 @@ if (length(trend_vars) > 0) {
     scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment trend distributions by scheme: treated vs matched controls",
-      subtitle = "Total injuries per road-km",
-      x = "Pre-treatment slope", y = "Density",
+      subtitle = "Pre-COVID slope and trajectory-shape variables",
+      x = "Pre-treatment trend/shape value", y = "Density",
       fill = NULL, colour = NULL
     ) +
     theme_diag() +
@@ -694,7 +729,7 @@ if (length(trend_vars) > 0) {
     ) +
     facet_wrap(~scheme, ncol = 3, scales = "free_y") +
     labs(
-      title    = "Pre-treatment injury trends by scheme — pooled matching",
+      title    = "Pre-treatment injury trends by scheme â€” pooled matching",
       subtitle = "Quarterly weighted mean injuries per km | dotted line = scheme start",
       x = NULL, y = "Weighted mean injuries per km",
       colour = NULL, linetype = NULL
@@ -766,12 +801,12 @@ if (length(trend_vars) > 0) {
 }
 cat("\n")
 
-# ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                  PART B — PER-SCHEME DIAGNOSTICS                    ║
-# ╚═══════════════════════════════════════════════════════════════════════╝
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘                  PART B â€” PER-SCHEME DIAGNOSTICS                    â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("PART B — PER-SCHEME DIAGNOSTICS\n")
+cat("PART B â€” PER-SCHEME DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
 
 # Schemes
@@ -783,7 +818,7 @@ schemes <- matched_full %>%
 
 cat("Schemes:", paste(schemes, collapse = ", "), "\n\n")
 
-# Control → scheme lookup from matching pairs (scheme column added by
+# Control â†’ scheme lookup from matching pairs (scheme column added by
 # the per-scheme matching loop in script 16).
 ctrl_scheme_lookup <- matching_pairs %>%
   select(OA = control_OA, scheme) %>%
@@ -841,7 +876,10 @@ write_csv(smd_all_schemes, file.path(outdir, "09_smd_per_scheme.csv"))
 cat("\n--- 10. Per-scheme love plots ---\n")
 
 # Stage 2 variables + key Stage 1 variables
-key_vars <- c("trend_total_pkm", "log1p_mean_total_pkm",
+key_vars <- c("trend_total_pkm",
+              "recent_minus_mid_total_pkm",
+              "mid_minus_early_total_pkm",
+              "log1p_mean_total_pkm",
               "log1p_road_density_m_km2", "log1p_road_length_km",
               "pct_A_road", "pct_minor_road",
               "log1p_dist_BUA_centroid", "log1p_pop_density", "IMD")
@@ -1034,3 +1072,4 @@ list.files(outdir, pattern = "\\.csv$") %>%
 cat("\nFigure outputs:\n")
 list.files(outdir, pattern = "\\.png$") %>%
   walk(~ cat("  ", .x, "\n"))
+

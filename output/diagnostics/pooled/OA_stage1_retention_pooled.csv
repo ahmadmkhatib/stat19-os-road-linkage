@@ -1,0 +1,8 @@
+scheme,n_treated_input,n_controls_input,n_treated_retained_s1,n_controls_retained_s1
+Bath,45,30741,45,1382
+Birmingham,120,30741,120,2373
+Bradford,257,30741,257,4723
+Bristol,47,30741,47,1244
+Newcastle,27,30741,27,810
+Portsmouth,56,30741,56,1885
+Sheffield,39,30741,39,1084
