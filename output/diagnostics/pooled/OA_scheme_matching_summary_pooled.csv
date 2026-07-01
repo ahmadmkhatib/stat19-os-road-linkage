@@ -1,8 +1,8 @@
 scheme,n_treated,n_control_rows,n_unique_controls,ratio_rows,ratio_unique,max_control_weight
 Bath,45,45,45,1,1,1
 Birmingham,120,213,213,1.8,1.8,2.6625
-Bradford,257,461,461,1.8,1.8,4.48443579766537
+Bradford,258,456,456,1.8,1.8,13.255813953488373
 Bristol,47,84,84,1.8,1.8,2.6808510638297873
 Newcastle,27,220,220,8.1,8.1,2.716049382716049
-Portsmouth,56,353,353,6.3,6.3,3.1517857142857144
+Portsmouth,55,189,189,3.4,3.4,2.577272727272727
 Sheffield,39,70,70,1.8,1.8,3.58974358974359

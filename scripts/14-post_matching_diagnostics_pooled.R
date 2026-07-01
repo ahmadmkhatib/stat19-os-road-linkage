@@ -106,13 +106,15 @@ stage1_vars_raw <- c(
   "pct_A_road", "pct_B_road", "pct_minor_road",
   "dist_BUA_centroid", "pop_density", "area_km2",
   "business_retail_per_km2", "IMD",
-  "cars_one_pct", "cars_twoPlus_pct",
+  "cars_none_pct", "no_cars_pct", "cars_zero_pct", "cars_one_pct", "cars_twoPlus_pct",
   "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
   "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
   "Taxi_pct", "workAthome_pct", "Motorcycle_pct", "Other_pct",
   "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
+  "Other_ethnic_pct", "Other_ethnicity_pct", "Other_ethnic_group_pct",
   "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
-  "age_45to64_pct", "age_65to84_pct"
+  "age_45to64_pct", "age_65to84_pct",
+  "X85plus_pct"
 )
 
 log_transform_s1 <- c("road_length_km", "pop_density", "dist_BUA_centroid",
@@ -129,7 +131,7 @@ stage1_vars_log <- c(
 stage2_trends <- c(
   "trend_total_pkm"
   #,  "recent_minus_mid_total_pkm",
-#  "mid_minus_early_total_pkm"
+  #  "mid_minus_early_total_pkm"
 )
 stage2_levels <- "mean_total_pkm"
 stage2_vars_log <- c(stage2_trends, paste0("log1p_", stage2_levels))
@@ -148,6 +150,9 @@ var_labels <- c(
   "log1p_pop_density"          = "Pop. density (log)",
   "log1p_business_retail_per_km2" = "Retail density (log)",
   "IMD"                        = "IMD",
+  "cars_none_pct"              = "% No car",
+  "no_cars_pct"                = "% No car",
+  "cars_zero_pct"              = "% No car",
   "cars_one_pct"               = "% 1 car",
   "cars_twoPlus_pct"           = "% 2+ cars",
   "Drive_Car_pct"              = "% Drive to work",
@@ -158,17 +163,22 @@ var_labels <- c(
   "Train_pct"                  = "% Train",
   "Underground_train_tram_pct" = "% Underground/tram",
   "Taxi_pct"                   = "% Taxi",
+  "Motorcycle_pct"             = "% Motorcycle",
   "workAthome_pct"             = "% Work from home",
   "Other_pct"                  = "% Other commute",
   "White_pct"                  = "% White",
   "Mixed_pct"                  = "% Mixed ethnicity",
   "Asian_pct"                  = "% Asian",
   "Black_pct"                  = "% Black",
+  "Other_ethnic_pct"           = "% Other ethnicity",
+  "Other_ethnicity_pct"        = "% Other ethnicity",
+  "Other_ethnic_group_pct"     = "% Other ethnicity",
   "age_under15_pct"            = "% Under 15",
   "age_15to24_pct"             = "% 15-24",
   "age_25to44_pct"             = "% 25-44",
   "age_45to64_pct"             = "% 45-64",
   "age_65to84_pct"             = "% 65-84",
+  "X85plus_pct" = "% 85+",
   "trend_total_pkm"            = "Trend: total injuries/km",
   "recent_minus_mid_total_pkm" = "Recent - mid injuries/km",
   "mid_minus_early_total_pkm"  = "Mid - early injuries/km",
@@ -357,6 +367,9 @@ desc_table <- map_df(desc_raw_vars, ~ desc_stats(matched_full, .x))
 write_csv(desc_table, file.path(outdir, "01_descriptive_table.csv"))
 cat("  Saved: 01_descriptive_table.csv\n")
 
+
+
+desc_table |> print(n=50)
 # =============================================================================
 # SMD TABLES
 # =============================================================================
@@ -425,8 +438,8 @@ make_love_plot <- function(smd_df, title, subtitle = "") {
 
 p_love_s1 <- make_love_plot(
   smd_s1,
-  "Stage 1 balance â€” structural & sociodemographic covariates",
-  "Pooled matching (England, other-city controls only)"
+  "Stage 1 balance: structural & sociodemographic covariates",
+  "Pooled"
 )
 save_fig(p_love_s1, "fig01_love_plot_stage1.png", width = 14, height = 16)
 
@@ -503,7 +516,7 @@ save_fig(p_wt_hist + p_wt_ecdf, "fig06_weight_diagnostics.png",
 cat("\n")
 
 # =============================================================================
-# 5. STRATUM CHARACTERISTICS
+# STRATUM CHARACTERISTICS
 # =============================================================================
 
 cat("--- 5. Stratum characteristics ---\n")
@@ -562,10 +575,9 @@ if (n_isolated > 0) {
 cat("\n")
 
 # =============================================================================
-# 7. MAHALANOBIS DISTANCE
+# MAHALANOBIS DISTANCE
 # =============================================================================
 
-cat("--- 7. Mahalanobis distance ---\n")
 
 if ("mdist" %in% names(matched_full)) {
   dist_summary <- matched_full %>%
@@ -613,9 +625,10 @@ cat("--- 8. Parallel trends distributions ---\n")
 
 trend_vars <- intersect(
   c(
-    "trend_total_pkm",
-    "recent_minus_mid_total_pkm",
-    "mid_minus_early_total_pkm"
+    "trend_total_pkm"
+    #,
+   # "recent_minus_mid_total_pkm",
+  #  "mid_minus_early_total_pkm"
   ),
   names(matched_full)
 )
@@ -637,8 +650,7 @@ if (length(trend_vars) > 0) {
     scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment trend distributions: treated vs matched controls",
-      subtitle = "Pre-COVID slope and trajectory-shape variables",
-      x = "Pre-treatment trend/shape value", y = "Density",
+        x = "Pre-treatment trend value", y = "Density",
       fill = NULL, colour = NULL
     ) +
     theme_diag() +
@@ -825,10 +837,9 @@ ctrl_scheme_lookup <- matching_pairs %>%
   distinct()
 
 # =============================================================================
-# 9. PER-SCHEME SMD COMPUTATION
+# PER-SCHEME SMD COMPUTATION
 # =============================================================================
 
-cat("--- 9. Per-scheme SMD ---\n")
 
 smd_for_scheme <- function(scheme_name, vars) {
   treated_oas <- matched_full %>%
@@ -870,7 +881,7 @@ smd_all_schemes <- map_df(schemes, function(s) {
 write_csv(smd_all_schemes, file.path(outdir, "09_smd_per_scheme.csv"))
 
 # =============================================================================
-# 10. PER-SCHEME LOVE PLOTS (faceted)
+# PER-SCHEME LOVE PLOTS (faceted)
 # =============================================================================
 
 cat("\n--- 10. Per-scheme love plots ---\n")
@@ -920,10 +931,10 @@ save_fig(p_love_scheme, "fig10_love_plots_per_scheme.png",
          width = 16, height = 10)
 
 # =============================================================================
-# 11. SMD HEATMAP ACROSS SCHEMES (trends only)
+#  SMD HEATMAP ACROSS SCHEMES (trends only)
 # =============================================================================
 
-cat("--- 11. SMD heatmap ---\n")
+
 
 smd_breaks  <- c(0, 0.05, 0.10, 0.15, 0.20, Inf)
 smd_labels  <- c("<0.05", "0.05-0.10", "0.10-0.15", "0.15-0.20", ">0.20")
@@ -1057,9 +1068,7 @@ write_csv(scheme_balance, file.path(outdir, "12_scheme_balance_summary.csv"))
 cat("=== PER-SCHEME TREND BALANCE SUMMARY ===\n")
 print(scheme_balance, n = Inf)
 
-# =============================================================================
-# DONE
-# =============================================================================
+
 
 cat("\n")
 cat(paste(rep("=", 70), collapse = ""), "\n")
@@ -1072,4 +1081,26 @@ list.files(outdir, pattern = "\\.csv$") %>%
 cat("\nFigure outputs:\n")
 list.files(outdir, pattern = "\\.png$") %>%
   walk(~ cat("  ", .x, "\n"))
+
+
+
+
+
+
+
+# Stage 1 summary
+cat(stage1_text)
+
+# Stage 2 balance per scheme
+print(s2_balance)
+
+# Ratio summary
+print(ratio_summary)
+
+# Overall scheme summary
+print(scheme_summary)
+
+# Total pairs
+pairs_pooled %>% count(scheme)
+
 

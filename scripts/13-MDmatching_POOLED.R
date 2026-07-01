@@ -4,14 +4,7 @@
 #
 # Matches treated OAs to other-city control OAs separately for each CAZ scheme.
 #
-# Bradford-related fixes included here:
-#   1. No global control_pool object is used in the per-scheme loop.
-#   2. The control pool is rebuilt inside each scheme.
-#   3. Any OA treated in the current scheme is excluded from that scheme's
-#      control pool.
-#   4. Stage 2 matching caps donor reuse with reuse.max.
-#   5. Ratio selection records unique-control and reuse diagnostics.
-#   6. Stage 2 exactly matches on scheme-specific baseline injury quartiles.
+# 
 #
 # OUTPUTS:
 #   OA_matched_treated_pooled.rds
@@ -46,7 +39,7 @@ outdir <- here("output", "diagnostics", "pooled")
 
 # Matching controls. Tune these for sensitivity checks.
 stage1_candidate_ratio <- 50
-stage2_reuse_max <- 5
+stage2_reuse_max <- 20
 min_unique_controls_per_treated <- 1
 target_trend_smd <- 0.10
 

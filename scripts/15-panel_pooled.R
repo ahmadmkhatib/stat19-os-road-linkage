@@ -7,7 +7,7 @@
 # panel_id so panel models treat them as separate matched units.
 # OA-level clustering absorbs within-OA correlation.
 #
-# IMPORTANT FIX:
+#
 #   The treatment role in the matched panel is defined by the
 #   matching output, not by the original road-level CAZ flag.
 #
@@ -209,18 +209,18 @@ road_panel_matched <- road_panel_matched %>%
     quarter_year = as.yearqtr(quarter_year),
     caz_start_q = as.yearqtr(caz_start_q),
     
-    # Critical: matched role, not raw road CAZ flag.
+    # Matched role, not raw road CAZ flag.
     treat_group = as.integer(treat_indicator == 1),
     
-    post = case_when(
-      treat_group == 1 & !is.na(caz_start_q) &
-        quarter_year >= caz_start_q ~ 1L,
-      TRUE ~ 0L
-    ),
-    rel_time = case_when(
-      treat_group == 1 & !is.na(caz_start_q) ~
-        as.numeric(quarter_year - caz_start_q),
-      TRUE ~ NA_real_
+    # Scheme-relative timing applies to treated roads and matched controls.
+    # Controls are never treated, but they still have post-period observations
+    # relative to the treated scheme they are matched to.
+    post_scheme = as.integer(!is.na(caz_start_q) & quarter_year >= caz_start_q),
+    treated_post = treat_group * post_scheme,
+    rel_time = if_else(
+      !is.na(caz_start_q),
+      as.numeric(quarter_year - caz_start_q),
+      NA_real_
     )
   )
 
@@ -255,7 +255,8 @@ road_panel_matched <- road_panel_matched %>%
     match_copy,
     
     treat_group,
-    post,
+    post_scheme,
+    treated_post,
     rel_time,
     scheme,
     caz_start_q,
@@ -326,7 +327,7 @@ cat("  Expansion factor:",
 
 cat("\nOutcome summary (treated roads, post period):\n")
 road_panel_matched %>%
-  filter(treat_group == 1, post == 1) %>%
+  filter(treated_post == 1) %>%
   summarise(
     n_obs = n(),
     mean_total = round(mean(total_inj_adj_All, na.rm = TRUE), 4),
@@ -349,9 +350,7 @@ cat("  Expected:   ", n_units * n_qtrs, "\n")
 cat("  Balanced:   ",
     nrow(road_panel_matched) == n_units * n_qtrs, "\n")
 
-# ============================================================
-# Save
-# ============================================================
+
 
 arrow::write_parquet(
   road_panel_matched,
@@ -362,6 +361,5 @@ cat("\nSaved: road_panel_matched_pooled.parquet\n")
 cat("  Rows:", nrow(road_panel_matched),
     "| Panel units:", n_units,
     "| Quarters:", n_qtrs, "\n")
-
 
 

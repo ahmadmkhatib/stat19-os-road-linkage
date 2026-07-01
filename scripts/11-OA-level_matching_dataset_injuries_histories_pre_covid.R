@@ -5,20 +5,8 @@
 # Purpose:
 #   Construct one pooled OA-level matching dataset for the CAZ DiD analysis.
 #
-# Key decisions:
-#   1. Injury-history matching variables use TOTAL injuries only.
-#   2. No stratification by severity or road-user mode.
-#   3. Injury baseline and trend are calculated using the pre-COVID period:
-#        all quarters up to and including 2019 Q4.
-#   4. OA-quarter injury panel is zero-filled before calculating means/trends.
-#   5. Main injury variables for Stage 2 matching are per road-km:
-#        mean_total_pkm
-#        log1p_mean_total_pkm
-#        trend_total_pkm
-#        recent_minus_mid_total_pkm
-#        mid_minus_early_total_pkm
-#
-# Main output:
+# 
+# output:
 #   data/processed/OA_matching_data_pooled.rds
 #
 # Compatibility output:
@@ -110,6 +98,8 @@ caz <- st_read(
   quiet = TRUE
 )
 
+
+
 # Drop geometry from OA_analysis if needed
 OA_analysis_base <- OA_analysis
 
@@ -133,14 +123,17 @@ cat("OAs in OA_roads:", n_distinct(OA_roads$OA), "\n")
 cat("OAs in OA_injuries:", n_distinct(OA_injuries$OA), "\n")
 
 # ============================================================
-# 3. CAZ START DATE LOOKUP
+#  CAZ START DATE LOOKUP
 # ============================================================
-
 caz_dates <- caz %>%
   st_drop_geometry() %>%
   mutate(
     caz_start_date = dmy(startDt),
-    caz_start_q    = as.yearqtr(caz_start_date)
+    raw_q          = as.yearqtr(caz_start_date),
+    q_start        = as.Date(raw_q),
+    q_end          = as.Date(raw_q + 0.25) - 1,
+    q_mid          = q_start + as.integer(difftime(q_end, q_start, units = "days")) / 2,
+    caz_start_q    = if_else(caz_start_date > q_mid, raw_q + 0.25, raw_q)
   ) %>%
   group_by(scheme) %>%
   summarise(
@@ -158,6 +151,12 @@ if (any(caz_dates$caz_start_q <= pre_covid_end_q, na.rm = TRUE)) {
     "Check whether using all quarters up to 2019 Q4 is valid for every scheme."
   )
 }
+
+
+
+caz_dates %>%
+  filter(scheme == "Portsmouth") %>%
+  print()
 
 # ============================================================
 # 4. OA SCHEME / TREATMENT LOOKUP

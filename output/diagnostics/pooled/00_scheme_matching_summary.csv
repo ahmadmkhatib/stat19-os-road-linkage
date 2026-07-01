@@ -1,9 +1,9 @@
 scheme,treated,unique_controls,total_pairs,ratio
 Bath,45,45,45,1:1
 Birmingham,120,213,240,1:2
-Bradford,257,461,514,1:2
+Bradford,258,456,516,1:2
 Bristol,47,84,94,1:2
 Newcastle,27,220,243,1:9
-Portsmouth,56,353,448,1:8
+Portsmouth,55,189,220,1:4
 Sheffield,39,70,78,1:2
-Total,591,1446,1662,1:2.8
+Total,591,1277,1436,1:2.4

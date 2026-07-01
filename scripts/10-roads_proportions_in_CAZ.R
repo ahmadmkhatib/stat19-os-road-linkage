@@ -19,6 +19,23 @@ caz <- st_read(
 ) %>%
   st_make_valid()
 
+table(caz$scheme, caz$startDt)
+
+# Replace incorrect start date for Portsmouth
+caz <- caz %>%
+  mutate(
+    startDt = as.character(startDt),
+    startDt = if_else(scheme == "Portsmouth", "29/11/2021", startDt)
+  )
+
+
+caz %>%
+  st_drop_geometry() %>%
+  filter(scheme == "Portsmouth") %>%
+  distinct(scheme, startDt) %>%
+  print()
+
+
 glimpse(caz)
 # ── Ensure same CRS ────────────────────────────────────────
 roads <- st_transform(roads, st_crs(caz))
@@ -88,5 +105,12 @@ st_write(
 saveRDS(
   roads_caz_props,
   here("data","processed","roads_caz_props.rds")
+)
+
+# because portsmoth was corrected
+st_write(
+  caz,
+  here("data", "processed", "shp_files", "CAZ_areas.shp"),
+  delete_dsn = TRUE
 )
 

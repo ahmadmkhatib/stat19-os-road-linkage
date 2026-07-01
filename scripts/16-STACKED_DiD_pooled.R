@@ -270,19 +270,13 @@ model_panel %>%
   print()
 
 
-
-
 # =============================================================================
 # DIAGNOSTIC: ALL-ZERO ROAD-LINK EXCLUSION
 # =============================================================================
-# IMPORTANT:
-# Run this BEFORE:
+# IMPORTANT: run this BEFORE:
 #   model_panel <- model_panel %>%
 #     filter(unit_total_injury_all_periods > 0) %>%
 #     select(-unit_total_injury_all_periods)
-#
-# If you already ran that filter, rerun the script from the LOAD DATA / BUILD
-# MODEL PANEL section, then run this block before the exclusion.
 
 zero_exclusion_diag_dir <- file.path(outdir, "zero_exclusion_diagnostics")
 dir.create(zero_exclusion_diag_dir, showWarnings = FALSE, recursive = TRUE)
@@ -310,60 +304,73 @@ zero_exclusion_unit <- model_panel_zero_diag %>%
     .groups = "drop"
   )
 
+# -----------------------------------------------------------------------
+# 1. Link-stack observations dropped (row-level: link x scheme x quarter)
+# -----------------------------------------------------------------------
 zero_obs_summary <- model_panel_zero_diag %>%
   summarise(
     link_stack_observations_total    = n(),
     link_stack_observations_dropped  = sum(zero_dropped),
     link_stack_observations_retained = sum(!zero_dropped),
-    pct_observations_dropped         = 100 * mean(zero_dropped)
+    pct_observations_dropped         = round(100 * mean(zero_dropped), 1),
+    pct_observations_retained        = round(100 * mean(!zero_dropped), 1)
   )
 
-cat("\nNumber of link-stack observations dropped:\n")
+cat("\n=== 1. Link-stack observations dropped ===\n")
 print(zero_obs_summary)
 
+# Unit-level version (link x scheme, collapsed across quarters)
 zero_unit_summary <- zero_exclusion_unit %>%
   summarise(
     link_stack_units_total       = n(),
     link_stack_units_dropped     = sum(zero_dropped),
     link_stack_units_retained    = sum(!zero_dropped),
-    pct_link_stack_units_dropped = 100 * mean(zero_dropped)
+    pct_link_stack_units_dropped = round(100 * mean(zero_dropped), 1)
   )
 
 cat("\nNumber of unique link-stack units dropped:\n")
 print(zero_unit_summary)
 
+# -----------------------------------------------------------------------
+# 2. Unique physical road links dropped
+# -----------------------------------------------------------------------
+# A road link is "dropped in all stacks" only if it was zero-injury in
+# every scheme it appeared in (a link reused across schemes could be
+# retained in one stack and dropped in another).
 zero_identifier_summary <- zero_exclusion_unit %>%
   group_by(identifier) %>%
   summarise(
-    appears_in_n_stacks  = n_distinct(scheme),
+    appears_in_n_stacks   = n_distinct(scheme),
     dropped_in_all_stacks = all(zero_dropped),
     dropped_in_any_stack  = any(zero_dropped),
     .groups = "drop"
   ) %>%
   summarise(
-    unique_road_links_total = n(),
+    unique_road_links_total                 = n(),
     unique_road_links_dropped_in_all_stacks = sum(dropped_in_all_stacks),
+    unique_road_links_retained_in_any_stack = sum(!dropped_in_all_stacks),
     unique_road_links_dropped_in_any_stack  = sum(dropped_in_any_stack),
-    pct_unique_links_dropped_in_all_stacks =
-      100 * mean(dropped_in_all_stacks),
-    pct_unique_links_dropped_in_any_stack =
-      100 * mean(dropped_in_any_stack)
+    pct_unique_links_dropped_in_all_stacks  = round(100 * mean(dropped_in_all_stacks), 1),
+    pct_unique_links_dropped_in_any_stack   = round(100 * mean(dropped_in_any_stack), 1)
   )
 
-cat("\nNumber of unique physical road links dropped:\n")
+cat("\n=== 2. Unique physical road links dropped ===\n")
 print(zero_identifier_summary)
 
+# -----------------------------------------------------------------------
+# Breakdown by treatment group and by scheme (unchanged from original)
+# -----------------------------------------------------------------------
 zero_by_group <- zero_exclusion_unit %>%
   group_by(group, zero_dropped) %>%
   summarise(
-    link_stack_units = n(),
-    unique_road_links = n_distinct(identifier),
-    OAs = n_distinct(OA),
+    link_stack_units       = n(),
+    unique_road_links      = n_distinct(identifier),
+    OAs                    = n_distinct(OA),
     mean_quarters_observed = mean(n_quarters),
     .groups = "drop"
   ) %>%
   group_by(group) %>%
-  mutate(pct_within_group = 100 * link_stack_units / sum(link_stack_units)) %>%
+  mutate(pct_within_group = round(100 * link_stack_units / sum(link_stack_units), 1)) %>%
   ungroup()
 
 cat("\nDropped vs retained by treatment group:\n")
@@ -372,43 +379,57 @@ print(zero_by_group)
 zero_by_scheme <- zero_exclusion_unit %>%
   group_by(scheme, group, zero_dropped) %>%
   summarise(
-    link_stack_units = n(),
+    link_stack_units  = n(),
     unique_road_links = n_distinct(identifier),
-    OAs = n_distinct(OA),
+    OAs               = n_distinct(OA),
     .groups = "drop"
   ) %>%
   group_by(scheme, group) %>%
-  mutate(pct_within_scheme_group = 100 * link_stack_units / sum(link_stack_units)) %>%
+  mutate(pct_within_scheme_group = round(100 * link_stack_units / sum(link_stack_units), 1)) %>%
   ungroup() %>%
   arrange(scheme, group, zero_dropped)
 
 cat("\nDropped vs retained by scheme and group:\n")
 print(zero_by_scheme, n = Inf)
 
-possible_characteristic_vars <- c(
-  "prop_in_caz",
-  "road_length",
-  "length_m",
-  "length_km",
-  "mean_total_pkm",
-  "trend_total_pkm",
-  "recent_minus_mid_total_pkm",
-  "mid_minus_early_total_pkm"
-)
+# -----------------------------------------------------------------------
+# 3. Characteristics of retained vs dropped roads
+# -----------------------------------------------------------------------
+# FIX: the previous version checked for characteristic columns inside
+# model_panel_zero_diag, but those columns were dropped in model_panel's
+# select() upstream and were never there. This version re-joins them
+# explicitly from their source files:
+#   (a) road-level: prop_in_caz, road length  -> road_panel_matched_pooled.parquet
+#   (b) OA-level: pre-treatment injury trend/level -> OA_matched_full_pooled.rds
+#
+# If `road_panel` is still in scope at this point in the script (i.e. you
+# haven't hit `rm(road_panel)` yet), you can swap the arrow::read_parquet()
+# call below for the in-memory object instead.
 
-characteristic_vars <- intersect(possible_characteristic_vars, names(model_panel_zero_diag))
+road_level_chars <- arrow::read_parquet(
+  here("data", "processed", "road_panel_matched_pooled.parquet")
+) %>%
+  distinct(identifier, scheme, OA, prop_in_caz, length) %>%
+  rename(road_length_m = length)
+
+oa_level_chars <- readRDS(
+  here("data", "processed", "OA_matched_full_pooled.rds")
+) %>%
+  distinct(OA, trend_total_pkm, mean_total_pkm)
+
+road_characteristics <- zero_exclusion_unit %>%
+  distinct(uid, identifier, OA, scheme, treat_group, group, zero_dropped) %>%
+  left_join(road_level_chars, by = c("identifier", "scheme", "OA")) %>%
+  left_join(oa_level_chars,   by = "OA")
+
+characteristic_vars <- c(
+  "prop_in_caz", "road_length_m", "trend_total_pkm", "mean_total_pkm"
+)
+characteristic_vars <- intersect(characteristic_vars, names(road_characteristics))
+
+cat("\n=== 3. Characteristics of retained vs dropped roads ===\n")
 
 if (length(characteristic_vars) > 0) {
-  road_characteristics <- model_panel_zero_diag %>%
-    group_by(uid, identifier, OA, scheme, treat_group, group, zero_dropped) %>%
-    summarise(
-      across(
-        all_of(characteristic_vars),
-        ~ suppressWarnings(mean(.x, na.rm = TRUE)),
-        .names = "{.col}"
-      ),
-      .groups = "drop"
-    )
   
   characteristic_summary <- road_characteristics %>%
     pivot_longer(
@@ -418,12 +439,12 @@ if (length(characteristic_vars) > 0) {
     ) %>%
     group_by(characteristic, zero_dropped) %>%
     summarise(
-      n = sum(!is.na(value)),
-      mean = mean(value, na.rm = TRUE),
-      sd = sd(value, na.rm = TRUE),
+      n      = sum(!is.na(value)),
+      mean   = mean(value, na.rm = TRUE),
+      sd     = sd(value, na.rm = TRUE),
       median = median(value, na.rm = TRUE),
-      p25 = quantile(value, 0.25, na.rm = TRUE),
-      p75 = quantile(value, 0.75, na.rm = TRUE),
+      p25    = quantile(value, 0.25, na.rm = TRUE),
+      p75    = quantile(value, 0.75, na.rm = TRUE),
       .groups = "drop"
     )
   
@@ -436,9 +457,9 @@ if (length(characteristic_vars) > 0) {
     group_by(characteristic) %>%
     summarise(
       mean_retained = mean(value[zero_dropped == FALSE], na.rm = TRUE),
-      mean_dropped  = mean(value[zero_dropped == TRUE], na.rm = TRUE),
-      sd_retained   = sd(value[zero_dropped == FALSE], na.rm = TRUE),
-      sd_dropped    = sd(value[zero_dropped == TRUE], na.rm = TRUE),
+      mean_dropped  = mean(value[zero_dropped == TRUE],  na.rm = TRUE),
+      sd_retained   = sd(value[zero_dropped == FALSE],   na.rm = TRUE),
+      sd_dropped    = sd(value[zero_dropped == TRUE],    na.rm = TRUE),
       pooled_sd     = sqrt((sd_retained^2 + sd_dropped^2) / 2),
       smd_dropped_vs_retained = (mean_dropped - mean_retained) / pooled_sd,
       abs_smd = abs(smd_dropped_vs_retained),
@@ -452,15 +473,28 @@ if (length(characteristic_vars) > 0) {
   cat("\nStandardised differences: dropped vs retained roads:\n")
   print(characteristic_smd, n = Inf)
   
+  flagged <- characteristic_smd %>% filter(abs_smd >= 0.10)
+  if (nrow(flagged) > 0) {
+    cat("\n  NOTE: the following characteristics differ meaningfully",
+        "(|SMD| >= 0.10) between dropped and retained roads:\n")
+    print(flagged %>% select(characteristic, abs_smd))
+  } else {
+    cat("\n  No characteristic shows |SMD| >= 0.10 between dropped and retained roads.\n")
+  }
+  
   write_csv(characteristic_summary,
             file.path(zero_exclusion_diag_dir, "zero_exclusion_characteristic_summary.csv"))
   write_csv(characteristic_smd,
             file.path(zero_exclusion_diag_dir, "zero_exclusion_characteristic_smd.csv"))
+  
 } else {
-  cat("\nNo extra road-level characteristic variables found in model_panel.\n")
-  cat("This is okay if model_panel only contains identifiers, treatment, scheme, quarter, and outcome.\n")
+  cat("  No characteristic variables found after join — check column names in\n",
+      "  road_panel_matched_pooled.parquet and OA_matched_full_pooled.rds.\n")
 }
 
+# -----------------------------------------------------------------------
+# Save all outputs
+# -----------------------------------------------------------------------
 write_csv(zero_obs_summary,
           file.path(zero_exclusion_diag_dir, "zero_exclusion_observation_summary.csv"))
 write_csv(zero_unit_summary,
@@ -474,8 +508,6 @@ write_csv(zero_by_scheme,
 
 cat("\nZero-exclusion diagnostics saved to:\n")
 cat(zero_exclusion_diag_dir, "\n")
-
-
 
 
 # remove the zeros 
@@ -634,6 +666,12 @@ stacked <- stacked %>%
     event_time_ref = relevel(factor(event_time_ref), ref = "ref_year")
   )
 
+
+##### add a var to allow differntial covid effec to vary by scheme 
+stacked <- stacked %>%
+  mutate(
+    treat_scheme = interaction(treat_group, stack_scheme, drop = TRUE)
+  )
 # =============================================================================
 # CONSTRUCT FINAL WEIGHTS
 # =============================================================================
@@ -681,10 +719,6 @@ stacked <- stacked %>%
   select(-control_link_weight)
 
 
-
-
-
-
 # --- Verification ---
 # In the main analysis weights, each scheme should have total treated weight
 # of 1 and total control weight of 1 in each quarter.
@@ -729,15 +763,29 @@ stacked %>%
 # MODEL 1 - POOLED AVERAGE TREATMENT EFFECT
 # =============================================================================
 # Estimates one average post-treatment CAZ effect across all schemes.
-# Both main and sensitivity weighted versions are fitted:
-#   - analysis_weight: equal-scheme pooled estimate; treated and controls
-#     each sum to 1 within every scheme
-#   - link_weight: link-weighted sensitivity; larger schemes contribute more,
-#     while control totals are still balanced to treated totals within scheme
-# Primary headline estimate is the COVID-adjusted analysis-weighted model.
+#
+# Three analysis-weighted specifications are compared:
+#   1. No COVID adjustment
+#   2. Pooled COVID adjustment by treatment status
+#   3. Flexible COVID adjustment by treatment status and scheme
+#
+# The preferred headline estimate is Model 1c, because it matches the preferred
+# event-study specification and allows lockdown/recovery shocks to vary across
+# treated/control roads within each scheme.
+#
+# A link-weighted version of the preferred specification is also estimated as a
+# sensitivity check. This allows larger schemes to contribute more, while still
+# balancing control totals to treated totals within scheme.
 
+stacked <- stacked %>%
+  mutate(
+    treat_scheme = interaction(treat_group, stack_scheme, drop = TRUE)
+  )
+
+# 1a. No COVID adjustment
 m1_no_covid <- feglm(
-  outcome_raw ~ post_stack |
+  outcome_raw ~
+    post_stack |
     uid_stack + stack_scheme[qtr_int],
   data    = stacked,
   family  = "poisson",
@@ -746,8 +794,10 @@ m1_no_covid <- feglm(
   lean    = TRUE
 )
 
-m1_covid <- feglm(
-  outcome_raw ~ post_stack +
+# 1b. Pooled COVID adjustment by treatment status
+m1_covid_pooled <- feglm(
+  outcome_raw ~
+    post_stack +
     i(covid_period, treat_group, ref = "non_pandemic") |
     uid_stack + stack_scheme[qtr_int],
   data    = stacked,
@@ -757,10 +807,24 @@ m1_covid <- feglm(
   lean    = TRUE
 )
 
-# Link-weighted version for sensitivity comparison
-m1_covid_link_weighted <- feglm(
-  outcome_raw ~ post_stack +
-    i(covid_period, treat_group, ref = "non_pandemic") |
+# 1c. Flexible COVID adjustment by treatment status and scheme
+m1_covid_flexible <- feglm(
+  outcome_raw ~
+    post_stack +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack + stack_scheme[qtr_int],
+  data    = stacked,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+# Link-weighted sensitivity using the preferred flexible COVID adjustment
+m1_covid_flexible_link_weighted <- feglm(
+  outcome_raw ~
+    post_stack +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
     uid_stack + stack_scheme[qtr_int],
   data    = stacked,
   family  = "poisson",
@@ -772,28 +836,44 @@ m1_covid_link_weighted <- feglm(
 cat("\nModel 1: pooled average effect\n")
 etable(
   m1_no_covid,
-  m1_covid,
-  m1_covid_link_weighted,
-  headers = c("Analysis-weighted: no COVID", "Analysis-weighted: COVID-adjusted",
-              "Link-weighted: COVID-adjusted"),
+  m1_covid_pooled,
+  m1_covid_flexible,
+  m1_covid_flexible_link_weighted,
+  headers = c(
+    "Analysis-weighted: no COVID",
+    "Analysis-weighted: pooled COVID",
+    "Analysis-weighted: flexible COVID",
+    "Link-weighted: flexible COVID"
+  ),
   dict = c(
     "post_stack" = "CAZ post-treatment"
   )
 )
 
 model1_results <- tibble(
-  model = c("Analysis-weighted: no COVID interactions",
-            "Analysis-weighted: COVID-adjusted",
-            "Link-weighted: COVID-adjusted"),
+  model = c(
+    "No COVID adjustment",
+    "Pooled COVID adjustment",
+    "Flexible COVID adjustment",
+    "Flexible COVID adjustment, link-weighted"
+  ),
+  model_type = c(
+    "Main comparison",
+    "Main comparison",
+    "Main comparison",
+    "Sensitivity"
+  ),
   estimate_log_irr = c(
     coef(m1_no_covid)["post_stack"],
-    coef(m1_covid)["post_stack"],
-    coef(m1_covid_link_weighted)["post_stack"]
+    coef(m1_covid_pooled)["post_stack"],
+    coef(m1_covid_flexible)["post_stack"],
+    coef(m1_covid_flexible_link_weighted)["post_stack"]
   ),
   se = c(
     se(m1_no_covid)["post_stack"],
-    se(m1_covid)["post_stack"],
-    se(m1_covid_link_weighted)["post_stack"]
+    se(m1_covid_pooled)["post_stack"],
+    se(m1_covid_flexible)["post_stack"],
+    se(m1_covid_flexible_link_weighted)["post_stack"]
   )
 ) %>%
   mutate(
@@ -815,23 +895,29 @@ p_model1 <- ggplot(
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
   geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
-  geom_point(size = 3) +
+  geom_point(aes(shape = model_type), size = 3) +
   labs(
     title    = "Model 1: pooled average CAZ effect",
-    subtitle = "Stacked PPML - equal-scheme main estimate and link-weighted sensitivity",
+    subtitle = "Stacked PPML comparing COVID adjustment specifications",
     x        = "% change in injuries",
-    y        = NULL
+    y        = NULL,
+    shape    = NULL
   ) +
   theme_minimal(base_size = 12)
 
 print(p_model1)
-ggsave(file.path(outdir, "01_model1_pooled_average_effect.png"),
-       p_model1, width = 8, height = 5, dpi = 300)
+ggsave(
+  file.path(outdir, "01_model1_pooled_average_effect.png"),
+  p_model1, width = 8, height = 5, dpi = 300
+)
+
+write_csv(model1_results, file.path(outdir, "model1_pooled_average_effects.csv"))
 
 # Primary headline estimate
-m1_main           <- m1_covid
+m1_main <- m1_covid_flexible
+
 model1_main_result <- model1_results %>%
-  filter(model == "Analysis-weighted: COVID-adjusted")
+  filter(model == "Flexible COVID adjustment")
 
 # =============================================================================
 # MODEL 2 - POOLED DYNAMIC EVENT STUDY (quarter -1 reference)
@@ -871,17 +957,18 @@ ggsave(file.path(outdir, "02_model2_pooled_event_study.png"),
 #   (a) averaging over four quarters reduces reference period noise
 #   (b) the gap before implementation is visually explicit
 #   (c) avoids anchoring on a quarter that may be COVID-contaminated
-#       for some schemes (particularly Bradford, where quarters -8 to
-#       -5 are lockdown/recovery)
+#       
 
 m2_event_yearref <- feglm(
-  outcome_raw ~ i(event_time_ref, treat_group, ref = "ref_year") +
-    i(covid_period, treat_group, ref = "non_pandemic") |
-    uid_stack + stack_scheme[qtr_int],
+  outcome_raw ~
+    i(event_time_ref, treat_group, ref = "ref_year") +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |    # flexible COVID adjustment by treatment status and scheme
+    uid_stack +                                              # road-link stack fixed effects
+    stack_scheme[qtr_int],                                  # cheme-specific time trends
   data    = stacked,
   family  = "poisson",
   cluster = ~OA,
-  weights = ~analysis_weight,
+  weights = ~analysis_weight,                               # equal-scheme analysis weights
   lean    = TRUE
 )
 
@@ -910,6 +997,114 @@ ggsave(file.path(outdir, "02_compare_reference_periods.png"),
        p_compare, width = 18, height = 7, dpi = 300)
 
 write_csv(model2c_results, file.path(outdir, "model2c_yearref_event_study.csv"))
+
+
+
+# Define whether each observation is in the COVID period
+stacked <- stacked %>%
+  mutate(
+    is_covid = covid_period %in% c("lockdown", "recovery")
+  )
+
+# For each scheme, define a clean reference year:
+# - default: event_time -4:-1 if all/available quarters are non-COVID
+# - if contaminated: nearest four non-COVID pre-treatment quarters before COVID
+stacked <- stacked %>%
+  mutate(
+    is_covid = covid_period %in% c("lockdown", "recovery"),
+    pre_covid_ref = quarter_year >= as.yearqtr("2019 Q2") &
+      quarter_year <= as.yearqtr("2020 Q1")
+  ) %>%
+  group_by(stack_scheme) %>%
+  mutate(
+    normal_ref = event_time >= -4 & event_time <= -1,
+    normal_ref_has_covid = any(normal_ref & is_covid, na.rm = TRUE),
+    
+    clean_ref_year = case_when(
+      !normal_ref_has_covid & normal_ref ~ TRUE,
+      normal_ref_has_covid & pre_covid_ref & event_time < 0 ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    
+    event_time_ref_clean = case_when(
+      clean_ref_year ~ "ref_year",
+      TRUE ~ as.character(event_time)
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    event_time_ref_clean = factor(event_time_ref_clean),
+    event_time_ref_clean = relevel(event_time_ref_clean, ref = "ref_year")
+  )
+
+stacked %>%
+  filter(clean_ref_year) %>%
+  distinct(stack_scheme, quarter_year, event_time, covid_period) %>%
+  arrange(stack_scheme, quarter_year) %>%
+  print(n = Inf)
+
+
+m2_event_cleanref <- feglm(
+  outcome_raw ~
+    i(event_time_ref_clean, treat_group, ref = "ref_year") +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack +
+    stack_scheme[qtr_int],
+  data    = stacked,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+
+print(m2_event_cleanref)
+
+extract_fixest_event_study_cleanref <- function(model) {
+  ct <- coeftable(model)
+  
+  tibble(
+    term     = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se       = ct[, "Std. Error"]
+  ) %>%
+    filter(str_detect(term, "^event_time_ref_clean::")) %>%
+    mutate(
+      event_time = str_match(term, "^event_time_ref_clean::(-?\\d+):treat_group$")[, 2],
+      event_time = as.numeric(event_time),
+      ci_lo      = estimate - 1.96 * se,
+      ci_hi      = estimate + 1.96 * se,
+      irr        = exp(estimate),
+      irr_lo     = exp(ci_lo),
+      irr_hi     = exp(ci_hi),
+      pct_change = 100 * (irr - 1),
+      pct_lo     = 100 * (irr_lo - 1),
+      pct_hi     = 100 * (irr_hi - 1)
+    ) %>%
+    filter(!is.na(event_time)) %>%
+    arrange(event_time)
+}
+
+cleanref_results <- extract_fixest_event_study_cleanref(m2_event_cleanref)
+
+cleanref_results %>%
+  summarise(
+    min_event_time = min(event_time),
+    max_event_time = max(event_time),
+    n_terms = n(),
+    n_post_terms = sum(event_time >= 0)
+  )
+
+cleanref_results %>%
+  filter(event_time >= 0) %>%
+  select(event_time, estimate, se, pct_change, pct_lo, pct_hi) %>%
+  print(n = Inf)
+
+stacked %>%
+  filter(event_time >= 0) %>%
+  distinct(stack_scheme, event_time) %>%
+  count(event_time, name = "n_schemes") %>%
+  arrange(event_time)
 
 # =============================================================================
 # PARALLEL-TRENDS DIAGNOSTICS
@@ -960,7 +1155,6 @@ write_csv(wald_summary, file.path(outdir, "parallel_trends_wald_tests.csv"))
 
 
 
-
 stacked_pre <- stacked %>%
   filter(event_time < 0) %>%
   mutate(
@@ -968,10 +1162,12 @@ stacked_pre <- stacked %>%
     event_time_sq = event_time_c^2
   )
 
+
 m_pretrend_test <- feglm(
   outcome_raw ~
     treat_group:event_time_c +
-    treat_group:event_time_sq |
+    treat_group:event_time_sq +
+    i(covid_period, treat_group, ref = "non_pandemic") |
     uid_stack + stack_scheme[qtr_int],
   data    = stacked_pre,
   family  = "poisson",
@@ -987,13 +1183,68 @@ wald(m_pretrend_test, keep = "treat_group:event_time")
 
 
 
+stacked_pre_12 <- stacked %>%
+  filter(event_time < 0, event_time >= -12) %>%
+  mutate(
+    event_time_c  = event_time + 1,
+    event_time_sq = event_time_c^2
+  )
+
+m_pretrend_test_12 <- feglm(
+  outcome_raw ~
+    treat_group:event_time_c +
+    treat_group:event_time_sq +
+    i(covid_period, treat_group, ref = "non_pandemic") |
+    uid_stack + stack_scheme[qtr_int],
+  data    = stacked_pre_12,
+  family  = "poisson",
+  weights = ~analysis_weight,
+  cluster = ~OA,
+  lean    = TRUE
+)
+
+etable(m_pretrend_test_12)
+wald(m_pretrend_test_12, keep = "treat_group:event_time")
+
+
+m_pretrend_heterog <- feglm(
+  outcome_raw ~
+    treat_group:event_time_c:stack_scheme +
+    i(covid_period, treat_group, ref = "non_pandemic") |
+    uid_stack + stack_scheme[qtr_int],
+  data    = stacked_pre,
+  family  = "poisson",
+  weights = ~analysis_weight,
+  cluster = ~OA,
+  lean    = TRUE
+)
 
 
 
+etable(m_pretrend_heterog)
+wald(m_pretrend_heterog, keep = "treat_group:event_time")
 
 
+stacked_pre <- stacked %>%
+  filter(event_time < 0) %>%
+  mutate(
+    event_time_c = event_time + 1
+  )
 
+m_pretrend_heterog_covid <- feglm(
+  outcome_raw ~
+    treat_group:event_time_c:stack_scheme +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack + stack_scheme[qtr_int],
+  data    = stacked_pre,
+  family  = "poisson",
+  weights = ~analysis_weight,
+  cluster = ~OA,
+  lean    = TRUE
+)
 
+etable(m_pretrend_heterog_covid)
+wald(m_pretrend_heterog_covid, keep = "treat_group:event_time")
 
 
 # =============================================================================
@@ -1154,7 +1405,7 @@ m1_twoway <- feglm(
 )
 
 cat("\nSensitivity: linear trend vs scheme x quarter FE\n")
-etable(m1_covid, m1_twoway,
+etable(m1_covid_pooled, m1_twoway,
        headers = c("Linear trend per scheme (main)", "Scheme x Quarter FE"))
 
 # 2. Excluding Bradford
@@ -1174,7 +1425,7 @@ m1_excl_bradford <- feglm(
 )
 
 cat("\nSensitivity: pooled estimate excluding Bradford\n")
-etable(m1_covid, m1_excl_bradford,
+etable(m1_covid_pooled, m1_excl_bradford,
        headers = c("All schemes", "Excluding Bradford"))
 
 # =============================================================================
@@ -1212,6 +1463,68 @@ saveRDS(
 )
 
 cat("\nOutputs saved to:", outdir, "\n")
+
+
+
+# Composition check: which schemes contribute observations at each event_time bin
+scheme_composition <- stacked_pre %>%
+  count(event_time, stack_scheme, name = "n_obs") %>%
+  group_by(event_time) %>%
+  mutate(pct_of_bin = 100 * n_obs / sum(n_obs)) %>%
+  ungroup() %>%
+  arrange(event_time, desc(pct_of_bin))
+
+cat("\nScheme composition by event-time bin:\n")
+print(scheme_composition, n = Inf)
+
+# Wide view: easier to scan for compositional shift over event time
+composition_wide <- scheme_composition %>%
+  select(event_time, stack_scheme, pct_of_bin) %>%
+  pivot_wider(names_from = stack_scheme, values_from = pct_of_bin, values_fill = 0) %>%
+  arrange(event_time)
+
+print(composition_wide, n = Inf)
+
+write_csv(composition_wide, file.path(outdir, "pretrend_scheme_composition_by_event_time.csv"))
+
+# Visual: stacked area showing scheme share of each event-time bin
+p_composition <- ggplot(
+  scheme_composition,
+  aes(x = event_time, y = pct_of_bin, fill = stack_scheme)
+) +
+  geom_area(position = "stack") +
+  labs(
+    title = "Scheme composition of pre-treatment event-time bins",
+    subtitle = "Reveals whether far pre-period bins are dominated by different schemes than near bins",
+    x = "Quarters relative to CAZ implementation",
+    y = "% of observations in event-time bin",
+    fill = "Scheme"
+  ) +
+  theme_minimal(base_size = 12)
+
+print(p_composition)
+ggsave(file.path(outdir, "diag_pretrend_scheme_composition.png"),
+       p_composition, width = 10, height = 6, dpi = 300)
+
+# Minimum/maximum event_time observed per scheme - directly shows the staggering
+scheme_event_range <- stacked_pre %>%
+  group_by(stack_scheme) %>%
+  summarise(
+    min_event_time = min(event_time),
+    max_event_time = max(event_time),
+    n_quarters_pre = n_distinct(event_time),
+    .groups = "drop"
+  ) %>%
+  arrange(min_event_time)
+
+cat("\nPre-treatment event-time range per scheme:\n")
+print(scheme_event_range)
+
+
+
+
+
+
 
 # =============================================================================
 # BRADFORD DIAGNOSTIC INVESTIGATION
@@ -1452,3 +1765,18 @@ stacked %>%
   mutate(control_to_treated_ratio = group_0 / group_1) %>%
   arrange(desc(control_to_treated_ratio)) %>%
   print()
+
+
+
+# table for the methods report
+
+model_panel %>%
+  group_by(group) %>%
+  summarise(
+    units = n_distinct(uid),
+    observations = n(),
+    total_RTI = sum(outcome_raw, na.rm = TRUE),
+    mean_RTI_per_road_quarter = mean(outcome_raw, na.rm = TRUE),
+    pct_zero = 100 * mean(outcome_raw == 0, na.rm = TRUE),
+    .groups = "drop"
+  )
