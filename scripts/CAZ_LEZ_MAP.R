@@ -1,3 +1,21 @@
+# =============================================================================
+# England-only CAZ map using the latest pooled matching outputs
+# =============================================================================
+#
+# Inputs:
+#   data/processed/OA_matched_full_pooled.rds
+#   data/processed/shp_files/OA_subset.shp
+#   data/processed/shp_files/CAZ_areas.shp
+#
+# Output:
+#   outputs/England_CAZ_recent_matching_map.png
+#
+# Notes:
+#   - Scotland is removed entirely.
+#   - CAZ schemes and OA coverage are taken from the recent matched data.
+#   - Treated and matched-control OAs are mapped separately.
+# =============================================================================
+
 library(sf)
 library(ggplot2)
 library(here)
@@ -6,214 +24,102 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(ggspatial)
 
+select <- dplyr::select
+filter <- dplyr::filter
+rename <- dplyr::rename
+mutate <- dplyr::mutate
+
 target_crs <- 27700
 
-# ── Load data ─────────────────────────────────────────────────────────────────
-caz_raw <- st_read(here("data","processed","shp_files","CAZ_areas.shp")) %>%
+# =============================================================================
+# 1. Load recent matching data
+# =============================================================================
+
+matched_full <- readRDS(here("data", "processed", "OA_matched_full_pooled.rds"))
+
+if (!"OA" %in% names(matched_full)) {
+  stop("OA column is missing from OA_matched_full_pooled.rds.")
+}
+
+if (!"scheme" %in% names(matched_full)) {
+  stop("scheme column is missing from OA_matched_full_pooled.rds.")
+}
+
+if (!"treat_indicator" %in% names(matched_full)) {
+  if ("treated_OA" %in% names(matched_full)) {
+    matched_full <- matched_full %>%
+      mutate(treat_indicator = as.integer(treated_OA == 1))
+  } else {
+    stop("Need treat_indicator or treated_OA in OA_matched_full_pooled.rds.")
+  }
+}
+
+matched_oa <- matched_full %>%
+  mutate(
+    group = if_else(treat_indicator == 1, "Treated OA", "Matched control OA")
+  ) %>%
+  distinct(scheme, OA, group)
+
+matched_schemes <- matched_oa %>%
+  distinct(scheme) %>%
+  pull(scheme) %>%
+  sort()
+
+cat("\nMatched schemes in current data:\n")
+print(matched_schemes)
+
+# =============================================================================
+# 2. Load spatial data and filter to England/current matched sample
+# =============================================================================
+
+oa_sf <- st_read(here("data", "processed", "shp_files", "OA_subset.shp"),
+                 quiet = TRUE) %>%
+  st_transform(target_crs)
+
+if (!"OA" %in% names(oa_sf)) {
+  stop("OA column is missing from OA_subset.shp.")
+}
+
+if ("LAD24CD" %in% names(oa_sf)) {
+  oa_sf <- oa_sf %>%
+    filter(substr(LAD24CD, 1, 1) == "E")
+}
+
+matched_oa_sf <- oa_sf %>%
+  inner_join(matched_oa, by = "OA") %>%
+  st_make_valid()
+
+if (nrow(matched_oa_sf) == 0) {
+  stop("No matched OAs joined to OA_subset.shp. Check OA identifiers.")
+}
+
+caz_raw <- st_read(here("data", "processed", "shp_files", "CAZ_areas.shp"),
+                   quiet = TRUE) %>%
   st_make_valid() %>%
   st_transform(target_crs)
 
-oa_sub <- st_read(here("data","processed","shp_files","OA_subset.shp")) %>%
-  st_transform(target_crs)
+if (!"scheme" %in% names(caz_raw)) {
+  stop("scheme column is missing from CAZ_areas.shp.")
+}
 
-# ── UK base map split into England / Scotland ─────────────────────────────────
-uk <- ne_countries(country = "United Kingdom", scale = "medium", returnclass = "sf") %>%
-  st_transform(target_crs)
-
-scotland_box <- st_as_sfc(st_bbox(c(
-  xmin = -200000, xmax = 700000,
-  ymin = 550000,  ymax = 1300000
-), crs = target_crs))
-
-england_box <- st_as_sfc(st_bbox(c(
-  xmin = -200000, xmax = 700000,
-  ymin = -100000, ymax = 550000
-), crs = target_crs))
-
-scotland <- st_intersection(uk, scotland_box)
-england  <- st_intersection(uk, england_box)
-
-# ── Clean up CAZ ──────────────────────────────────────────────────────────────
-caz <- caz_raw %>%
+caz_england_sf <- caz_raw %>%
+  filter(
+    scheme %in% matched_schemes,
+    !str_detect(scheme, regex("Oxford|Glasgow|Aberdeen|Dundee|Edinburgh", ignore_case = TRUE))
+  ) %>%
   rename(zone_name = scheme) %>%
-  filter(!grepl("Oxford", zone_name, ignore.case = TRUE)) %>%
   group_by(zone_name) %>%
   summarise(geometry = st_union(geometry), .groups = "drop") %>%
   st_make_valid()
 
-# ── Centroids ─────────────────────────────────────────────────────────────────
-caz_centroids <- caz %>%
-  st_centroid() %>%
-  mutate(
-    cx = st_coordinates(.)[,1],
-    cy = st_coordinates(.)[,2]
-  ) %>%
-  st_drop_geometry() %>%
-  arrange(desc(cy))
+if (nrow(caz_england_sf) == 0) {
+  stop("No CAZ geometries matched to the current matched schemes.")
+}
 
-# ── Bounding boxes ────────────────────────────────────────────────────────────
-map_bbox  <- st_bbox(st_union(england, scotland) %>% st_union())
-data_bbox <- st_bbox(oa_sub)
+# England base map only. This avoids any Scotland geometry or label.
+uk <- ne_countries(country = "United Kingdom", scale = "medium", returnclass = "sf") %>%
+  st_transform(target_crs)
 
-map_xmin <- as.numeric(map_bbox["xmin"])
-map_xmax <- as.numeric(map_bbox["xmax"])
-map_ymin <- as.numeric(map_bbox["ymin"])
-map_ymax <- as.numeric(map_bbox["ymax"])
-
-# ── Split zones ───────────────────────────────────────────────────────────────
-scotland_threshold <- 600000
-
-caz_scotland <- caz_centroids %>% filter(cy >= scotland_threshold) %>% arrange(desc(cy))
-caz_england  <- caz_centroids %>% filter(cy <  scotland_threshold) %>% arrange(desc(cy))
-
-# ── LEFT labels ───────────────────────────────────────────────────────────────
-label_x_left  <- map_xmin - 90000
-line_gap_left <- 15000
-
-n_eng <- nrow(caz_england)
-label_y_left <- seq(
-  from       = as.numeric(data_bbox["ymax"]) + 20000,
-  to         = as.numeric(data_bbox["ymin"]) - 20000,
-  length.out = n_eng
-)
-
-caz_labels_left <- caz_england %>%
-  mutate(
-    label_x    = label_x_left,
-    label_y    = label_y_left,
-    line_end_x = label_x_left + line_gap_left
-  )
-
-# ── RIGHT labels ──────────────────────────────────────────────────────────────
-label_x_right  <- map_xmax + 40000
-line_gap_right <- 15000
-
-n_sco <- nrow(caz_scotland)
-label_y_right <- seq(
-  from       = map_ymax - 20000,
-  to         = map_ymax - 20000 - (n_sco - 1) * 60000,
-  length.out = n_sco
-)
-
-caz_labels_right <- caz_scotland %>%
-  mutate(
-    label_x    = label_x_right,
-    label_y    = label_y_right,
-    line_end_x = label_x_right - line_gap_right
-  )
-
-# ── Main map ──────────────────────────────────────────────────────────────────
-main_map <- ggplot() +
-  
-  # England fill — no border colour so no internal E/S line
-  geom_sf(data = england,
-          fill = "#f5f0e8", colour = NA, linewidth = 0.5) +
-  
-  # Scotland fill — no border colour
-  geom_sf(data = scotland,
-          fill = "#e8f0e8", colour = NA, linewidth = 0.5) +
-  
-  # UK outline drawn on top — gives clean coastline without internal border
-  geom_sf(data = uk,
-          fill = NA, colour = "grey30", linewidth = 0.5) +
-  
-  geom_sf(data = oa_sub,
-          fill = "#d4e6f1", colour = NA, alpha = 0.5) +
-  
-  geom_sf(data = caz,
-          fill = "#E63946", colour = "#9B1D20", linewidth = 0.5, alpha = 0.9) +
-  
-  # LEFT leader lines
-  geom_segment(
-    data = caz_labels_left,
-    aes(x = cx, y = cy, xend = line_end_x, yend = label_y),
-    colour = "grey50", linewidth = 0.3
-  ) +
-  geom_point(
-    data = caz_labels_left,
-    aes(x = cx, y = cy),
-    shape = 21, fill = "#E63946", colour = "#9B1D20", size = 2.2
-  ) +
-  geom_text(
-    data = caz_labels_left,
-    aes(x = label_x, y = label_y, label = zone_name),
-    hjust = 0, size = 4.5, colour = "grey10", lineheight = 0.9
-  ) +
-  
-  # RIGHT leader lines
-  geom_segment(
-    data = caz_labels_right,
-    aes(x = cx, y = cy, xend = line_end_x, yend = label_y),
-    colour = "grey50", linewidth = 0.3
-  ) +
-  geom_point(
-    data = caz_labels_right,
-    aes(x = cx, y = cy),
-    shape = 21, fill = "#E63946", colour = "#9B1D20", size = 2.2
-  ) +
-  geom_text(
-    data = caz_labels_right,
-    aes(x = label_x, y = label_y, label = zone_name),
-    hjust = 0, size = 4.5, colour = "grey10", lineheight = 0.9
-  ) +
-  
-  # Country labels
-  annotate("text", x = 380000, y = 300000,
-           label = "England", size = 5.5, colour = "grey40",
-           fontface = "italic", alpha = 0.8) +
-  
-  annotate("text", x = 230000, y = 720000,
-           label = "Scotland", size = 5.5, colour = "grey40",
-           fontface = "italic", alpha = 0.8) +
-  
-  # North arrow
-  annotation_north_arrow(
-    location    = "br",
-    which_north = "true",
-    pad_x = unit(0.3, "cm"),
-    pad_y = unit(0.5, "cm"),
-    style = north_arrow_fancy_orienteering(
-      fill     = c("grey30", "white"),
-      line_col = "grey20",
-      text_col = "grey20",
-      text_size = 10
-    ),
-    height = unit(1.8, "cm"),
-    width  = unit(1.8, "cm")
-  ) +
-  
-  coord_sf(
-    crs    = target_crs,
-    xlim   = c(label_x_left - 10000,  label_x_right + 180000),
-    ylim   = c(map_ymin - 10000,       map_ymax + 10000),
-    expand = FALSE
-  ) +
-  
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.grid       = element_line(colour = "grey92", linewidth = 0.3),
-    plot.title       = element_text(face = "bold", size = 15, hjust = 0.5),
-    plot.subtitle    = element_text(size = 11, hjust = 0.5, colour = "grey40"),
-    axis.text        = element_blank(),
-    axis.ticks       = element_blank(),
-    plot.background  = element_rect(fill = "white", colour = NA),
-    panel.background = element_rect(fill = "#eaf4fb", colour = NA)
-  ) +
-  labs(
-    title    = "Clean Air Zones (CAZ) and Low Emission Zones (LEZ)",
-    subtitle = "England and Scotland",
-    x = NULL, y = NULL
-  )
-
-main_map
-
-ggsave(here("outputs","CAZ_LEZ_map.png"),
-       main_map, width = 16, height = 13, dpi = 300, bg = "white")
-
-
-
-
-########## ENGLAND ONLY ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~###########################################
 england_box <- st_as_sfc(st_bbox(c(
   xmin = -200000, xmax = 700000,
   ymin = -100000, ymax = 550000
@@ -221,82 +127,71 @@ england_box <- st_as_sfc(st_bbox(c(
 
 england <- st_intersection(uk, england_box)
 
-# ── Clean CAZ ────────────────────────────────────────────────────────────────
-caz <- caz_raw %>%
-  rename(zone_name = scheme) %>%
-  group_by(zone_name) %>%
-  summarise(geometry = st_union(geometry), .groups = "drop") %>%
-  st_make_valid()
+# =============================================================================
+# 3. Label positions
+# =============================================================================
 
-# ── KEEP ONLY ENGLAND SCHEMES (SAFE FILTER) ─────────────────────────────────
-england_schemes <- c(
-  "Bath",
-  "Birmingham",
-  "Bradford",
-  "Bristol",
-  "Newcastle",
-  "Portsmouth",
-  "Sheffield"
-)
-
-caz_england_sf <- caz %>%
-  filter(zone_name %in% england_schemes)
-
-# ── Centroids ────────────────────────────────────────────────────────────────
 caz_centroids <- caz_england_sf %>%
   st_centroid() %>%
   mutate(
-    cx = st_coordinates(.)[,1],
-    cy = st_coordinates(.)[,2]
+    cx = st_coordinates(.)[, 1],
+    cy = st_coordinates(.)[, 2]
   ) %>%
-  st_drop_geometry()
+  st_drop_geometry() %>%
+  arrange(desc(cy))
 
-# ── Simple manual label positions (stable, no dropping cities) ──────────────
-label_x_left <- st_bbox(england)["xmin"] - 90000
+england_bbox <- st_bbox(england)
+matched_bbox <- st_bbox(matched_oa_sf)
+
+label_x_left <- as.numeric(england_bbox["xmin"]) - 90000
 
 caz_labels <- caz_centroids %>%
-  arrange(desc(cy)) %>%
   mutate(
     label_x = label_x_left,
     label_y = seq(
-      from = st_bbox(england)["ymax"] - 20000,
-      to   = st_bbox(england)["ymin"] + 20000,
+      from = as.numeric(matched_bbox["ymax"]) + 20000,
+      to = as.numeric(matched_bbox["ymin"]) - 20000,
       length.out = n()
     ),
     line_end_x = label_x_left + 15000
   )
 
-# ── MAIN MAP ────────────────────────────────────────────────────────────────
-England_map <- ggplot() +
-  
-  # England background
-  geom_sf(data = england,
-          fill = "#f5f0e8",
-          colour = "grey30",
-          linewidth = 0.5) +
-  
-  # OA layer
-  geom_sf(data = oa_sub,
-          fill = "#d4e6f1",
-          colour = NA,
-          alpha = 0.5) +
-  
-  # CAZ zones (England only)
-  geom_sf(data = caz_england_sf,
-          fill = "#E63946",
-          colour = "#9B1D20",
-          linewidth = 0.5,
-          alpha = 0.9) +
-  
-  # leader lines
+# =============================================================================
+# 4. Map
+# =============================================================================
+
+england_caz_map <- ggplot() +
+  geom_sf(
+    data = england,
+    fill = "#f5f0e8",
+    colour = "grey35",
+    linewidth = 0.45
+  ) +
+  geom_sf(
+    data = matched_oa_sf %>% filter(group == "Matched control OA"),
+    fill = "#9ecae1",
+    colour = NA,
+    alpha = 0.45
+  ) +
+  geom_sf(
+    data = matched_oa_sf %>% filter(group == "Treated OA"),
+    fill = "#fdae6b",
+    colour = NA,
+    alpha = 0.75
+  ) +
+  geom_sf(
+    data = caz_england_sf,
+    fill = "#E63946",
+    colour = "#9B1D20",
+    linewidth = 0.55,
+    alpha = 0.88
+  ) +
   geom_segment(
     data = caz_labels,
     aes(x = cx, y = cy, xend = line_end_x, yend = label_y),
-    colour = "grey50",
+    colour = "grey45",
     linewidth = 0.3
   ) +
-  
-  # points
   geom_point(
     data = caz_labels,
     aes(x = cx, y = cy),
@@ -305,57 +200,82 @@ England_map <- ggplot() +
     colour = "#9B1D20",
     size = 2.2
   ) +
-  
-  # labels
   geom_text(
     data = caz_labels,
     aes(x = label_x, y = label_y, label = zone_name),
     hjust = 0,
-    size = 4.5,
-    colour = "grey10"
+    size = 4.2,
+    colour = "grey10",
+    lineheight = 0.9
   ) +
-  
-  # England label only
-  annotate("text",
-           x = 380000,
-           y = 300000,
-           label = "England",
-           size = 6,
-           colour = "grey40",
-           fontface = "italic") +
-  
+  annotate(
+    "text",
+    x = 380000,
+    y = 300000,
+    label = "England",
+    size = 5.5,
+    colour = "grey40",
+    fontface = "italic",
+    alpha = 0.85
+  ) +
+  annotation_north_arrow(
+    location = "br",
+    which_north = "true",
+    pad_x = unit(0.3, "cm"),
+    pad_y = unit(0.5, "cm"),
+    style = north_arrow_fancy_orienteering(
+      fill = c("grey30", "white"),
+      line_col = "grey20",
+      text_col = "grey20",
+      text_size = 10
+    ),
+    height = unit(1.6, "cm"),
+    width = unit(1.6, "cm")
+  ) +
   coord_sf(
     crs = target_crs,
-    xlim = c(st_bbox(england)["xmin"] - 10000,
-             st_bbox(england)["xmax"] + 50000),
-    ylim = c(st_bbox(england)["ymin"] - 10000,
-             st_bbox(england)["ymax"] + 10000),
+    xlim = c(label_x_left - 10000, as.numeric(england_bbox["xmax"]) + 50000),
+    ylim = c(as.numeric(england_bbox["ymin"]) - 10000,
+             as.numeric(england_bbox["ymax"]) + 10000),
     expand = FALSE
   ) +
-  
   theme_minimal(base_size = 14) +
   theme(
+    panel.grid = element_line(colour = "grey92", linewidth = 0.3),
+    plot.title = element_text(face = "bold", size = 15, hjust = 0.5),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, colour = "grey40"),
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    panel.grid = element_line(colour = "grey92", linewidth = 0.3),
-    panel.background = element_rect(fill = "#eaf4fb", colour = NA),
-    plot.background = element_rect(fill = "white", colour = NA)
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "#eaf4fb", colour = NA)
   ) +
-  
   labs(
-    title = "Clean Air Zones (CAZ) ",
-    subtitle = "England",
-    x = NULL, y = NULL
+    title = "Clean Air Zones and Recent Matched OA Sample",
+    subtitle = "England only; treated and matched-control OAs from OA_matched_full_pooled.rds",
+    x = NULL,
+    y = NULL
   )
 
-England_map
+print(england_caz_map)
 
-# ── SAVE ─────────────────────────────────────────────────────────────────────
 ggsave(
-  here("outputs","England_map.png"),
-  England_map,
+  here("outputs", "England_CAZ_recent_matching_map.png"),
+  england_caz_map,
   width = 14,
   height = 11,
   dpi = 300,
   bg = "white"
 )
+
+matched_map_summary <- matched_oa %>%
+  count(scheme, group, name = "n_oas") %>%
+  arrange(scheme, group)
+
+write_csv(
+  matched_map_summary,
+  here("outputs", "England_CAZ_recent_matching_map_summary.csv")
+)
+
+cat("\nSaved:\n")
+cat("  outputs/England_CAZ_recent_matching_map.png\n")
+cat("  outputs/England_CAZ_recent_matching_map_summary.csv\n")

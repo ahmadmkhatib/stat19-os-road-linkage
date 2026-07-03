@@ -44,7 +44,7 @@
 #     Dynamic effect path, pooled across schemes, reference = event times -4:-1.
 #
 # Sensitivity analyses repeat Models 1 and 2 after excluding Bradford and after
-# restricting Bradford observations to 2021 Q4 onward. Scheme-specific event
+# restricting Bradford observations to 2021 Q2 onward. Scheme-specific event
 # studies are also estimated with Bradford retained.
 #
 
@@ -493,15 +493,15 @@ run_models_1_2 <- function(data, label) {
   )
 }
 
-# Bradford's fixed -4:-1 reference begins in 2021 Q4. Change this to
+# Bradford's fixed -4:-1 reference begins in 2021 Q2. Change this to
 # "2021 Q3" if you want the looser version of this sensitivity.
-BRADFORD_RESTRICT_START_QTR <- as.yearqtr("2021 Q4")
+BRADFORD_RESTRICT_START_QTR <- as.yearqtr("2021 Q2")
 
 stacked_no_bradford <- stacked %>%
   filter(stack_scheme != "Bradford") %>%
   droplevels()
 
-stacked_bradford_post_2021q4 <- stacked %>%
+stacked_bradford_post_2021q2 <- stacked %>%
   filter(stack_scheme != "Bradford" | quarter_year >= BRADFORD_RESTRICT_START_QTR) %>%
   droplevels()
 
@@ -510,15 +510,15 @@ sensitivity_no_bradford <- run_models_1_2(
   "Sensitivity: exclude Bradford"
 )
 
-sensitivity_bradford_post_2021q4 <- run_models_1_2(
-  stacked_bradford_post_2021q4,
-  "Sensitivity: Bradford pre-period restricted to >= 2021 Q4"
+sensitivity_bradford_post_2021q2 <- run_models_1_2(
+  stacked_bradford_post_2021q2,
+  "Sensitivity: Bradford pre-period restricted to >= 2021 Q2"
 )
 
 model1_comparison <- bind_rows(
   extract_model1_result(m1_pooled_average, "Primary: all schemes"),
   sensitivity_no_bradford$model1_results,
-  sensitivity_bradford_post_2021q4$model1_results
+  sensitivity_bradford_post_2021q2$model1_results
 ) %>%
   select(spec, estimate_log_irr, se, irr, irr_lo, irr_hi,
          pct_change, pct_lo, pct_hi)
@@ -526,7 +526,7 @@ model1_comparison <- bind_rows(
 model2_post_comparison <- bind_rows(
   model2_results %>% mutate(spec = "Primary: all schemes", .before = 1),
   sensitivity_no_bradford$model2_results,
-  sensitivity_bradford_post_2021q4$model2_results,
+  sensitivity_bradford_post_2021q2$model2_results,
   model2_cleanref_results %>% mutate(spec = "Sensitivity: clean/flexible reference", .before = 1)
 ) %>%
   filter(event_time >= 0, event_time <= COMMON_POST_MAX) %>%
@@ -538,31 +538,31 @@ model2_wald_comparison <- tibble(
   spec = c(
     "Primary: all schemes",
     sensitivity_no_bradford$label,
-    sensitivity_bradford_post_2021q4$label,
+    sensitivity_bradford_post_2021q2$label,
     "Sensitivity: clean/flexible reference"
   ),
   stat = c(
     model2_post_common_wald$stat,
     sensitivity_no_bradford$model2_post_wald$stat,
-    sensitivity_bradford_post_2021q4$model2_post_wald$stat,
+    sensitivity_bradford_post_2021q2$model2_post_wald$stat,
     model2_cleanref_post_common_wald$stat
   ),
   df1 = c(
     model2_post_common_wald$df1,
     sensitivity_no_bradford$model2_post_wald$df1,
-    sensitivity_bradford_post_2021q4$model2_post_wald$df1,
+    sensitivity_bradford_post_2021q2$model2_post_wald$df1,
     model2_cleanref_post_common_wald$df1
   ),
   df2 = c(
     model2_post_common_wald$df2,
     sensitivity_no_bradford$model2_post_wald$df2,
-    sensitivity_bradford_post_2021q4$model2_post_wald$df2,
+    sensitivity_bradford_post_2021q2$model2_post_wald$df2,
     model2_cleanref_post_common_wald$df2
   ),
   p_value = c(
     model2_post_common_wald$p,
     sensitivity_no_bradford$model2_post_wald$p,
-    sensitivity_bradford_post_2021q4$model2_post_wald$p,
+    sensitivity_bradford_post_2021q2$model2_post_wald$p,
     model2_cleanref_post_common_wald$p
   )
 )
@@ -702,7 +702,7 @@ primary_results <- list(
     m2_pooled_event_fixedref = m2_pooled_event_fixedref,
     m2_pooled_event_cleanref_sensitivity = m2_pooled_event_cleanref_sensitivity,
     sensitivity_no_bradford = sensitivity_no_bradford,
-    sensitivity_bradford_post_2021q4 = sensitivity_bradford_post_2021q4
+    sensitivity_bradford_post_2021q2 = sensitivity_bradford_post_2021q2
   ),
   tables = list(
     model1_results = model1_results,
