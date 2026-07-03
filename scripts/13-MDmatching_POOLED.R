@@ -38,7 +38,7 @@ dir.create(here("output", "diagnostics", "pooled"),
 outdir <- here("output", "diagnostics", "pooled")
 
 # Matching controls. Tune these for sensitivity checks.
-stage1_candidate_ratio <- 50
+stage1_candidate_ratio <- 100
 stage2_reuse_max <- 20
 min_unique_controls_per_treated <- 1
 target_trend_smd <- 0.10
@@ -56,13 +56,13 @@ stage1_urban <- c("dist_BUA_centroid", "pop_density", "area_km2")
 stage1_business <- c("business_retail_per_km2")
 stage1_socdem <- c(
   "IMD",
-  "cars_one_pct", "cars_twoPlus_pct",
-  "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
-  "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
-  "Taxi_pct", "workAthome_pct", "Motorcycle_pct", "Other_pct",
-  "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
-  "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
-  "age_45to64_pct", "age_65to84_pct"
+  "ethnic_minority_pct",
+  "no_car_households_pct", "two_plus_car_households_pct",
+  "car_commute_pct", "public_transport_to_work_pct",
+  "active_travel_to_work_pct", "work_from_home_pct",
+  "children_0_19_pct", "young_people_5_19_pct",
+  "young_adults_20_34_pct", "working_age_20_64_pct",
+  "older_65plus_pct"
 )
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
@@ -72,7 +72,7 @@ stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 stage2_trends <- c(
   "trend_total_pkm"
   #,#  "recent_minus_mid_total_pkm",
- # "mid_minus_early_total_pkm"
+  # "mid_minus_early_total_pkm"
 )
 stage2_levels <- c("mean_total_pkm")
 stage2_vars <- c(stage2_trends, stage2_levels)
@@ -156,7 +156,20 @@ prep_dataset <- function(data) {
       age_15to24_pct = X15to19_pct + X20to24_pct,
       age_25to44_pct = X25to29_pct + X30to34_pct + X35to39_pct + X40to44_pct,
       age_45to64_pct = X45to49_pct + X50to54_pct + X55to59_pct + X60to64_pct,
-      age_65to84_pct = X65to69_pct + X70to74_pct + X75to79_pct + X80to84_pct
+      age_65to84_pct = X65to69_pct + X70to74_pct + X75to79_pct + X80to84_pct,
+      ethnic_minority_pct = Mixed_pct + Asian_pct + Black_pct + Other_ethnicity_pct,
+      no_car_households_pct = cars_none_pct,
+      two_plus_car_households_pct = cars_twoPlus_pct,
+      car_commute_pct = Drive_Car_pct + Passenger_Car_pct,
+      public_transport_to_work_pct =
+        Underground_train_tram_pct + Train_pct + bus_Coach_pct + Taxi_pct,
+      active_travel_to_work_pct = Walk_pct + Bicycle_pct,
+      work_from_home_pct = workAthome_pct,
+      children_0_19_pct = X4under_pct + X5to19_pct,
+      young_people_5_19_pct = X5to19_pct,
+      young_adults_20_34_pct = X20to24_pct + X25to29_pct + X30to34_pct,
+      working_age_20_64_pct = X20to64_pct,
+      older_65plus_pct = X65plus_pct
     )
 }
 
@@ -975,28 +988,18 @@ var_labels <- c(
   area_km2 = "OA area",
   business_retail_per_km2 = "retail business density",
   IMD = "Index of Multiple Deprivation",
-  cars_one_pct = "percentage with one car",
-  cars_twoPlus_pct = "percentage with 2+ cars",
-  Drive_Car_pct = "percentage commuting by car",
-  Passenger_Car_pct = "percentage commuting as car passenger",
-  Walk_pct = "percentage walking to work",
-  Bicycle_pct = "percentage cycling to work",
-  bus_Coach_pct = "percentage commuting by bus/coach",
-  Train_pct = "percentage commuting by train",
-  Underground_train_tram_pct = "percentage commuting by underground/train/tram",
-  Taxi_pct = "percentage commuting by taxi",
-  workAthome_pct = "percentage working at home",
-  Motorcycle_pct = "percentage commuting by motorcycle",
-  Other_pct = "percentage commuting by other mode",
-  White_pct = "percentage of White residents",
-  Mixed_pct = "percentage of Mixed residents",
-  Asian_pct = "percentage of Asian residents",
-  Black_pct = "percentage of Black residents",
-  age_under15_pct = "percentage aged under 15",
-  age_15to24_pct = "percentage aged 15-24",
-  age_25to44_pct = "percentage aged 25-44",
-  age_45to64_pct = "percentage aged 45-64",
-  age_65to84_pct = "percentage aged 65-84",
+  ethnic_minority_pct = "percentage of ethnic minority residents",
+  no_car_households_pct = "percentage of households with no car",
+  two_plus_car_households_pct = "percentage of households with 2+ cars",
+  car_commute_pct = "percentage commuting by car or car passenger",
+  public_transport_to_work_pct = "percentage commuting by public or paid transport",
+  active_travel_to_work_pct = "percentage walking or cycling to work",
+  work_from_home_pct = "percentage working at home",
+  children_0_19_pct = "percentage aged 0-19",
+  young_people_5_19_pct = "percentage aged 5-19",
+  young_adults_20_34_pct = "percentage aged 20-34",
+  working_age_20_64_pct = "percentage aged 20-64",
+  older_65plus_pct = "percentage aged 65+",
   log1p_road_density_m_km2 = "road density",
   log1p_road_length_km = "road length",
   log1p_pop_density = "population density",
@@ -1088,11 +1091,12 @@ top_residual_imbalance <- residual_imbalance %>%
   pull(text)
 
 specific_vars <- c(
-  "Drive_Car_pct",
+  "car_commute_pct",
+  "public_transport_to_work_pct",
+  "active_travel_to_work_pct",
+  "ethnic_minority_pct",
+  "two_plus_car_households_pct",
   "log1p_business_retail_per_km2",
-  "White_pct",
-  "cars_twoPlus_pct",
-  "Asian_pct",
   "log1p_dist_BUA_centroid"
 )
 

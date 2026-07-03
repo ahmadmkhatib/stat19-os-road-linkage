@@ -177,7 +177,45 @@ OA_char_fixed <- OA_char_raw %>%
       ~ if_else(travel_base_n == 0, NA_real_, .x / travel_base_n * 100),
       .names = "{.col}_pct"
     )
+  ) %>%
+  mutate(
+    ethnic_minority_pct =
+      Mixed_pct + Asian_pct + Black_pct + Other_ethnicity_pct,
+    children_0_19_pct = X4under_pct + X5to19_pct,
+    young_people_5_19_pct = X5to19_pct,
+    young_adults_20_34_pct = X20to24_pct + X25to29_pct + X30to34_pct,
+    working_age_20_64_pct = X20to64_pct,
+    older_65plus_pct = X65plus_pct,
+    no_car_households_pct = cars_none_pct,
+    two_plus_car_households_pct = cars_twoPlus_pct,
+    car_commute_pct = Drive_Car_pct + Passenger_Car_pct,
+    public_transport_to_work_pct =
+      Underground_train_tram_pct + Train_pct + bus_Coach_pct + Taxi_pct,
+    active_travel_to_work_pct = Walk_pct + Bicycle_pct,
+    work_from_home_pct = workAthome_pct,
+    motorcycle_to_work_pct = Motorcycle_pct,
+    other_commute_pct = Other_pct
   )
+
+# Keep the detailed percentage columns for audit/QC, but use the grouped
+# variables below for Stage 1 matching to avoid sparse category noise.
+stage1_grouped_census_vars <- c(
+  "IMD",
+  "pop_density",
+  "log1p_pop_density",
+  "ethnic_minority_pct",
+  "no_car_households_pct",
+  "two_plus_car_households_pct",
+  "car_commute_pct",
+  "public_transport_to_work_pct",
+  "active_travel_to_work_pct",
+  "work_from_home_pct",
+  "children_0_19_pct",
+  "young_people_5_19_pct",
+  "young_adults_20_34_pct",
+  "working_age_20_64_pct",
+  "older_65plus_pct"
+)
 
 # Sanity check: travel-mode percentages should sum to 100
 travel_pct_cols <- paste0(travel_cols, "_pct")
@@ -498,16 +536,7 @@ stage1_expected <- c(
   "pct_B_road",
   "pct_minor_road",
   "dist_BUA_centroid",
-  "pop_density",
-  "log1p_pop_density",
-  "IMD",
-  "cars_none_pct",
-  "Drive_Car_pct",
-  "Walk_pct",
-  "Bicycle_pct",
-  "X65plus_pct",
-  "X5to19_pct",
-  "X20to24_pct"
+  stage1_grouped_census_vars
 )
 
 missing_cols_s1 <- setdiff(stage1_expected, names(OA_matching_census))
@@ -682,16 +711,7 @@ if (!"zero_injury_OA" %in% names(OA_matching_census)) {
 cat("\n[9] Census variable completeness: treated OAs\n")
 
 census_vars <- c(
-  "IMD",
-  "cars_none_pct",
-  "Drive_Car_pct",
-  "Walk_pct",
-  "Bicycle_pct",
-  "X65plus_pct",
-  "X5to19_pct",
-  "X20to24_pct",
-  "pop_density",
-  "log1p_pop_density"
+  stage1_grouped_census_vars
 )
 
 missing_census_vars <- setdiff(census_vars, names(OA_matching_census))

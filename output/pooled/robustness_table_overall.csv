@@ -1,8 +1,0 @@
-Specification,Estimate,SE,p_value
-C&S adjusted (primary),0.1173 inj/km,0.0566,0.038
-C&S unadjusted,0.0987 inj/km,0.0529,0.062
-C&S adj >=10m,0.0982 inj/km,0.0569,0.085
-C&S adj excl 2024,0.1095 inj/km,0.063,0.082
-PPML pre-filt,+1.2%,NA,0.814
-PPML >=10m,+2.8%,NA,0.601
-PPML excl 2024,-6.2%,NA,0.301

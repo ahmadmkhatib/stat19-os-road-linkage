@@ -106,15 +106,13 @@ stage1_vars_raw <- c(
   "pct_A_road", "pct_B_road", "pct_minor_road",
   "dist_BUA_centroid", "pop_density", "area_km2",
   "business_retail_per_km2", "IMD",
-  "cars_none_pct", "no_cars_pct", "cars_zero_pct", "cars_one_pct", "cars_twoPlus_pct",
-  "Drive_Car_pct", "Passenger_Car_pct", "Walk_pct", "Bicycle_pct",
-  "bus_Coach_pct", "Train_pct", "Underground_train_tram_pct",
-  "Taxi_pct", "workAthome_pct", "Motorcycle_pct", "Other_pct",
-  "White_pct", "Mixed_pct", "Asian_pct", "Black_pct",
-  "Other_ethnic_pct", "Other_ethnicity_pct", "Other_ethnic_group_pct",
-  "age_under15_pct", "age_15to24_pct", "age_25to44_pct",
-  "age_45to64_pct", "age_65to84_pct",
-  "X85plus_pct"
+  "ethnic_minority_pct",
+  "no_car_households_pct", "two_plus_car_households_pct",
+  "car_commute_pct", "public_transport_to_work_pct",
+  "active_travel_to_work_pct", "work_from_home_pct",
+  "children_0_19_pct", "young_people_5_19_pct",
+  "young_adults_20_34_pct", "working_age_20_64_pct",
+  "older_65plus_pct"
 )
 
 log_transform_s1 <- c("road_length_km", "pop_density", "dist_BUA_centroid",
@@ -150,6 +148,18 @@ var_labels <- c(
   "log1p_pop_density"          = "Pop. density (log)",
   "log1p_business_retail_per_km2" = "Retail density (log)",
   "IMD"                        = "IMD",
+  "ethnic_minority_pct"         = "% Ethnic minority",
+  "no_car_households_pct"       = "% No car household",
+  "two_plus_car_households_pct" = "% 2+ car household",
+  "car_commute_pct"             = "% Car commute",
+  "public_transport_to_work_pct" = "% Public/paid transport to work",
+  "active_travel_to_work_pct"   = "% Active travel to work",
+  "work_from_home_pct"          = "% Work from home",
+  "children_0_19_pct"           = "% Aged 0-19",
+  "young_people_5_19_pct"       = "% Aged 5-19",
+  "young_adults_20_34_pct"      = "% Aged 20-34",
+  "working_age_20_64_pct"       = "% Aged 20-64",
+  "older_65plus_pct"            = "% Aged 65+",
   "cars_none_pct"              = "% No car",
   "no_cars_pct"                = "% No car",
   "cars_zero_pct"              = "% No car",
@@ -202,6 +212,86 @@ cat("Treated:", nrow(matched_treated),
 cat("Unique control OAs:", n_distinct(matched_controls$OA), "\n\n")
 
 # Prepare log-transformed columns
+add_grouped_stage1_vars <- function(data) {
+  if (!"ethnic_minority_pct" %in% names(data)) {
+    other_eth_col <- intersect(
+      c("Other_ethnicity_pct", "Other_ethnic_pct", "Other_ethnic_group_pct"),
+      names(data)
+    )
+    eth_source <- c("Mixed_pct", "Asian_pct", "Black_pct", other_eth_col[1])
+    if (all(!is.na(eth_source)) && all(eth_source %in% names(data))) {
+      data[["ethnic_minority_pct"]] <- rowSums(data[eth_source], na.rm = FALSE)
+    }
+  }
+  
+  no_car_col <- intersect(
+    c("cars_none_pct", "no_cars_pct", "cars_zero_pct"),
+    names(data)
+  )
+  if (!"no_car_households_pct" %in% names(data) && length(no_car_col) > 0) {
+    data[["no_car_households_pct"]] <- data[[no_car_col[1]]]
+  }
+  
+  if (!"two_plus_car_households_pct" %in% names(data) &&
+      "cars_twoPlus_pct" %in% names(data)) {
+    data[["two_plus_car_households_pct"]] <- data[["cars_twoPlus_pct"]]
+  }
+  
+  if (!"car_commute_pct" %in% names(data) &&
+      all(c("Drive_Car_pct", "Passenger_Car_pct") %in% names(data))) {
+    data[["car_commute_pct"]] <-
+      data[["Drive_Car_pct"]] + data[["Passenger_Car_pct"]]
+  }
+  
+  public_transport_cols <- c(
+    "Underground_train_tram_pct", "Train_pct", "bus_Coach_pct", "Taxi_pct"
+  )
+  if (!"public_transport_to_work_pct" %in% names(data) &&
+      all(public_transport_cols %in% names(data))) {
+    data[["public_transport_to_work_pct"]] <-
+      rowSums(data[public_transport_cols], na.rm = FALSE)
+  }
+  
+  if (!"active_travel_to_work_pct" %in% names(data) &&
+      all(c("Walk_pct", "Bicycle_pct") %in% names(data))) {
+    data[["active_travel_to_work_pct"]] <-
+      data[["Walk_pct"]] + data[["Bicycle_pct"]]
+  }
+  
+  if (!"work_from_home_pct" %in% names(data) &&
+      "workAthome_pct" %in% names(data)) {
+    data[["work_from_home_pct"]] <- data[["workAthome_pct"]]
+  }
+  
+  if (!"children_0_19_pct" %in% names(data) &&
+      all(c("X4under_pct", "X5to19_pct") %in% names(data))) {
+    data[["children_0_19_pct"]] <- data[["X4under_pct"]] + data[["X5to19_pct"]]
+  }
+  
+  if (!"young_people_5_19_pct" %in% names(data) &&
+      "X5to19_pct" %in% names(data)) {
+    data[["young_people_5_19_pct"]] <- data[["X5to19_pct"]]
+  }
+  
+  if (!"young_adults_20_34_pct" %in% names(data) &&
+      all(c("X20to24_pct", "X25to29_pct", "X30to34_pct") %in% names(data))) {
+    data[["young_adults_20_34_pct"]] <-
+      data[["X20to24_pct"]] + data[["X25to29_pct"]] + data[["X30to34_pct"]]
+  }
+  
+  if (!"working_age_20_64_pct" %in% names(data) &&
+      "X20to64_pct" %in% names(data)) {
+    data[["working_age_20_64_pct"]] <- data[["X20to64_pct"]]
+  }
+  
+  if (!"older_65plus_pct" %in% names(data) &&
+      "X65plus_pct" %in% names(data)) {
+    data[["older_65plus_pct"]] <- data[["X65plus_pct"]]
+  }
+  
+  data
+}
+
 add_log_vars <- function(data) {
   for (v in log_transform_s1) {
     if (v %in% names(data))
@@ -218,7 +308,11 @@ add_log_vars <- function(data) {
   data
 }
 
-matched_full <- add_log_vars(matched_full)
+matched_full <- matched_full %>%
+  add_grouped_stage1_vars() %>%
+  add_log_vars()
+matched_treated <- add_grouped_stage1_vars(matched_treated)
+matched_controls <- add_grouped_stage1_vars(matched_controls)
 
 required_stage2_diag_vars <- c(stage2_trends, paste0("log1p_", stage2_levels))
 missing_stage2_diag_vars <- setdiff(required_stage2_diag_vars, names(matched_full))
@@ -243,6 +337,7 @@ unmatched_pool <- full_data %>%
     !(control_group2_OA == 1 & zero_injury_OA == 1)
   ) %>%
   mutate(treat_indicator = as.integer(treated_OA == 1)) %>%
+  add_grouped_stage1_vars() %>%
   add_log_vars()
 
 missing_stage2_unmatched_vars <- setdiff(required_stage2_diag_vars, names(unmatched_pool))
@@ -524,7 +619,8 @@ cat("--- 5. Stratum characteristics ---\n")
 stratum_vars <- intersect(
   c("mean_total_pkm", "road_length_km", "road_density_m_km2",
     "pop_density", "dist_BUA_centroid", "IMD",
-    "pct_A_road", "pct_minor_road", "Drive_Car_pct", "Walk_pct"),
+    "pct_A_road", "pct_minor_road", "car_commute_pct",
+    "public_transport_to_work_pct", "active_travel_to_work_pct"),
   names(matched_full)
 )
 
@@ -627,8 +723,8 @@ trend_vars <- intersect(
   c(
     "trend_total_pkm"
     #,
-   # "recent_minus_mid_total_pkm",
-  #  "mid_minus_early_total_pkm"
+    # "recent_minus_mid_total_pkm",
+    #  "mid_minus_early_total_pkm"
   ),
   names(matched_full)
 )
@@ -650,7 +746,7 @@ if (length(trend_vars) > 0) {
     scale_colour_manual(values = c("Treated" = COL_TREATED, "Control" = COL_CONTROL)) +
     labs(
       title    = "Pre-treatment trend distributions: treated vs matched controls",
-        x = "Pre-treatment trend value", y = "Density",
+      x = "Pre-treatment trend value", y = "Density",
       fill = NULL, colour = NULL
     ) +
     theme_diag() +
@@ -990,6 +1086,7 @@ full_heatmap <- smd_all_schemes %>%
         variable %in% paste0("log_", log_nozero_s1) |
         variable %in% c("pct_A_road", "pct_B_road", "pct_minor_road") ~ "Road network",
       variable %in% c("log1p_dist_BUA_centroid", "log1p_pop_density",
+                      "log_area_km2",
                       "log1p_business_retail_per_km2") ~ "Urban form",
       TRUE ~ "Sociodemographic"
     ),
@@ -1102,5 +1199,3 @@ print(scheme_summary)
 
 # Total pairs
 pairs_pooled %>% count(scheme)
-
-

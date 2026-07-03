@@ -1,5 +1,5 @@
-baseline_injury_stratum,n,mean_total_pkm_mean,mean_total_pkm_sd,road_length_km_mean,road_length_km_sd,road_density_m_km2_mean,road_density_m_km2_sd,pop_density_mean,pop_density_sd,dist_BUA_centroid_mean,dist_BUA_centroid_sd,IMD_mean,IMD_sd,pct_A_road_mean,pct_A_road_sd,pct_minor_road_mean,pct_minor_road_sd,Drive_Car_pct_mean,Drive_Car_pct_sd,Walk_pct_mean,Walk_pct_sd
-1,150,0.1,0.086,0.999,0.827,22731.006,10254.038,11248.639,8140.969,2195.08,1279.885,38.891,19.011,7.366,13.388,88.907,16.364,38.023,12.016,27.843,11.37
-2,148,0.284,0.162,1.2,1.288,21716.512,9186.248,11466.196,10571.224,2105.83,1178.194,38.447,17.277,12.959,17.078,82.109,19.743,36.106,14.245,29.661,13.691
-3,144,0.489,0.241,1.474,1.524,22100.257,8169.044,10315.613,9723.754,1803.156,1054.494,42.685,17.837,15.984,18.032,79.366,19.44,33.473,12.72,31.503,13.003
-4,149,1.049,0.713,1.319,1.405,21511.996,9270.694,11727.184,12358.608,1666.483,942.346,42.623,18.537,20.047,21.07,74.39,22.684,32.765,12.325,31.921,13.009
+baseline_injury_stratum,n,mean_total_pkm_mean,mean_total_pkm_sd,road_length_km_mean,road_length_km_sd,road_density_m_km2_mean,road_density_m_km2_sd,pop_density_mean,pop_density_sd,dist_BUA_centroid_mean,dist_BUA_centroid_sd,IMD_mean,IMD_sd,pct_A_road_mean,pct_A_road_sd,pct_minor_road_mean,pct_minor_road_sd,car_commute_pct_mean,car_commute_pct_sd,public_transport_to_work_pct_mean,public_transport_to_work_pct_sd,active_travel_to_work_pct_mean,active_travel_to_work_pct_sd
+1,150,0.1,0.086,0.999,0.827,22731.006,10254.038,11248.639,8140.969,2195.08,1279.885,38.891,19.011,7.366,13.388,88.907,16.364,43.881,14.412,20.414,8.646,30.432,12.463
+2,148,0.284,0.162,1.2,1.288,21716.512,9186.248,11466.196,10571.224,2105.83,1178.194,38.447,17.277,12.959,17.078,82.109,19.743,41.614,16.144,20.786,7.386,32.152,14.754
+3,144,0.489,0.241,1.474,1.524,22100.257,8169.044,10315.613,9723.754,1803.156,1054.494,42.685,17.837,15.984,18.032,79.366,19.44,39.215,14.868,21.996,7.307,33.52,13.575
+4,149,1.049,0.713,1.319,1.405,21511.996,9270.694,11727.184,12358.608,1666.483,942.346,42.623,18.537,20.047,21.07,74.39,22.684,38.127,15.396,22.52,7.533,34.085,13.936

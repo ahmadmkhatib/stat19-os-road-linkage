@@ -1,31 +1,23 @@
 variable,label,smd_before,smd_after,balanced
-log1p_road_length_km,Road length (log),-0.2644,0.0293,TRUE
-log1p_pop_density,Pop. density (log),0.6694,0.1904,FALSE
-log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8803,-0.3776,FALSE
-log1p_road_density_m_km2,Road density (log),0.6132,0.2484,FALSE
-log1p_business_retail_per_km2,Retail density (log),1.5501,0.5099,FALSE
-log_area_km2,Area (log),-0.6199,-0.1749,FALSE
-pct_A_road,% A road,0.3251,0.0434,TRUE
-pct_B_road,% B road,0.1039,0.0546,TRUE
-pct_minor_road,% Minor road,-0.3418,-0.0453,TRUE
-IMD,IMD,0.701,0.3667,FALSE
-cars_none_pct,% No car,1.2938,0.3804,FALSE
-cars_one_pct,% 1 car,-0.4998,-0.1742,FALSE
-cars_twoPlus_pct,% 2+ cars,-1.2799,-0.2936,FALSE
-Drive_Car_pct,% Drive to work,-1.5081,-0.309,FALSE
-Passenger_Car_pct,% Passenger car,-0.1909,-0.0383,TRUE
-Walk_pct,% Walk to work,1.5023,0.2615,FALSE
-Bicycle_pct,% Cycle to work,-0.296,-0.1869,FALSE
-bus_Coach_pct,% Bus/coach,0.2406,0.0312,TRUE
-Train_pct,% Train,0.5463,0.2851,FALSE
-Underground_train_tram_pct,% Underground/tram,0.2997,0.0263,TRUE
-Taxi_pct,% Taxi,0.3827,0.252,FALSE
-workAthome_pct,% Work from home,-0.0204,0.166,FALSE
-Motorcycle_pct,% Motorcycle,-0.5469,-0.2684,FALSE
-Other_pct,% Other commute,0.3511,0.2762,FALSE
-White_pct,% White,-1.2651,-0.7408,FALSE
-Mixed_pct,% Mixed ethnicity,0.3812,0.0652,TRUE
-Asian_pct,% Asian,1.0036,0.661,FALSE
-Black_pct,% Black,0.4695,0.2086,FALSE
-Other_ethnicity_pct,% Other ethnicity,0.7501,0.3085,FALSE
-X85plus_pct,% 85+,-0.5949,-0.2332,FALSE
+log1p_road_length_km,Road length (log),-0.2644,0.1008,FALSE
+log1p_pop_density,Pop. density (log),0.6694,0.1664,FALSE
+log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8803,-0.3197,FALSE
+log1p_road_density_m_km2,Road density (log),0.6132,0.2983,FALSE
+log1p_business_retail_per_km2,Retail density (log),1.5501,0.5606,FALSE
+log_area_km2,Area (log),-0.6199,-0.1288,FALSE
+pct_A_road,% A road,0.3251,0.0674,TRUE
+pct_B_road,% B road,0.1039,0.044,TRUE
+pct_minor_road,% Minor road,-0.3418,-0.0687,TRUE
+IMD,IMD,0.701,0.3488,FALSE
+ethnic_minority_pct,% Ethnic minority,1.2651,0.7106,FALSE
+no_car_households_pct,% No car household,1.2938,0.3942,FALSE
+two_plus_car_households_pct,% 2+ car household,-1.2799,-0.35,FALSE
+car_commute_pct,% Car commute,-1.4305,-0.3524,FALSE
+public_transport_to_work_pct,% Public/paid transport to work,0.6949,0.2876,FALSE
+active_travel_to_work_pct,% Active travel to work,1.2808,0.2259,FALSE
+work_from_home_pct,% Work from home,-0.0204,0.181,FALSE
+children_0_19_pct,% Aged 0-19,0.0777,0.053,TRUE
+young_people_5_19_pct,% Aged 5-19,0.1079,0.0635,TRUE
+young_adults_20_34_pct,% Aged 20-34,0.9986,0.3481,FALSE
+working_age_20_64_pct,% Aged 20-64,0.6502,0.1754,FALSE
+older_65plus_pct,% Aged 65+,-1.0151,-0.39,FALSE

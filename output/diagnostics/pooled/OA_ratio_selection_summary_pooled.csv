@@ -1,8 +1,8 @@
 scheme,n_treated,n_controls,selected_ratio,total_trend_smd,max_trend_smd,mean_smd,n_unique_controls,unique_controls_per_treated,max_reuse,mean_reuse,passes_selection_rules
-Bath,45,45,1,0.0011,0.0011,0.0013,45,1,1,1,TRUE
-Birmingham,120,213,1,0.0025,0.0025,0.004,114,0.95,2,1.053,FALSE
-Bradford,258,456,1,0.0013,0.0013,2e-4,235,0.911,15,1.098,FALSE
-Bristol,47,84,2,0.0037,0.0037,0.0014,84,1.787,3,1.119,TRUE
-Newcastle,27,220,9,0,0,5e-4,220,8.148,3,1.105,TRUE
-Portsmouth,55,189,4,4e-4,4e-4,0.0011,189,3.436,3,1.164,TRUE
-Sheffield,39,70,1,0.0018,0.0018,0.0024,36,0.923,4,1.083,FALSE
+Bath,45,45,1,0.0014,0.0014,8e-4,45,1,1,1,TRUE
+Birmingham,120,225,1,7e-4,7e-4,0.0035,116,0.967,2,1.034,FALSE
+Bradford,258,469,1,8e-4,8e-4,3e-4,240,0.93,15,1.075,FALSE
+Bristol,47,130,3,0.0048,0.0048,0.0012,130,2.766,3,1.085,TRUE
+Newcastle,27,107,4,7e-4,7e-4,4e-4,107,3.963,2,1.009,TRUE
+Portsmouth,55,251,5,8e-4,8e-4,5e-4,251,4.564,3,1.096,TRUE
+Sheffield,39,69,1,0,0,0.0018,35,0.897,4,1.114,FALSE

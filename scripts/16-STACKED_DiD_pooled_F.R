@@ -91,35 +91,26 @@ extract_event_study <- function(model, var_prefix) {
     arrange(event_time)
 }
 
-extract_scheme_effects <- function(model) {
+extract_scheme_effects <- function(model, var_prefix = "scheme_post") {
   ct <- coeftable(model)
-  
   tibble(
     term             = rownames(ct),
     estimate_log_irr = ct[, "Estimate"],
     se               = ct[, "Std. Error"],
     p_value          = ct[, "Pr(>|z|)"]
   ) %>%
-    filter(str_detect(term, "^scheme_post::")) %>%
-    mutate(
-      scheme = str_remove(term, "scheme_post::")
-    ) %>%
+    filter(str_detect(term, paste0("^", var_prefix, "::"))) %>%
+    mutate(scheme = str_remove(term, paste0("^", var_prefix, "::"))) %>%
     add_irr_columns("estimate_log_irr", "se") %>%
-    mutate(
-      sig = case_when(
-        p_value < 0.001 ~ "***",
-        p_value < 0.01  ~ "**",
-        p_value < 0.05  ~ "*",
-        p_value < 0.10  ~ ".",
-        TRUE            ~ ""
-      )
-    ) %>%
-    select(
-      scheme, estimate_log_irr, se, irr, irr_lo, irr_hi,
-      pct_change, pct_lo, pct_hi, p_value, sig
-    ) %>%
+    mutate(sig = case_when(
+      p_value < 0.001 ~ "***", p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*", p_value < 0.10 ~ ".", TRUE ~ ""
+    )) %>%
+    select(scheme, estimate_log_irr, se, irr, irr_lo, irr_hi,
+           pct_change, pct_lo, pct_hi, p_value, sig) %>%
     arrange(pct_change)
 }
+
 
 plot_event_study <- function(df, title, subtitle, ylab, colour = "#E74C3C") {
   ggplot(df, aes(x = event_time, y = estimate)) +
@@ -139,6 +130,8 @@ plot_event_study <- function(df, title, subtitle, ylab, colour = "#E74C3C") {
     theme(panel.grid.minor = element_blank())
 }
 
+
+###### 
 make_clean_reference <- function(stacked_data) {
   # If the conventional year-reference period (-4:-1) overlaps COVID/recovery,
   # use the common pre-COVID year 2019 Q2-2020 Q1 as a clean reference instead.
@@ -352,6 +345,17 @@ stacked <- stacked %>%
     scheme_post = factor(scheme_post, levels = c("control", schemes_all))
   )
 
+
+
+stacked <- make_clean_reference(stacked)
+
+clean_reference_table <- stacked %>%
+  filter(clean_ref_year) %>%
+  distinct(stack_scheme, quarter_year, event_time, covid_period) %>%
+  arrange(stack_scheme, quarter_year)
+
+
+
 # =============================================================================
 # SECTION 1 - MAIN ANALYSIS
 # =============================================================================
@@ -398,6 +402,13 @@ p_model1 <- ggplot(model1_results, aes(x = pct_change, y = model)) +
 
 ggsave(file.path(outdir, "01_main_pooled_average_effect.png"),
        p_model1, width = 9, height = 4.5, dpi = 300)
+
+
+
+# Best-available Model 1: flexible scheme x treatment COVID control (already have)
+# + clean pre-COVID reference for the "pre" comparison
+# + explicit reporting alongside the scheme-decomposed Model 3, not as a substitute for it
+
 
 # -----------------------------------------------------------------------------
 # Main Model 2: pooled dynamic event study, year-reference model
@@ -472,6 +483,198 @@ p_model3 <- ggplot(
 ggsave(file.path(outdir, "03_main_scheme_average_effects.png"),
        p_model3, width = 9, height = 6, dpi = 300)
 
+
+# ==============================================================================
+# MODEL 3 (REVISED): scheme-specific average effects
+# Fixes vs. original: (1) comparison anchored to clean pre-COVID reference period
+# only, not an unweighted pool of the entire non-stationary pre-period + controls;
+# (2) common fixed post-treatment window (0-5 quarters) so all 7 schemes are
+# compared on equal footing (per post_event_scheme_counts, all 7 are present
+# through event_time 5).
+# ==============================================================================
+
+COMMON_POST_MAX <- 5
+
+stacked_m3 <- stacked %>%
+  filter(clean_ref_year | (event_time >= 0 & event_time <= COMMON_POST_MAX)) %>%
+  mutate(
+    post_common        = as.integer(treat_group == 1 &
+                                      event_time >= 0 & event_time <= COMMON_POST_MAX),
+    scheme_post_common  = if_else(post_common == 1, as.character(stack_scheme), "control"),
+    scheme_post_common  = factor(scheme_post_common, levels = c("control", schemes_all))
+  )
+
+m3_scheme_average_clean <- feglm(
+  outcome_raw ~
+    i(scheme_post_common, ref = "control") +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack +
+    stack_scheme[qtr_int],
+  data    = stacked_m3,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model3_clean_results <- extract_scheme_effects(m3_scheme_average_clean, "scheme_post_common")
+print(model3_clean_results, n = Inf)
+
+
+cat("\nModel 3 (revised): scheme-specific effects, common 0-", COMMON_POST_MAX,
+    "Q post window, clean pre-COVID reference\n", sep = "")
+etable(m3_scheme_average_clean)
+print(model3_clean_results, n = Inf)
+
+# -----------------------------------------------------------------------------
+# Direct before/after comparison, to document the correction 
+# -----------------------------------------------------------------------------
+model3_comparison <- bind_rows(
+  model3_results %>% mutate(spec = "Original: unbalanced window, uncleaned reference"),
+  model3_clean_results %>% mutate(spec = paste0("Revised: common 0-", COMMON_POST_MAX,
+                                                "Q window, clean reference"))
+) %>%
+  select(spec, scheme, pct_change, pct_lo, pct_hi, p_value, sig) %>%
+  arrange(scheme, spec)
+
+print(model3_comparison, n = Inf)
+
+p_model3_comparison <- ggplot(
+  model3_comparison,
+  aes(x = pct_change, y = fct_reorder(scheme, pct_change), colour = spec)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2,
+                position = position_dodge(width = 0.5)) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  labs(
+    title = "Scheme-specific average effects: original vs. corrected specification",
+    subtitle = "Corrected: common post-treatment window + clean pre-COVID reference period",
+    x = "% change in injuries", y = NULL, colour = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(outdir, "03b_model3_original_vs_clean_comparison.png"),
+       p_model3_comparison, width = 10, height = 6, dpi = 300)
+
+write_csv(model3_clean_results, file.path(outdir, "model3_revised_clean_common_window.csv"))
+write_csv(model3_comparison, file.path(outdir, "model3_original_vs_revised_comparison.csv"))
+
+
+
+#####    extend same correction to model 1
+m1_pooled_average_clean <- feglm(
+  outcome_raw ~
+    post_common +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack +
+    stack_scheme[qtr_int],
+  data    = stacked_m3,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model1_clean_results <- tibble(
+  model             = paste0("Pooled average (0-", COMMON_POST_MAX,
+                             "Q, clean reference, equal-scheme weight)"),
+  estimate_log_irr  = coef(m1_pooled_average_clean)["post_common"],
+  se                = se(m1_pooled_average_clean)["post_common"]
+) %>%
+  add_irr_columns("estimate_log_irr", "se")
+
+print(model1_clean_results)
+
+
+
+
+######      Keep all the intervening quarters in the estimation (so the trend/FE structure is identified off the full series, same as your original models), but collapse them into a neutral "other" category that doesn't enter the ref-vs-post contrast:
+
+stacked_m3c <- stacked %>%
+  mutate(
+    period_bucket = case_when(
+      clean_ref_year                                    ~ "ref_year",
+      treat_group == 1 & event_time >= 0 & event_time <= COMMON_POST_MAX ~ "post_common",
+      TRUE                                               ~ "other"
+    ),
+    scheme_post_bucket = if_else(period_bucket == "post_common",
+                                 as.character(stack_scheme), "ref_year"),
+    scheme_post_bucket = factor(scheme_post_bucket, levels = c("ref_year", schemes_all)),
+    # give "other" rows their own dummy so they're absorbed, not folded into "ref"
+    other_flag = as.integer(period_bucket == "other")
+  )
+
+m3_scheme_average_bucketed <- feglm(
+  outcome_raw ~
+    i(scheme_post_bucket, ref = "ref_year") +
+    other_flag:treat_scheme +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack + stack_scheme[qtr_int],
+  data    = stacked_m3c,        #
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model3_bucketed_results <- extract_scheme_effects(m3_scheme_average_bucketed, "scheme_post_bucket")
+print(model3_bucketed_results, n = Inf)
+
+model3_full_comparison <- bind_rows(
+  model3_results %>% mutate(spec = "1_Original"),
+  model3_clean_results %>% mutate(spec = "2_Clean ref, rows dropped"),
+  model3_bucketed_results %>% mutate(spec = "3_Clean ref, full data retained")
+) %>%
+  select(spec, scheme, pct_change, pct_lo, pct_hi, sig) %>%
+  arrange(scheme, spec)
+print(model3_full_comparison, n = Inf)
+
+model3_bucketed_results <- extract_scheme_effects(m3_scheme_average_bucketed, "scheme_post_bucket")
+print(model3_bucketed_results, n = Inf)
+
+# Direct 3-way comparison
+model3_full_comparison <- bind_rows(
+  model3_results %>% mutate(spec = "1_Original"),
+  model3_clean_results %>% mutate(spec = "2_Clean ref, rows dropped"),
+  model3_bucketed_results %>% mutate(spec = "3_Clean ref, full data retained")
+) %>%
+  select(spec, scheme, pct_change, pct_lo, pct_hi, sig) %>%
+  arrange(scheme, spec)
+print(model3_full_comparison, n = Inf)
+
+
+
+
+# Does the bucketed spec's fitted reference level differ meaningfully from
+# m2_clean_reference's implicit reference, and from the individual dummies' reference?
+# Check: what's the estimated log-rate for Bradford control & treated in EACH spec's
+# reference category, on the linear predictor scale, to see where the divergence enters.
+
+# 1. Simple sanity check: does the *manually computed* raw injury ratio in the
+#    two post-window definitions match?
+bradford_check <- stacked %>%
+  filter(stack_scheme == "Bradford") %>%
+  mutate(
+    is_ref  = clean_ref_year,
+    is_post = treat_group == 1 & event_time >= 0 & event_time <= 5
+  )
+
+bradford_check %>%
+  filter(is_ref) %>%
+  group_by(treat_group) %>%
+  summarise(mean_inj = mean(outcome_raw), n = n(), .groups = "drop")
+
+bradford_check %>%
+  filter(event_time >= 0, event_time <= 5) %>%
+  group_by(treat_group) %>%
+  summarise(mean_inj = mean(outcome_raw), n = n(), .groups = "drop")
+
+
+
+
+
 # -----------------------------------------------------------------------------
 # Main Model 4: scheme-specific dynamic event studies
 # -----------------------------------------------------------------------------
@@ -533,6 +736,17 @@ p_model4 <- ggplot(model4_results, aes(x = event_time, y = estimate)) +
 
 ggsave(file.path(outdir, "04_main_scheme_event_studies.png"),
        p_model4, width = 12, height = 10, dpi = 300)
+
+
+
+### Bradford 
+# Extend Bradford's dynamic event study to the full post-treatment window,
+# using the clean-reference specification, to see whether late post-treatment
+# quarters show a re-emerging gap that could explain Model 3's aggregate
+model4_results %>%
+  filter(scheme == "Bradford") %>%
+  arrange(event_time) %>%
+  print(n = Inf)
 
 # =============================================================================
 # SECTION 2 - SUPPORTING DIAGNOSTICS AND SENSITIVITY CHECKS
@@ -740,12 +954,7 @@ model1_sensitivity_results <- tibble(
 
 model2_quarter_ref_results <- extract_event_study(m2_quarter_ref, "event_time_f")
 
-stacked <- make_clean_reference(stacked)
 
-clean_reference_table <- stacked %>%
-  filter(clean_ref_year) %>%
-  distinct(stack_scheme, quarter_year, event_time, covid_period) %>%
-  arrange(stack_scheme, quarter_year)
 
 m2_clean_reference <- feglm(
   outcome_raw ~
@@ -763,6 +972,14 @@ model2_cleanref_results <- extract_event_study(
   m2_clean_reference,
   "event_time_ref_clean"
 )
+
+# Joint F/Wald test: are the 6 individual post-treatment coefficients
+# (event_time 0-5) jointly different from zero, even if none is individually significant?
+wald(m2_clean_reference, keep = "event_time_ref_clean::[0-5]:treat_group")
+
+# The conventional -4:-1 reference window is not a neutral default — it's a specific empirical claim ("these four quarters represent each scheme's untreated steady state"), and you've now falsified that claim for at least one scheme with a hard number: Bradford's treated/control ratio in that window is 1.30, versus 0.86 in the stable pre-COVID period — a 51% relative swing. Using a contaminated reference period doesn't add noise symmetrically; it introduces a specific, signed bias into every post-treatment coefficient for that scheme, because every event-time estimate is defined relative to that reference level. A method that anchors the reference in a period you've independently verified as stable (2019 Q2–2020 Q1, pre-COVID) is a strictly better-justified choice once you know this, not just an alternative robustness cut.
+# the clean reference isn't at a constant distance from treatment across schemes the way -4:-1 is (Bradford's clean reference sits at event_time −14 to −11, Bristol's at −4 to −1, since Bristol implemented soon after the pre-COVID window while Bradford implemented years later). That's a real tradeoff — you're trading "constant relative timing, contaminated level" for "clean level, inconsistent relative timing." Report both, lead with clean reference as primary, and note this tradeoff explicitly rather than pretending it's a strict improvement with no downside.
+
 
 post_event_scheme_counts <- stacked %>%
   filter(event_time >= 0) %>%
@@ -889,6 +1106,39 @@ p_composition <- ggplot(
 ggsave(file.path(outdir, "support_pretrend_scheme_composition.png"),
        p_composition, width = 10, height = 6, dpi = 300)
 
+
+
+
+# -----------------------------------------------------------------------------
+#. Which scheme(s) drive the pooled pretrend rejection?
+# -----------------------------------------------------------------------------
+
+pretrend_decomp <- model4_results %>%
+  filter(event_time %in% -8:-5) %>%
+  select(scheme, event_time, estimate, se) %>%
+  left_join(
+    scheme_composition %>%
+      filter(event_time %in% -8:-5) %>%
+      rename(scheme = stack_scheme),
+    by = c("scheme", "event_time")
+  ) %>%
+  mutate(
+    z = estimate / se,
+    weighted_contribution = estimate * (pct_of_bin / 100)
+  ) %>%
+  arrange(event_time, desc(abs(weighted_contribution)))
+
+cat("\nScheme-level contributions to pooled pretrend coefficients, event_time -8:-5\n")
+print(pretrend_decomp, n = Inf)
+
+# Quick visual: composition-weighted scheme contribution by event time
+ggplot(pretrend_decomp, aes(x = factor(event_time), y = weighted_contribution, fill = scheme)) +
+  geom_col(position = "stack") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Composition-weighted scheme contributions to pooled pretrend coefficients",
+       x = "Event time", y = "Composition-weighted log-IRR contribution") +
+  theme_minimal(base_size = 12)
+
 # -----------------------------------------------------------------------------
 # F. Bradford diagnostic investigation
 # -----------------------------------------------------------------------------
@@ -954,8 +1204,360 @@ reference_year_ratio <- stacked %>%
   mutate(control_to_treated_ratio = group_0 / group_1) %>%
   arrange(desc(control_to_treated_ratio))
 
+
+# -----------------------------------------------------------------------------
+#  Bradford controls : where do controls actually come from?
+# -----------------------------------------------------------------------------
+# whether any OA appears as BOTH treated and control within Bradford
+#    (would indicate treated/control roads sitting in the same small area)
+bradford_oa_overlap <- bradford_stack %>%
+  distinct(OA, treat_group) %>%
+  count(OA, treat_group) %>%
+  pivot_wider(names_from = treat_group, values_from = n, values_fill = 0,
+              names_prefix = "treat_")
+
+bradford_oa_overlap %>%
+  mutate(status = case_when(
+    treat_1 > 0 & treat_0 > 0 ~ "BOTH treated and control in same OA",
+    treat_1 > 0 ~ "treated only",
+    TRUE ~ "control only"
+  )) %>%
+  count(status)
+control_reuse <- stacked %>%
+  filter(treat_group == 0) %>%
+  distinct(identifier, stack_scheme) %>%
+  count(identifier, name = "n_schemes_as_control")
+
+cat("\nHow many control links are reused across multiple scheme stacks:\n")
+print(count(control_reuse, n_schemes_as_control))
+
+bradford_shared <- stacked %>%
+  filter(stack_scheme == "Bradford", treat_group == 0,
+         identifier %in% control_reuse$identifier[control_reuse$n_schemes_as_control > 1]) %>%
+  distinct(identifier) %>% nrow()
+cat("\nBradford control links also used as controls elsewhere:", bradford_shared, "\n")
+
+# 6. Leverage check: is the -5/-6 spike coming from a handful of high-injury control links?
+bradford_control_leverage <- bradford_stack %>%
+  filter(treat_group == 0, event_time < 0) %>%
+  group_by(identifier) %>%
+  summarise(total_pre_injuries = sum(outcome_raw), .groups = "drop") %>%
+  arrange(desc(total_pre_injuries)) %>%
+  mutate(cum_share = cumsum(total_pre_injuries) / sum(total_pre_injuries))
+
+cat("\nTop 10 Bradford control links by pre-period injuries:\n")
+print(head(bradford_control_leverage, 10))
+cat("Share of all Bradford control pre-period injuries from top 10 links: ",
+    round(100 * bradford_control_leverage$cum_share[10], 1), "%\n", sep = "")
+
+# 7. Robustness: drop the top-leverage control links and re-run Bradford's event study
+top_leverage_ids <- head(bradford_control_leverage$identifier, 10)
+
+bradford_trimmed <- bradford_stack %>%
+  filter(!(treat_group == 0 & identifier %in% top_leverage_ids)) %>%
+  droplevels()
+
+m_bradford_trimmed <- feglm(
+  outcome_raw ~
+    i(event_time_ref, treat_group, ref = "ref_year") +
+    i(covid_period, treat_group, ref = "non_pandemic") |
+    uid_stack + qtr_int,
+  data = bradford_trimmed, family = "poisson",
+  cluster = ~OA, weights = ~analysis_weight, lean = TRUE
+)
+
+cat("\nBradford event study excluding top-10-leverage control links:\n")
+extract_event_study(m_bradford_trimmed, "event_time_ref") %>%
+  filter(event_time >= -8, event_time <= 8) %>%
+  print(n = Inf)
+
+# 8. Finer COVID control: continuous ramp instead of 3-level factor,
+#    to test whether the -6/-7 spike is a residual differential-recovery artifact
+bradford_stack_ramp <- bradford_stack %>%
+  mutate(
+    qtrs_since_lockdown_start = pmax(0, qtr_int -
+                                       (as.integer(round((as.numeric(as.yearqtr("2020 Q2")) - min_qtr) * 4)) + 1L)),
+    recovery_ramp = if_else(covid_period != "non_pandemic", qtrs_since_lockdown_start, 0)
+  )
+
+m_bradford_ramp <- feglm(
+  outcome_raw ~
+    i(event_time_ref, treat_group, ref = "ref_year") +
+    treat_group:recovery_ramp |
+    uid_stack + qtr_int,
+  data = bradford_stack_ramp, family = "poisson",
+  cluster = ~OA, weights = ~analysis_weight, lean = TRUE
+)
+
+cat("\nBradford event study with continuous COVID-recovery ramp control:\n")
+extract_event_study(m_bradford_ramp, "event_time_ref") %>%
+  filter(event_time >= -8, event_time <= 8) %>%
+  print(n = Inf)
+
+
+
+
+
+# Rebuild Bradford's scheme-specific event study using the CLEAN reference
+# (to match the Model 3 spec you're trying to reconcile), then run the joint
+# post-treatment Wald test within Bradford alone.
+
+bradford_stack_clean <- stacked %>%
+  filter(stack_scheme == "Bradford") %>%
+  droplevels()
+
+m_bradford_event_clean <- feglm(
+  outcome_raw ~
+    i(event_time_ref_clean, treat_group, ref = "ref_year") +
+    i(covid_period, treat_group, ref = "non_pandemic") |
+    uid_stack + qtr_int,
+  data    = bradford_stack_clean,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+cat("\nBradford event study, clean pre-COVID reference:\n")
+extract_event_study(m_bradford_event_clean, "event_time_ref_clean") %>%
+  filter(event_time >= 0, event_time <= 8) %>%
+  print(n = Inf)
+
+# The joint test that actually matches Model 3's claim
+wald(m_bradford_event_clean, keep = "event_time_ref_clean::[0-5]:treat_group")
+
+
+
 write_csv(bradford_period_summary,
           file.path(outdir, "support_bradford_period_summary.csv"))
+# -----------------------------------------------------------------------------
+# 9. Pinpoint exactly which calendar quarter drives the -5/-6 divergence
+#    (fully saturated quarter x treatment, no event-time binning, no linear trend)
+# -----------------------------------------------------------------------------
+
+bradford_saturated <- bradford_stack %>%
+  filter(quarter_year >= as.yearqtr("2020 Q1"), quarter_year <= as.yearqtr("2022 Q4")) %>%
+  mutate(qtr_f = factor(quarter_year))
+
+m_bradford_saturated <- feglm(
+  outcome_raw ~ i(qtr_f, treat_group, ref = as.character(as.yearqtr("2022 Q3"))) |
+    uid_stack,
+  data = bradford_saturated, family = "poisson",
+  cluster = ~OA, weights = ~analysis_weight, lean = TRUE
+)
+
+cat("\nBradford: fully saturated calendar-quarter x treatment (no trend, no COVID dummy)\n")
+etable(m_bradford_saturated)
+# Look specifically at 2021 Q2 and 2021 Q3 (= event_time -6, -5) --
+# if the coefficient is concentrated in exactly one quarter rather than ramping
+# smoothly, that points to a discrete event/anticipation shock rather than a
+# recovery-trajectory confound.
+
+# -----------------------------------------------------------------------------
+# 10. Leverage check restricted specifically to event_time -5 and -6
+#     (the earlier check pooled ALL pre-period injuries, diluting a concentrated spike)
+# -----------------------------------------------------------------------------
+
+bradford_spike_leverage <- bradford_stack %>%
+  filter(event_time %in% c(-6, -5)) %>%
+  group_by(identifier, treat_group) %>%
+  summarise(spike_injuries = sum(outcome_raw), n_obs = n(), .groups = "drop") %>%
+  arrange(desc(spike_injuries))
+
+cat("\nTop control AND treated links driving the -5/-6 window specifically:\n")
+print(head(bradford_spike_leverage, 15))
+
+# Compare: is the -5/-6 rise concentrated in a few links, or diffuse across many?
+bradford_spike_leverage %>%
+  filter(treat_group == 0) %>%
+  mutate(cum_share = cumsum(spike_injuries) / sum(spike_injuries)) %>%
+  slice_head(n = 10)
+
+# -----------------------------------------------------------------------------
+# 11. Anticipation check: was Bradford's CAZ start date announced/delayed
+#     well before caz_start_q? Test whether treated roads diverge from an
+#     EARLIER hypothetical "announcement" cutoff, not just the go-live date.
+#     (fill in the actual announcement date once confirmed)
+# -----------------------------------------------------------------------------
+
+bradford_announce_test <- bradford_stack %>%
+  mutate(
+    # placeholder - replace with actual publicly announced/confirmed start date
+    announce_q = as.yearqtr("2021 Q3"),
+    post_announce = as.integer(treat_group == 1 & quarter_year >= announce_q)
+  )
+
+m_bradford_announce <- feglm(
+  outcome_raw ~ post_announce + post_stack |
+    uid_stack + qtr_int,
+  data = bradford_announce_test, family = "poisson",
+  cluster = ~OA, weights = ~analysis_weight, lean = TRUE
+)
+etable(m_bradford_announce)
+# If post_announce absorbs a chunk of what was previously loading onto the
+# -5/-6 pretrend coefficients, that's evidence of genuine anticipation
+# rather than a COVID artifact, and argues for redefining "treatment start"
+# using the announcement date rather than go-live for Bradford (and possibly
+# other delayed schemes).
+
+# -----------------------------------------------------------------------------
+# 12. Same diagnostic run scheme-by-scheme, since the composition chart shows
+#     Newcastle and Birmingham also drive large -6/-5 contributions
+# -----------------------------------------------------------------------------
+
+run_saturated_check <- function(sc, lo_q = "2020 Q1", hi_q = "2022 Q4", ref_q = NULL) {
+  d <- stacked %>%
+    filter(
+      stack_scheme == sc,
+      quarter_year >= as.yearqtr(lo_q),
+      quarter_year <= as.yearqtr(hi_q)
+    ) %>%
+    mutate(qtr_chr = as.character(quarter_year))
+  
+  ref <- if (is.null(ref_q)) {
+    sort(unique(d$qtr_chr))[1]
+  } else {
+    as.character(as.yearqtr(ref_q))
+  }
+  
+  if (!ref %in% d$qtr_chr) {
+    stop(
+      "Reference quarter ", ref, " is not present for scheme ", sc,
+      ". Available quarters: ", paste(sort(unique(d$qtr_chr)), collapse = ", ")
+    )
+  }
+  
+  d <- d %>%
+    mutate(
+      qtr_f_ref = if_else(qtr_chr == ref, "REF_QTR", qtr_chr),
+      qtr_f_ref = factor(
+        qtr_f_ref,
+        levels = c("REF_QTR", sort(setdiff(unique(qtr_chr), ref)))
+      )
+    )
+  
+  feglm(
+    outcome_raw ~ i(qtr_f_ref, treat_group, ref = "REF_QTR") | uid_stack,
+    data = d,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = TRUE
+  )
+}
+
+for (sc in c("Bradford", "Newcastle", "Birmingham")) {
+  cat("\n===", sc, "===\n")
+  print(etable(run_saturated_check(sc)))
+}
+
+
+# -----------------------------------------------------------------------------
+# Decompose: is the -6/-5 divergence driven by treated levels rising,
+# or control levels falling?
+# -----------------------------------------------------------------------------
+
+bradford_quarterly_means <- bradford_stack %>%
+  filter(quarter_year >= as.yearqtr("2019 Q1"), quarter_year <= as.yearqtr("2022 Q4")) %>%
+  group_by(quarter_year, treat_group) %>%
+  summarise(
+    mean_injury = mean(outcome_raw),
+    n_links     = n_distinct(identifier),
+    total_injury = sum(outcome_raw),
+    .groups = "drop"
+  ) %>%
+  mutate(group = if_else(treat_group == 1, "Treated", "Control"))
+
+# Index each series to its own 2019 average, so you can see relative movement
+bradford_indexed_series <- bradford_quarterly_means %>%
+  group_by(group) %>%
+  mutate(
+    base = mean(mean_injury[quarter_year >= as.yearqtr("2019 Q1") &
+                              quarter_year <= as.yearqtr("2019 Q4")]),
+    index = 100 * mean_injury / base
+  ) %>%
+  ungroup()
+
+ggplot(bradford_indexed_series, aes(x = as.Date(quarter_year), y = index, colour = group)) +
+  geom_vline(xintercept = as.Date(as.yearqtr("2021 Q2")), linetype = "dotted") +
+  geom_vline(xintercept = as.Date(as.yearqtr("2021 Q3")), linetype = "dotted") +
+  geom_vline(xintercept = as.Date(as.yearqtr("2022 Q4")), linetype = "dashed") +
+  geom_line(linewidth = 0.9) +
+  labs(title = "Bradford: treated vs. control, indexed to 2019 average",
+       subtitle = "Dotted = event times -6/-5 (2021 Q2/Q3); dashed = actual CAZ start",
+       x = NULL, y = "Index (2019 = 100)") +
+  theme_minimal(base_size = 12)
+
+# Quarter-on-quarter change for each series, to see which one moves first/more
+bradford_qoq <- bradford_quarterly_means %>%
+  arrange(group, quarter_year) %>%
+  group_by(group) %>%
+  mutate(qoq_change = mean_injury - lag(mean_injury)) %>%
+  ungroup() %>%
+  filter(quarter_year >= as.yearqtr("2021 Q1"), quarter_year <= as.yearqtr("2021 Q4"))
+
+print(bradford_qoq, n = Inf)
+
+
+
+###   treated roads recovered from COVID unusually sharply in 2021, 
+# peaked around Q3, and then partially reverted. 
+# That maps precisely onto the event-time coefficients: −6/−5 (2021 Q2/Q3) are the peak of the overshoot 
+#and are strongly positive; by event_time 0 (2022 Q4) the series have mostly reconverged
+
+
+### the recovery probleme 
+
+
+
+plot_indexed_recovery <- function(sc, base_start = "2019 Q1", base_end = "2019 Q4") {
+  d <- stacked %>%
+    filter(stack_scheme == sc,
+           quarter_year >= as.yearqtr("2019 Q1"), quarter_year <= as.yearqtr("2022 Q4")) %>%
+    group_by(quarter_year, treat_group) %>%
+    summarise(mean_injury = mean(outcome_raw), .groups = "drop") %>%
+    mutate(group = if_else(treat_group == 1, "Treated", "Control")) %>%
+    group_by(group) %>%
+    mutate(
+      base = mean(mean_injury[quarter_year >= as.yearqtr(base_start) &
+                                quarter_year <= as.yearqtr(base_end)]),
+      index = 100 * mean_injury / base
+    ) %>%
+    ungroup()
+  
+  ggplot(d, aes(x = as.Date(quarter_year), y = index, colour = group)) +
+    geom_line(linewidth = 0.9) +
+    labs(title = paste(sc, ": treated vs. control, indexed to 2019 average"),
+         x = NULL, y = "Index (2019 = 100)") +
+    theme_minimal(base_size = 12)
+}
+
+
+plot_indexed_recovery("Newcastle")
+plot_indexed_recovery("Birmingham")
+
+
+
+###   how much of the reference-period inflation is left by event_time −4 to −1
+
+bradford_ref_vs_precovid <- bradford_stack %>%
+  mutate(period = case_when(
+    quarter_year >= as.yearqtr("2019 Q1") & quarter_year <= as.yearqtr("2019 Q4") ~ "pre-COVID baseline",
+    event_time >= -4 & event_time <= -1 ~ "reference window",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(period)) %>%
+  group_by(period, treat_group) %>%
+  summarise(mean_injury = mean(outcome_raw), .groups = "drop") %>%
+  pivot_wider(names_from = treat_group, values_from = mean_injury, names_prefix = "grp_") %>%
+  mutate(treat_control_ratio = grp_1 / grp_0)
+
+print(bradford_ref_vs_precovid)
+
+
+
+
+
 write_csv(bradford_indexed,
           file.path(outdir, "support_bradford_indexed_pre_post.csv"))
 write_csv(same_scheme_overlap,
@@ -965,20 +1567,14 @@ write_csv(control_post_pre_index,
 write_csv(reference_year_ratio,
           file.path(outdir, "support_reference_year_control_treated_ratio.csv"))
 
-# =============================================================================
-# SAVE MAIN OUTPUTS
-# =============================================================================
+
 
 write_csv(model1_results, file.path(outdir, "model1_main_pooled_average_effect.csv"))
 write_csv(model2_results, file.path(outdir, "model2_main_pooled_yearref_event_study.csv"))
 write_csv(model3_results, file.path(outdir, "model3_main_scheme_average_effects.csv"))
 write_csv(model4_results, file.path(outdir, "model4_main_scheme_event_studies.csv"))
 
-# =============================================================================
-# CONSOLE REPORT
-# =============================================================================
-# This section prints the main outputs and key supporting diagnostics so the
-# console log can be copied into a follow-up review.
+
 
 cat("\n\n")
 cat("###############################################################################\n")
@@ -1147,3 +1743,116 @@ saveRDS(
 )
 
 cat("\nReorganised analysis complete. Outputs saved to:", outdir, "\n")
+
+
+
+
+
+# ==============================================================================
+# MODEL 3 (REVISED): scheme-specific average effects
+# Fixes vs. original: (1) comparison anchored to clean pre-COVID reference period
+# only, not an unweighted pool of the entire non-stationary pre-period + controls;
+# (2) common fixed post-treatment window (0-5 quarters) so all 7 schemes are
+# compared on equal footing (per post_event_scheme_counts, all 7 are present
+# through event_time 5).
+# ==============================================================================
+
+COMMON_POST_MAX <- 5
+
+stacked_m3 <- stacked %>%
+  filter(clean_ref_year | (event_time >= 0 & event_time <= COMMON_POST_MAX)) %>%
+  mutate(
+    post_common        = as.integer(treat_group == 1 &
+                                      event_time >= 0 & event_time <= COMMON_POST_MAX),
+    scheme_post_common  = if_else(post_common == 1, as.character(stack_scheme), "control"),
+    scheme_post_common  = factor(scheme_post_common, levels = c("control", schemes_all))
+  )
+
+m3_scheme_average_clean <- feglm(
+  outcome_raw ~
+    i(scheme_post_common, ref = "control") +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack +
+    stack_scheme[qtr_int],
+  data    = stacked_m3,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model3_clean_results <- extract_scheme_effects(m3_scheme_average_clean, "scheme_post_common")
+
+cat("\nModel 3 (revised): scheme-specific effects, common 0-", COMMON_POST_MAX,
+    "Q post window, clean pre-COVID reference\n", sep = "")
+etable(m3_scheme_average_clean)
+print(model3_clean_results, n = Inf)
+
+# -----------------------------------------------------------------------------
+# Direct before/after comparison, to document the correction in your report
+# -----------------------------------------------------------------------------
+model3_comparison <- bind_rows(
+  model3_results %>% mutate(spec = "Original: unbalanced window, uncleaned reference"),
+  model3_clean_results %>% mutate(spec = paste0("Revised: common 0-", COMMON_POST_MAX,
+                                                "Q window, clean reference"))
+) %>%
+  select(spec, scheme, pct_change, pct_lo, pct_hi, p_value, sig) %>%
+  arrange(scheme, spec)
+
+print(model3_comparison, n = Inf)
+
+p_model3_comparison <- ggplot(
+  model3_comparison,
+  aes(x = pct_change, y = fct_reorder(scheme, pct_change), colour = spec)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2,
+                position = position_dodge(width = 0.5)) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  labs(
+    title = "Scheme-specific average effects: original vs. corrected specification",
+    subtitle = "Corrected: common post-treatment window + clean pre-COVID reference period",
+    x = "% change in injuries", y = NULL, colour = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(outdir, "03b_model3_original_vs_clean_comparison.png"),
+       p_model3_comparison, width = 10, height = 6, dpi = 300)
+
+
+
+
+
+
+
+m1_pooled_average_clean <- feglm(
+  outcome_raw ~
+    post_common +
+    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    uid_stack +
+    stack_scheme[qtr_int],
+  data    = stacked_m3,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model1_clean_results <- tibble(
+  model             = paste0("Pooled average (0-", COMMON_POST_MAX,
+                             "Q, clean reference, equal-scheme weight)"),
+  estimate_log_irr  = coef(m1_pooled_average_clean)["post_common"],
+  se                = se(m1_pooled_average_clean)["post_common"]
+) %>%
+  add_irr_columns("estimate_log_irr", "se")
+
+print(model1_clean_results)
+
+
+
+
+
+
+
+
