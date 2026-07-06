@@ -1,0 +1,12 @@
+stage,balance_group,n_variables,mean_abs_smd_before,mean_abs_smd_after,max_abs_smd_after,n_imbalanced_0_10,n_imbalanced_0_05,worst_variable,all_balanced_0_10,all_balanced_0_05
+Stage 1,Road/network covariates,9,0.5965,0.2352,0.6659,8,8,Retail density (log),FALSE,FALSE
+Stage 1,Socio-demographic covariates,13,0.832,0.3738,0.6246,11,12,% Ethnic minority,FALSE,FALSE
+Stage 2,Overall pre-treatment trend,1,0.0111,0.025,0.025,0,0,Trend: total injuries/km,TRUE,TRUE
+Stage 2,Within-pre-period trend shape,2,0.0809,0.0568,0.0802,0,1,Recent - mid injuries/km,TRUE,FALSE
+Stage 2,Pre-COVID injury level,1,0.7202,0.1448,0.1448,1,1,Level: pre-COVID injuries/km (log),FALSE,FALSE
+Stage 2,Lockdown injury level,1,0.2921,0.1175,0.1175,1,1,Level: lockdown injuries/km (log),FALSE,FALSE
+Stage 2,Recovery injury level,1,0.4991,0.1023,0.1023,1,1,Level: recovery injuries/km (log),FALSE,FALSE
+Stage 2,COVID response change,1,0.2442,0.0368,0.0368,0,0,COVID - pre-COVID injuries/km,TRUE,TRUE
+Stage 2,Recovery response change,1,0.1847,0.0254,0.0254,0,0,Recovery - COVID injuries/km,TRUE,TRUE
+Stage 2,Overall pre-treatment injury level,1,0.7202,0.1448,0.1448,1,1,Level: mean total injuries/km (log),FALSE,FALSE
+Stage 2,Zero-quarter share,1,0.49370000000000003,0.1117,0.1117,1,1,Zero-injury quarter share (log),FALSE,FALSE

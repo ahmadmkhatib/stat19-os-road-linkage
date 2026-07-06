@@ -1,5 +1,5 @@
 # =============================================================================
-# CAZ INJURY DID - PRIMARY PPML MODELS (FINAL)
+# CAZ INJURY DID - PRIMARY PPML MODELS 
 # =============================================================================
 #
 # Main estimand
@@ -8,11 +8,8 @@
 #   pooled estimate is an average SCHEME effect, not an average road-link
 #   effect.
 #
-# -----------------------------------------------------------------------------
-# WHY THIS IS THE FINAL PRIMARY SPECIFICATION
-# -----------------------------------------------------------------------------
 # The primary workflow now focuses on pooled Models 1 and 2. Scheme-specific
-# Models 3 and 4 are run at the end as supplementary heterogeneity diagnostics.
+# Models 3 and 4 are run at the end for now...
 #
 #   FIXED EVENT-STUDY REFERENCE FOR MODEL 2
 #      The primary pooled event study uses the conventional fixed year
@@ -107,6 +104,24 @@ extract_event_study <- function(model, var_prefix) {
     filter(!is.na(event_time)) %>%
     add_irr_columns() %>%
     arrange(event_time)
+}
+
+extract_annual_event_study <- function(model, var_prefix) {
+  ct <- coeftable(model)
+  tibble(
+    term     = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se       = ct[, "Std. Error"]
+  ) %>%
+    filter(str_detect(term, paste0("^", var_prefix, "::"))) %>%
+    mutate(
+      event_year = str_match(
+        term, paste0("^", var_prefix, "::(-?\\d+):treat_group$")
+      )[, 2] %>% as.numeric()
+    ) %>%
+    filter(!is.na(event_year)) %>%
+    add_irr_columns() %>%
+    arrange(event_year)
 }
 
 # NOTE: var_prefix must match the actual model term exactly (e.g.
@@ -343,41 +358,98 @@ scheme_sample_summary <- model_panel %>%
   summarise(treated_units = sum(treat_group == 1), control_units = sum(treat_group == 0),
             .groups = "drop")
 
+
+
+##########
+
+
+
+
 # =============================================================================
-# 3. PRIMARY MODEL 1 - POOLED AVERAGE EFFECT
+# PRIMARY MODEL 1 - POOLED AVERAGE EFFECT
 # =============================================================================
 #
 # Why this model is primary:
 #   Headline equal-scheme average effect. Uses the bucketed fixed-reference
-#   construction (post_common vs. event-time -4:-1 ref_year, with intervening quarters
-#   absorbed via other_flag:treat_scheme) plus flexible scheme-by-treatment
-#   COVID adjustment.
+#   construction (scheme-specific post effects vs. event-time -4:-1 ref_year,
+#   with intervening quarters bucketed as "other") plus road-link FE and
+#   scheme-by-quarter FE.
 #
-# MAIN CAVEAT: this pooled number averages scheme effects that run in
-# opposite directions and are individually large and significant (see Model
-# 3). A near-zero pooled effect here does NOT mean "no effect" - always
-# report this alongside Model 3, never as a substitute for it.
 
-m1_pooled_average <- feglm(
+# =============================================================================
+# MODEL 1 - POOLED AVERAGE EFFECT VIA SCHEME-SPECIFIC EFFECTS
+# =============================================================================
+# Under uid_stack + stack_scheme^qtr_int, a single post_common coefficient can be
+# pinned by the omitted/collinear scheme category. Safer approach:
+#   1. Estimate one post effect per scheme.
+#   2. Average those scheme effects with equal scheme weights.
+
+m1_scheme_effects_model <- feglm(
   outcome_raw ~
-    post_common +
-    other_flag:treat_scheme +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    i(scheme_post_bucket, ref = "ref_year") +
+    other_flag:treat_scheme |
     uid_stack +
-    stack_scheme[qtr_int],
+    stack_scheme^qtr_int,
   data    = stacked,
   family  = "poisson",
   cluster = ~OA,
   weights = ~analysis_weight,
-  lean    = TRUE
+  lean    = FALSE
 )
 
-model1_results <- tibble(
-  model = "Model 1: pooled average, equal-scheme, fixed -4:-1 reference (bucketed)",
-  estimate_log_irr = coef(m1_pooled_average)["post_common"],
-  se = se(m1_pooled_average)["post_common"]
-) %>%
-  add_irr_columns("estimate_log_irr", "se")
+average_scheme_effect <- function(model, schemes, label) {
+  beta <- coef(model)
+  V <- vcov(model)
+  
+  terms <- paste0("scheme_post_bucket::", schemes)
+  
+  missing_terms <- setdiff(terms, names(beta))
+  if (length(missing_terms) > 0) {
+    stop("Missing scheme terms: ", paste(missing_terms, collapse = ", "))
+  }
+  
+  b <- beta[terms]
+  V_sub <- V[terms, terms, drop = FALSE]
+  
+  # Equal-scheme average on log-IRR scale
+  w <- rep(1 / length(terms), length(terms))
+  avg_log_irr <- as.numeric(sum(w * b))
+  avg_se <- as.numeric(sqrt(t(w) %*% V_sub %*% w))
+  
+  # Average percent change across schemes, also useful descriptively
+  avg_irr <- exp(avg_log_irr)
+  
+  tibble(
+    spec = label,
+    n_schemes = length(schemes),
+    estimate_log_irr = avg_log_irr,
+    se = avg_se,
+    z = estimate_log_irr / se,
+    p_value = 2 * pnorm(abs(z), lower.tail = FALSE),
+    ci_lo = estimate_log_irr - 1.96 * se,
+    ci_hi = estimate_log_irr + 1.96 * se,
+    irr = avg_irr,
+    irr_lo = exp(ci_lo),
+    irr_hi = exp(ci_hi),
+    pct_change = 100 * (irr - 1),
+    pct_lo = 100 * (irr_lo - 1),
+    pct_hi = 100 * (irr_hi - 1)
+  )
+}
+
+model1_results <- average_scheme_effect(
+  m1_scheme_effects_model,
+  schemes_all,
+  "Model 1: equal-scheme average from scheme-specific post effects"
+)
+
+model1_scheme_results <- extract_scheme_effects(
+  m1_scheme_effects_model,
+  "scheme_post_bucket"
+)
+
+print(model1_results, n = Inf)
+print(model1_scheme_results, n = Inf)
 
 # =============================================================================
 # 4. PRIMARY MODEL 2 - POOLED FIXED-REFERENCE EVENT STUDY
@@ -392,10 +464,9 @@ model1_results <- tibble(
 
 m2_pooled_event_fixedref <- feglm(
   outcome_raw ~
-    i(event_time_ref, treat_group, ref = "ref_year") +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    i(event_time_ref, treat_group, ref = "ref_year")  |
     uid_stack +
-    stack_scheme[qtr_int],
+    stack_scheme^qtr_int,
   data    = stacked,
   family  = "poisson",
   cluster = ~OA,
@@ -415,10 +486,9 @@ model2_post_common_wald <- wald(
 
 m2_pooled_event_cleanref_sensitivity <- feglm(
   outcome_raw ~
-    i(event_time_ref_clean, treat_group, ref = "ref_year") +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    i(event_time_ref_clean, treat_group, ref = "ref_year")  |
     uid_stack +
-    stack_scheme[qtr_int],
+    stack_scheme^qtr_int,
   data    = stacked,
   family  = "poisson",
   cluster = ~OA,
@@ -436,65 +506,76 @@ model2_cleanref_post_common_wald <- wald(
   keep = paste0("event_time_ref_clean::[0-", COMMON_POST_MAX, "]:treat_group")
 )
 
+# Annual event-year buckets used by the pooled annual Model 2 and the
+# scheme-specific annual Model 3 below. The estimation panel remains quarterly;
+# this only bins event-time coefficients into yearly relative-time effects.
+ANNUAL_POST_MAX <- ceiling((COMMON_POST_MAX + 1) / 4)
+
+stacked_annual <- stacked %>%
+  mutate(
+    event_year = case_when(
+      fixed_ref_year ~ NA_integer_,
+      event_time >= 0 ~ floor(event_time / 4) + 1L,
+      event_time < -4 ~ -ceiling((abs(event_time) - 4) / 4),
+      TRUE ~ NA_integer_
+    ),
+    event_year_ref = if_else(fixed_ref_year, "ref_year", as.character(event_year)),
+    event_year_ref = relevel(factor(event_year_ref), ref = "ref_year"),
+    post_event_year = if_else(
+      event_time >= 0 & event_time <= COMMON_POST_MAX,
+      floor(event_time / 4) + 1L,
+      NA_integer_
+    ),
+    annual_period_bucket = case_when(
+      fixed_ref_year ~ "ref_year",
+      treat_group == 1 & !is.na(post_event_year) ~ paste0("year", post_event_year),
+      TRUE ~ "other"
+    ),
+    other_flag_annual = as.integer(annual_period_bucket == "other"),
+    scheme_year_bucket = if_else(
+      annual_period_bucket %in% paste0("year", seq_len(ANNUAL_POST_MAX)),
+      paste0(as.character(stack_scheme), "_", annual_period_bucket),
+      "ref_year"
+    ),
+    scheme_year_bucket = factor(
+      scheme_year_bucket,
+      levels = c(
+        "ref_year",
+        as.vector(outer(
+          schemes_all,
+          paste0("year", seq_len(ANNUAL_POST_MAX)),
+          paste,
+          sep = "_"
+        ))
+      )
+    )
+  )
+
+m2_annual <- feglm(
+  outcome_raw ~
+    i(event_year_ref, treat_group, ref = "ref_year") |
+    uid_stack +
+    stack_scheme^qtr_int,
+  data    = stacked_annual,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model2_annual_results <- extract_annual_event_study(m2_annual, "event_year_ref")
+
+model2_annual_post_wald <- wald(
+  m2_annual,
+  keep = paste0("event_year_ref::[1-", ANNUAL_POST_MAX, "]:treat_group")
+)
+
 # =============================================================================
 # 5. SENSITIVITY ANALYSES FOR MODELS 1 AND 2
 # =============================================================================
 
-extract_model1_result <- function(model, label) {
-  tibble(
-    spec = label,
-    estimate_log_irr = coef(model)["post_common"],
-    se = se(model)["post_common"]
-  ) %>%
-    add_irr_columns("estimate_log_irr", "se")
-}
-
-run_models_1_2 <- function(data, label) {
-  d <- data %>% droplevels()
-  
-  m1 <- feglm(
-    outcome_raw ~
-      post_common +
-      other_flag:treat_scheme +
-      i(covid_period, treat_scheme, ref = "non_pandemic") |
-      uid_stack +
-      stack_scheme[qtr_int],
-    data    = d,
-    family  = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean    = TRUE
-  )
-  
-  m2 <- feglm(
-    outcome_raw ~
-      i(event_time_ref, treat_group, ref = "ref_year") +
-      i(covid_period, treat_scheme, ref = "non_pandemic") |
-      uid_stack +
-      stack_scheme[qtr_int],
-    data    = d,
-    family  = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean    = TRUE
-  )
-  
-  list(
-    label = label,
-    model1 = m1,
-    model2 = m2,
-    model1_results = extract_model1_result(m1, label),
-    model2_results = extract_event_study(m2, "event_time_ref") %>%
-      mutate(spec = label, .before = 1),
-    model2_post_wald = wald(
-      m2,
-      keep = paste0("event_time_ref::[0-", COMMON_POST_MAX, "]:treat_group")
-    )
-  )
-}
-
-# Bradford's fixed -4:-1 reference begins in 2021 Q2. Change this to
-# "2021 Q3" if you want the looser version of this sensitivity.
+# Bradford's fixed -4:-1 reference begins in 2021 Q2. This is retained as a
+# sensitivity because Bradford shows post-COVID/pre-implementation divergence.
 BRADFORD_RESTRICT_START_QTR <- as.yearqtr("2021 Q2")
 
 stacked_no_bradford <- stacked %>%
@@ -505,28 +586,134 @@ stacked_bradford_post_2021q2 <- stacked %>%
   filter(stack_scheme != "Bradford" | quarter_year >= BRADFORD_RESTRICT_START_QTR) %>%
   droplevels()
 
-sensitivity_no_bradford <- run_models_1_2(
+stacked_bradford_only <- stacked %>%
+  filter(stack_scheme == "Bradford") %>%
+  droplevels()
+
+stacked_bradford_only_restricted <- stacked %>%
+  filter(
+    stack_scheme == "Bradford",
+    quarter_year >= BRADFORD_RESTRICT_START_QTR
+  ) %>%
+  droplevels()
+
+stacked_all_bradford_restricted <- stacked %>%
+  filter(
+    stack_scheme != "Bradford" |
+      quarter_year >= BRADFORD_RESTRICT_START_QTR
+  ) %>%
+  droplevels()
+
+run_model2_sensitivity <- function(data, label) {
+  d <- data %>% droplevels()
+  
+  m2 <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack +
+      stack_scheme^qtr_int,
+    data    = d,
+    family  = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean    = FALSE
+  )
+  
+  list(
+    label = label,
+    model = m2,
+    m2_results = extract_event_study(m2, "event_time_ref") %>%
+      mutate(spec = label, .before = 1),
+    m2_wald = wald(
+      m2,
+      keep = paste0("event_time_ref::[0-", COMMON_POST_MAX, "]:treat_group")
+    )
+  )
+}
+
+sensitivity_no_bradford_m2 <- run_model2_sensitivity(
   stacked_no_bradford,
   "Sensitivity: exclude Bradford"
 )
 
-sensitivity_bradford_post_2021q2 <- run_models_1_2(
+sensitivity_bradford_post_2021q2_m2 <- run_model2_sensitivity(
   stacked_bradford_post_2021q2,
   "Sensitivity: Bradford pre-period restricted to >= 2021 Q2"
 )
 
-model1_comparison <- bind_rows(
-  extract_model1_result(m1_pooled_average, "Primary: all schemes"),
-  sensitivity_no_bradford$model1_results,
-  sensitivity_bradford_post_2021q2$model1_results
+run_bradford_only_m2 <- function(data, label) {
+  d <- data %>% droplevels()
+  
+  m2 <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack +
+      qtr_int,
+    data    = d,
+    family  = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean    = FALSE
+  )
+  
+  list(
+    label = label,
+    m2 = m2,
+    m2_results = extract_event_study(m2, "event_time_ref") %>%
+      mutate(spec = label, .before = 1),
+    m2_wald = wald(
+      m2,
+      keep = paste0("event_time_ref::[0-", COMMON_POST_MAX, "]:treat_group")
+    )
+  )
+}
+
+cmp_bradford_full <- run_bradford_only_m2(
+  stacked_bradford_only,
+  "Bradford only: full panel"
+)
+
+cmp_bradford_restricted <- run_bradford_only_m2(
+  stacked_bradford_only_restricted,
+  "Bradford only: >= 2021 Q2"
+)
+
+bradford_only_model2_comparison <- bind_rows(
+  cmp_bradford_full$m2_results,
+  cmp_bradford_restricted$m2_results
 ) %>%
-  select(spec, estimate_log_irr, se, irr, irr_lo, irr_hi,
-         pct_change, pct_lo, pct_hi)
+  filter(event_time >= 0, event_time <= COMMON_POST_MAX) %>%
+  select(spec, event_time, estimate, se, irr, irr_lo, irr_hi,
+         pct_change, pct_lo, pct_hi) %>%
+  arrange(spec, event_time)
+
+bradford_only_model2_wald <- tibble(
+  spec = c(
+    cmp_bradford_full$label,
+    cmp_bradford_restricted$label
+  ),
+  stat = c(
+    cmp_bradford_full$m2_wald$stat,
+    cmp_bradford_restricted$m2_wald$stat
+  ),
+  df1 = c(
+    cmp_bradford_full$m2_wald$df1,
+    cmp_bradford_restricted$m2_wald$df1
+  ),
+  df2 = c(
+    cmp_bradford_full$m2_wald$df2,
+    cmp_bradford_restricted$m2_wald$df2
+  ),
+  p_value = c(
+    cmp_bradford_full$m2_wald$p,
+    cmp_bradford_restricted$m2_wald$p
+  )
+)
 
 model2_post_comparison <- bind_rows(
   model2_results %>% mutate(spec = "Primary: all schemes", .before = 1),
-  sensitivity_no_bradford$model2_results,
-  sensitivity_bradford_post_2021q2$model2_results,
+  sensitivity_no_bradford_m2$m2_results,
+  sensitivity_bradford_post_2021q2_m2$m2_results,
   model2_cleanref_results %>% mutate(spec = "Sensitivity: clean/flexible reference", .before = 1)
 ) %>%
   filter(event_time >= 0, event_time <= COMMON_POST_MAX) %>%
@@ -537,32 +724,32 @@ model2_post_comparison <- bind_rows(
 model2_wald_comparison <- tibble(
   spec = c(
     "Primary: all schemes",
-    sensitivity_no_bradford$label,
-    sensitivity_bradford_post_2021q2$label,
+    sensitivity_no_bradford_m2$label,
+    sensitivity_bradford_post_2021q2_m2$label,
     "Sensitivity: clean/flexible reference"
   ),
   stat = c(
     model2_post_common_wald$stat,
-    sensitivity_no_bradford$model2_post_wald$stat,
-    sensitivity_bradford_post_2021q2$model2_post_wald$stat,
+    sensitivity_no_bradford_m2$m2_wald$stat,
+    sensitivity_bradford_post_2021q2_m2$m2_wald$stat,
     model2_cleanref_post_common_wald$stat
   ),
   df1 = c(
     model2_post_common_wald$df1,
-    sensitivity_no_bradford$model2_post_wald$df1,
-    sensitivity_bradford_post_2021q2$model2_post_wald$df1,
+    sensitivity_no_bradford_m2$m2_wald$df1,
+    sensitivity_bradford_post_2021q2_m2$m2_wald$df1,
     model2_cleanref_post_common_wald$df1
   ),
   df2 = c(
     model2_post_common_wald$df2,
-    sensitivity_no_bradford$model2_post_wald$df2,
-    sensitivity_bradford_post_2021q2$model2_post_wald$df2,
+    sensitivity_no_bradford_m2$m2_wald$df2,
+    sensitivity_bradford_post_2021q2_m2$m2_wald$df2,
     model2_cleanref_post_common_wald$df2
   ),
   p_value = c(
     model2_post_common_wald$p,
-    sensitivity_no_bradford$model2_post_wald$p,
-    sensitivity_bradford_post_2021q2$model2_post_wald$p,
+    sensitivity_no_bradford_m2$m2_wald$p,
+    sensitivity_bradford_post_2021q2_m2$m2_wald$p,
     model2_cleanref_post_common_wald$p
   )
 )
@@ -575,8 +762,7 @@ run_scheme_event_fixedref <- function(sc) {
   fit <- tryCatch(
     feglm(
       outcome_raw ~
-        i(event_time_ref, treat_group, ref = "ref_year") +
-        i(covid_period, treat_group, ref = "non_pandemic") |
+        i(event_time_ref, treat_group, ref = "ref_year")  |
         uid_stack +
         qtr_int,
       data    = d,
@@ -618,72 +804,85 @@ scheme_event_fixedref_post_wald <- map_dfr(schemes_all, function(sc) {
                                 "Fail to reject H0"))
 })
 
-# -----------------------------------------------------------------------------
-# Annual (policy-facing) event study: Year 1, Year 2 post-implementation
-# -----------------------------------------------------------------------------
-
-MAX_EVENT_YEAR <- 2   # Year 1 = quarters 0-3 (fully balanced, 7 schemes);
-# Year 2 = quarters 4-7 (partially balanced, see below)
-
-stacked_annual <- stacked %>%
-  mutate(
-    event_year = case_when(
-      treat_group == 1 & event_time >= 0 & event_time <= 3  ~ "year1",
-      treat_group == 1 & event_time >= 4 & event_time <= 7  ~ "year2",
-      TRUE ~ NA_character_
-    ),
-    period_bucket_annual = case_when(
-      fixed_ref_year ~ "ref_year",
-      !is.na(event_year) ~ event_year,
-      TRUE ~ "other"
-    ),
-    scheme_year_bucket = if_else(
-      period_bucket_annual %in% c("year1", "year2"),
-      paste0(as.character(stack_scheme), "_", period_bucket_annual),
-      "ref_year"
-    ),
-    scheme_year_bucket = factor(scheme_year_bucket, levels = c(
-      "ref_year",
-      paste0(rep(schemes_all, each = 2), "_", c("year1", "year2"))
-    )),
-    other_flag_annual = as.integer(period_bucket_annual == "other")
+run_model1_average <- function(data, schemes, label) {
+  d <- data %>% droplevels()
+  
+  fit <- feglm(
+    outcome_raw ~
+      i(scheme_post_bucket, ref = "ref_year") +
+      other_flag:treat_scheme |
+      uid_stack +
+      stack_scheme^qtr_int,
+    data    = d,
+    family  = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean    = FALSE
   )
+  
+  list(
+    model = fit,
+    average = average_scheme_effect(fit, schemes, label),
+    scheme_effects = extract_scheme_effects(fit, "scheme_post_bucket") %>%
+      mutate(spec = label, .before = 1)
+  )
+}
 
-# Pooled annual event study (equivalent to Model 2, but yearly)
-m2_annual <- feglm(
-  outcome_raw ~
-    i(period_bucket_annual, treat_group, ref = "ref_year") +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
-    uid_stack + stack_scheme[qtr_int],
-  data    = stacked_annual %>% filter(period_bucket_annual != "other" | treat_group == 0),
-  family  = "poisson", cluster = ~OA,
-  weights = ~analysis_weight, lean = TRUE
+m1_primary_avg <- run_model1_average(
+  stacked,
+  schemes_all,
+  "Primary: all schemes"
 )
-# NOTE: control-arm rows are always kept (they define "other" for treated only
-# in the pretrend/COVID sense); treated "other" quarters need the same
-# other_flag absorption as before if you want full-data retention rather than
-# row-dropping - swap in other_flag_annual:treat_scheme the same way as your
-# COMMON_POST_MAX models if you want the fully bucketed version.
 
-etable(m2_annual)
+m1_no_bradford_avg <- run_model1_average(
+  stacked_no_bradford,
+  setdiff(schemes_all, "Bradford"),
+  "Sensitivity: exclude Bradford"
+)
+
+m1_bradford_restricted_avg <- run_model1_average(
+  stacked_bradford_post_2021q2,
+  schemes_all,
+  "Sensitivity: Bradford >= 2021 Q2"
+)
+
+model1_comparison <- bind_rows(
+  m1_primary_avg$average,
+  m1_no_bradford_avg$average,
+  m1_bradford_restricted_avg$average
+)
+
+model1_scheme_comparison <- bind_rows(
+  m1_primary_avg$scheme_effects,
+  m1_no_bradford_avg$scheme_effects,
+  m1_bradford_restricted_avg$scheme_effects
+)
+
+print(model1_comparison, n = Inf)
+print(model1_scheme_comparison, n = Inf)
+
+
 
 # =============================================================================
-# 6. PRIMARY FIGURES AND SAVED MODEL OBJECTS
+# PRIMARY FIGURES AND SAVED MODEL OBJECTS
 # =============================================================================
 
-p_model1 <- ggplot(model1_results, aes(x = pct_change, y = model)) +
+p_model1 <- ggplot(model1_comparison, aes(x = pct_change, y = fct_reorder(spec, pct_change))) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
   geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
   geom_point(size = 3) +
-  labs(title = "Model 1: pooled average CAZ effect",
-       subtitle = "Equal-scheme weighted PPML; fixed -4:-1 reference (bucketed); flexible scheme-by-treatment COVID adjustment",
-       x = "% change in injuries", y = NULL) +
+  labs(
+    title = "Model 1: equal-scheme average CAZ effect and Bradford sensitivities",
+    subtitle = "Average of scheme-specific post-treatment log-IRRs; road-link FE and scheme-by-quarter FE",
+    x = "% change in injuries",
+    y = NULL
+  ) +
   theme_minimal(base_size = 12)
 
 p_model2 <- plot_event_study(
   model2_results %>% filter(event_time >= -28, event_time <= 10),
   title = "Model 2: pooled fixed-reference event study",
-  subtitle = "Reference = event times -4:-1; flexible scheme-by-treatment COVID adjustment"
+  subtitle = "Reference = event times -4:-1; road-link FE and scheme-by-quarter FE"
 )
 
 ggsave(file.path(outdir, "primary_01_pooled_average_effect.png"), p_model1, width = 9, height = 4.5, dpi = 300)
@@ -698,25 +897,37 @@ primary_results <- list(
     clean_reference_table = clean_reference_table
   ),
   models = list(
-    m1_pooled_average = m1_pooled_average,
+    m1_scheme_effects_model = m1_scheme_effects_model,
+    m1_primary_avg_model = m1_primary_avg$model,
+    m1_no_bradford_avg_model = m1_no_bradford_avg$model,
+    m1_bradford_restricted_avg_model = m1_bradford_restricted_avg$model,
     m2_pooled_event_fixedref = m2_pooled_event_fixedref,
     m2_pooled_event_cleanref_sensitivity = m2_pooled_event_cleanref_sensitivity,
-    sensitivity_no_bradford = sensitivity_no_bradford,
-    sensitivity_bradford_post_2021q2 = sensitivity_bradford_post_2021q2
+    m2_annual = m2_annual,
+    sensitivity_no_bradford_m2 = sensitivity_no_bradford_m2,
+    sensitivity_bradford_post_2021q2_m2 = sensitivity_bradford_post_2021q2_m2,
+    bradford_only_full_m2 = cmp_bradford_full$m2,
+    bradford_only_restricted_m2 = cmp_bradford_restricted$m2
   ),
   tables = list(
     model1_results = model1_results,
+    model1_scheme_results = model1_scheme_results,
     model2_results = model2_results,
     model2_cleanref_results = model2_cleanref_results,
+    model2_annual_results = model2_annual_results,
     model1_comparison = model1_comparison,
+    model1_scheme_comparison = model1_scheme_comparison,
     model2_post_comparison = model2_post_comparison,
     model2_wald_comparison = model2_wald_comparison,
+    bradford_only_model2_comparison = bradford_only_model2_comparison,
+    bradford_only_model2_wald = bradford_only_model2_wald,
     scheme_event_fixedref_results = scheme_event_fixedref_results,
     scheme_event_fixedref_post_wald = scheme_event_fixedref_post_wald
   ),
   tests = list(
     model2_post_common_wald = model2_post_common_wald,
-    model2_cleanref_post_common_wald = model2_cleanref_post_common_wald
+    model2_cleanref_post_common_wald = model2_cleanref_post_common_wald,
+    model2_annual_post_wald = model2_annual_post_wald
   )
 )
 
@@ -727,12 +938,14 @@ saveRDS(primary_results, here("data", "processed", "caz_primary_ppml_results.rds
 saveRDS(
   list(
     stacked = stacked,
+    stacked_annual = stacked_annual,
     model_panel = model_panel,
     model_panel_for_zero_diag = model_panel_for_zero_diag,
     schemes_all = schemes_all,
     scheme_timing = scheme_timing,
     min_qtr = min_qtr,
-    COMMON_POST_MAX = COMMON_POST_MAX
+    COMMON_POST_MAX = COMMON_POST_MAX,
+    ANNUAL_POST_MAX = ANNUAL_POST_MAX
   ),
   here("data", "processed", "caz_support_script_inputs.rds")
 )
@@ -765,9 +978,11 @@ cat("\nClean reference periods used in clean-reference sensitivity models:\n")
 print(clean_reference_table, n = Inf)
 
 print_heading("1. MODEL 1 - Pooled Average Effect")
-etable(m1_pooled_average, dict = c("post_common" = "CAZ post-treatment"))
+etable(m1_scheme_effects_model)
 cat("\nModel 1 converted to IRR and percent change:\n")
 print(model1_results, n = Inf)
+cat("\nModel 1 scheme-specific post effects:\n")
+print(model1_scheme_results, n = Inf)
 
 print_heading("2. MODEL 2 - Pooled Fixed-Reference Event Study")
 etable(m2_pooled_event_fixedref)
@@ -786,6 +1001,12 @@ model2_cleanref_results %>%
   print(n = Inf)
 cat("\nClean-reference pooled joint Wald test, post-treatment window:\n")
 print(model2_cleanref_post_common_wald)
+cat("\nAnnual pooled Model 2 regression table:\n")
+etable(m2_annual)
+cat("\nAnnual pooled Model 2 event-year estimates:\n")
+print(model2_annual_results, n = Inf)
+cat("\nAnnual pooled Model 2 joint Wald test, post-treatment event-year window 1-", ANNUAL_POST_MAX, ":\n", sep = "")
+print(model2_annual_post_wald)
 
 print_heading("3. MODEL 1 AND 2 SENSITIVITY COMPARISON")
 cat("\nModel 1 primary vs. sensitivity specifications:\n")
@@ -794,6 +1015,10 @@ cat("\nModel 2 post-treatment event-time estimates, primary vs. sensitivity spec
 print(model2_post_comparison, n = Inf)
 cat("\nModel 2 joint Wald tests, post-treatment window 0-", COMMON_POST_MAX, ":\n", sep = "")
 print(model2_wald_comparison, n = Inf)
+cat("\nBradford-only Model 2 post-treatment comparison, full panel vs. >= 2021 Q2:\n")
+print(bradford_only_model2_comparison, n = Inf)
+cat("\nBradford-only Model 2 Wald tests, full panel vs. >= 2021 Q2:\n")
+print(bradford_only_model2_wald, n = Inf)
 cat("\nScheme-specific fixed-reference event-study Wald tests, Bradford retained:\n")
 print(scheme_event_fixedref_post_wald, n = Inf)
 
@@ -810,33 +1035,14 @@ cat("Saved primary figures in:", outdir, "\n")
 # useful for heterogeneity and scheme-level diagnostics, but the primary script
 # now leads with pooled Models 1 and 2 plus Bradford sensitivity checks.
 
-# Scheme-specific annual effects (equivalent to Model 3, but yearly)
-m3_annual <- feglm(
-  outcome_raw ~
-    i(scheme_year_bucket, ref = "ref_year") +
-    other_flag_annual:treat_scheme +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
-    uid_stack + stack_scheme[qtr_int],
-  data    = stacked_annual,
-  family  = "poisson", cluster = ~OA,
-  weights = ~analysis_weight, lean = TRUE
-)
-
-model3_annual_results <- extract_scheme_effects(m3_annual, "scheme_year_bucket") %>%
-  mutate(
-    event_year = str_extract(scheme, "year\\d$"),
-    scheme = str_remove(scheme, "_year\\d$")
-  )
-
 # Model 3: scheme-specific average effects under the same bucketed fixed
 # reference setup as primary Model 1.
 m3_scheme_average <- feglm(
   outcome_raw ~
     i(scheme_post_bucket, ref = "ref_year") +
-    other_flag:treat_scheme +
-    i(covid_period, treat_scheme, ref = "non_pandemic") |
+    other_flag:treat_scheme |
     uid_stack +
-    stack_scheme[qtr_int],
+    stack_scheme^qtr_int,
   data    = stacked,
   family  = "poisson",
   cluster = ~OA,
@@ -845,6 +1051,35 @@ m3_scheme_average <- feglm(
 )
 
 model3_results <- extract_scheme_effects(m3_scheme_average, "scheme_post_bucket")
+
+# Scheme-specific annual effects: same identifying structure as Model 3, but
+# with separate scheme-level effects for each post-treatment event-year bucket.
+m3_annual <- feglm(
+  outcome_raw ~
+    i(scheme_year_bucket, ref = "ref_year") +
+    other_flag_annual:treat_scheme |
+    uid_stack +
+    stack_scheme^qtr_int,
+  data    = stacked_annual,
+  family  = "poisson",
+  cluster = ~OA,
+  weights = ~analysis_weight,
+  lean    = TRUE
+)
+
+model3_annual_results <- extract_scheme_effects(m3_annual, "scheme_year_bucket") %>%
+  mutate(
+    event_year = str_extract(scheme, "year\\d+$"),
+    scheme = str_remove(scheme, "_year\\d+$")
+  ) %>%
+  relocate(event_year, .after = scheme)
+
+if (nrow(model3_annual_results) == 0) {
+  stop(
+    "Annual Model 3 produced no scheme_year_bucket coefficients. Estimated terms were: ",
+    paste(rownames(coeftable(m3_annual)), collapse = ", ")
+  )
+}
 
 # Model 4: scheme-specific clean-reference event studies. These are
 # supplementary diagnostics because the primary pooled Model 2 uses fixed
@@ -857,8 +1092,7 @@ run_scheme_event_cleanref <- function(sc) {
   fit <- tryCatch(
     feglm(
       outcome_raw ~
-        i(event_time_ref_clean, treat_group, ref = "ref_year") +
-        i(covid_period, treat_group, ref = "non_pandemic") |
+        i(event_time_ref_clean, treat_group, ref = "ref_year")  |
         uid_stack +
         qtr_int,
       data    = d,
@@ -959,3 +1193,149 @@ model4_results %>%
 cat("\nSupplementary within-scheme joint Wald tests, post-treatment window 0-", COMMON_POST_MAX, ":\n", sep = "")
 print(scheme_post_wald, n = Inf)
 cat("Saved supplementary scheme model object: data/processed/caz_supplementary_scheme_models.rds\n")
+
+
+
+
+
+
+
+
+#####################################################################################
+
+
+
+
+# =============================================================================
+# DIAGNOSTIC: WHICH SCHEMES DRIVE THE POOLED PRE-TREND COEFFICIENTS?
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Composition of each event-time bin: which schemes have data there, and
+#    how much weight (analysis_weight-summed) each contributes
+# -----------------------------------------------------------------------------
+
+event_time_composition <- stacked %>%
+  filter(event_time %in% c(-9, -6, -5, -4, -3, -2, -1, 0:5)) %>%  # extend as needed
+  group_by(event_time, stack_scheme, treat_group) %>%
+  summarise(
+    n_obs = n(),
+    n_units = n_distinct(uid_stack),
+    weight_sum = sum(analysis_weight),
+    .groups = "drop"
+  ) %>%
+  arrange(event_time, stack_scheme, treat_group)
+
+print(event_time_composition, n = Inf)
+
+# Quick view: which schemes are PRESENT at all vs. absent at each event_time
+scheme_presence_by_event_time <- stacked %>%
+  distinct(event_time, stack_scheme) %>%
+  mutate(present = TRUE) %>%
+  tidyr::complete(event_time, stack_scheme, fill = list(present = FALSE)) %>%
+  filter(event_time %in% c(-9, -6, -5, -4, -3, -2, -1, 0:5)) %>%
+  tidyr::pivot_wider(names_from = stack_scheme, values_from = present)
+
+print(scheme_presence_by_event_time, n = Inf)
+
+# -----------------------------------------------------------------------------
+# Pull each scheme's OWN coefficient at event_time -6 and -9 from the
+#    scheme-specific fixed-reference event studies you already fit
+#    (scheme_event_fixedref_results, from run_scheme_event_fixedref())
+# -----------------------------------------------------------------------------
+
+suspect_bins <- c(-9, -6)
+
+scheme_level_at_suspect_bins <- scheme_event_fixedref_results %>%
+  filter(event_time %in% suspect_bins) %>%
+  select(scheme, event_time, estimate, se, pct_change, pct_lo, pct_hi) %>%
+  arrange(event_time, desc(abs(estimate)))
+
+print(scheme_level_at_suspect_bins, n = Inf)
+
+# NOTE: not every scheme will have data at -9 (depends on scheme_timing).
+# Cross-check against scheme_presence_by_event_time above before concluding
+# a scheme is "null" there vs. simply absent.
+
+# -----------------------------------------------------------------------------
+#  Leave-one-scheme-out pooled event study, focused on the suspect bins
+#    Refits the SAME primary Model 2 spec (stack_scheme^qtr_int FE) dropping
+#    one scheme at a time, and reports event_time -9 and -6 each time.
+# -----------------------------------------------------------------------------
+
+run_event_study_drop_scheme <- function(drop_scheme) {
+  d <- stacked %>%
+    filter(stack_scheme != drop_scheme) %>%
+    droplevels()
+  
+  fit <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack +
+      stack_scheme^qtr_int,
+    data    = d,
+    family  = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean    = TRUE
+  )
+  
+  extract_event_study(fit, "event_time_ref") %>%
+    filter(event_time %in% suspect_bins) %>%
+    mutate(dropped_scheme = drop_scheme, .before = 1)
+}
+
+leave_one_out_suspect_bins <- map_dfr(schemes_all, run_event_study_drop_scheme)
+
+leave_one_out_comparison <- bind_rows(
+  model2_results %>%
+    filter(event_time %in% suspect_bins) %>%
+    mutate(dropped_scheme = "(none - full pooled)", .before = 1),
+  leave_one_out_suspect_bins
+) %>%
+  select(dropped_scheme, event_time, estimate, se, pct_change, pct_lo, pct_hi) %>%
+  arrange(event_time, dropped_scheme)
+
+print(leave_one_out_comparison, n = Inf)
+
+# -----------------------------------------------------------------------------
+#  Interpretation helper: flag which schemes, when dropped, kill significance
+# -----------------------------------------------------------------------------
+
+leave_one_out_flagged <- leave_one_out_comparison %>%
+  mutate(
+    z = estimate / se,
+    p_value = 2 * pnorm(abs(z), lower.tail = FALSE),
+    sig = p_value < 0.05
+  ) %>%
+  group_by(event_time) %>%
+  mutate(
+    full_pooled_sig = sig[dropped_scheme == "(none - full pooled)"],
+    flips_when_dropped = full_pooled_sig & !sig & dropped_scheme != "(none - full pooled)"
+  ) %>%
+  ungroup() %>%
+  arrange(event_time, dropped_scheme)
+
+print(leave_one_out_flagged %>% filter(flips_when_dropped | dropped_scheme == "(none - full pooled)"), n = Inf)
+
+
+
+### The pre-trend at -6/-9 is not an idiosyncratic artifact of one or two schemes' data quality 
+###  could it be that event times -6 and -9 don't map to the same calendar quarter across schemes (implementation dates range from 2021 Q2 to 2023 Q3), but because CAZ rollout was clustered in a fairly narrow 2021–2023 window, event time -6/-9 for most schemes does land somewhere in the COVID-lockdown/recovery period. If CAZ-designated roads (busier, more central, arterial) recovered from COVID traffic suppression on a different trajectory than their matched controls — even after the scheme×quarter FE absorbs the common calendar shock — that differential recovery would show up as a "pre-trend" at similar relative event times across most schemes, without needing any one scheme to be the culprit.
+
+# Map suspect event times to calendar quarter and covid phase, per scheme
+suspect_bin_calendar_map <- stacked %>%
+  filter(event_time %in% c(-9, -6)) %>%
+  distinct(stack_scheme, event_time, quarter_year, covid_period) %>%
+  arrange(event_time, stack_scheme)
+
+
+
+#
+print(suspect_bin_calendar_map, n = Inf)
+
+
+###The pre-trend violation at event_time -9 and -6 may partly reflect COVID/recovery calendar-period shocks being pooled into relative event-time bins, rather than pure anticipatory CAZ effects.
+
+### clean-reference checks reduces concern about reference-period contamination and does not change the conclusion.
+

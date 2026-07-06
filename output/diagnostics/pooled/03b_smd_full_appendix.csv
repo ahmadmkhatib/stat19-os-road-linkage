@@ -1,0 +1,33 @@
+stage,variable,label,smd_before,smd_after,balanced,balance_group
+Stage 1,log1p_business_retail_per_km2,Retail density (log),1.5501,0.6659,FALSE,Road/network covariates
+Stage 1,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8803,-0.3118,FALSE,Road/network covariates
+Stage 1,log1p_pop_density,Pop. density (log),0.6694,0.2573,FALSE,Road/network covariates
+Stage 1,log1p_road_density_m_km2,Road density (log),0.6132,0.2924,FALSE,Road/network covariates
+Stage 1,log1p_road_length_km,Road length (log),-0.2644,0.0133,TRUE,Road/network covariates
+Stage 1,log_area_km2,Area (log),-0.6199,-0.2261,FALSE,Road/network covariates
+Stage 1,pct_A_road,% A road,0.3251,0.1027,FALSE,Road/network covariates
+Stage 1,pct_B_road,% B road,0.1039,0.1057,FALSE,Road/network covariates
+Stage 1,pct_minor_road,% Minor road,-0.3418,-0.1416,FALSE,Road/network covariates
+Stage 1,IMD,IMD,0.701,0.4117,FALSE,Socio-demographic covariates
+Stage 1,active_travel_to_work_pct,% Active travel to work,1.2808,0.4614,FALSE,Socio-demographic covariates
+Stage 1,car_commute_pct,% Car commute,-1.4305,-0.5373,FALSE,Socio-demographic covariates
+Stage 1,children_0_19_pct,% Aged 0-19,0.0777,0.0411,TRUE,Socio-demographic covariates
+Stage 1,ethnic_minority_pct,% Ethnic minority,1.2651,0.6246,FALSE,Socio-demographic covariates
+Stage 1,no_car_households_pct,% No car household,1.2938,0.5727,FALSE,Socio-demographic covariates
+Stage 1,older_65plus_pct,% Aged 65+,-1.0151,-0.5034,FALSE,Socio-demographic covariates
+Stage 1,public_transport_to_work_pct,% Public/paid transport to work,0.6949,0.29,FALSE,Socio-demographic covariates
+Stage 1,two_plus_car_households_pct,% 2+ car household,-1.2799,-0.5692,FALSE,Socio-demographic covariates
+Stage 1,work_from_home_pct,% Work from home,-0.0204,0.1023,FALSE,Socio-demographic covariates
+Stage 1,working_age_20_64_pct,% Aged 20-64,0.6502,0.2402,FALSE,Socio-demographic covariates
+Stage 1,young_adults_20_34_pct,% Aged 20-34,0.9986,0.4404,FALSE,Socio-demographic covariates
+Stage 1,young_people_5_19_pct,% Aged 5-19,0.1079,0.0654,TRUE,Socio-demographic covariates
+Stage 2,trend_total_pkm,Trend: total injuries/km,-0.0111,0.025,TRUE,Overall pre-treatment trend
+Stage 2,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0611,-0.0335,TRUE,Within-pre-period trend shape
+Stage 2,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.1006,0.0802,TRUE,Within-pre-period trend shape
+Stage 2,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7202,0.1448,FALSE,Pre-COVID injury level
+Stage 2,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.2921,0.1175,FALSE,Lockdown injury level
+Stage 2,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.4991,0.1023,FALSE,Recovery injury level
+Stage 2,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2442,-0.0368,TRUE,COVID response change
+Stage 2,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.1847,0.0254,TRUE,Recovery response change
+Stage 2,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7202,0.1448,FALSE,Overall pre-treatment injury level
+Stage 2,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.49370000000000003,-0.1117,FALSE,Zero-quarter share

@@ -1,8 +1,8 @@
-scheme,n_treated,n_controls,selected_ratio,total_trend_smd,max_trend_smd,mean_smd,n_unique_controls,unique_controls_per_treated,max_reuse,mean_reuse,passes_selection_rules
-Bath,45,45,1,0.0014,0.0014,8e-4,45,1,1,1,TRUE
-Birmingham,120,225,1,7e-4,7e-4,0.0035,116,0.967,2,1.034,FALSE
-Bradford,258,469,1,8e-4,8e-4,3e-4,240,0.93,15,1.075,FALSE
-Bristol,47,130,3,0.0048,0.0048,0.0012,130,2.766,3,1.085,TRUE
-Newcastle,27,107,4,7e-4,7e-4,4e-4,107,3.963,2,1.009,TRUE
-Portsmouth,55,251,5,8e-4,8e-4,5e-4,251,4.564,3,1.096,TRUE
-Sheffield,39,69,1,0,0,0.0018,35,0.897,4,1.114,FALSE
+scheme,n_treated,n_controls,selected_ratio,total_trend_smd,max_priority_trend_smd,max_trend_smd,mean_smd,n_unique_controls,unique_controls_per_treated,max_reuse,mean_reuse,passes_selection_rules
+Bath,45,132,3,0.0017,0.0089,0.0744,0.0188,132,2.933,2,1.023,FALSE
+Birmingham,120,423,4,0.0391,0.0391,0.0391,0.0198,423,3.525,4,1.135,TRUE
+Bradford,258,1492,1,0.0065,0.026,0.0381,0.0135,244,0.946,5,1.057,FALSE
+Bristol,47,336,9,0.0017,0.0217,0.1982,0.039,336,7.149,5,1.259,FALSE
+Newcastle,27,53,2,0.0042,0.0805,0.0805,0.0381,53,1.963,2,1.019,FALSE
+Portsmouth,55,55,1,0.0369,0.0543,0.1469,0.0437,55,1,1,1,FALSE
+Sheffield,39,113,3,0.1416,0.1416,0.1416,0.0401,113,2.897,2,1.035,FALSE

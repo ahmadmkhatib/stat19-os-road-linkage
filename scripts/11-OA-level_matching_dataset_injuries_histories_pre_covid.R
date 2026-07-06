@@ -34,6 +34,13 @@ target_crs <- 27700
 # This is pre-2020 / pre-COVID
 pre_covid_end_q <- as.yearqtr("2019 Q4")
 
+# I add these pandemic-period windows because the revised matching script
+# balances how treated and control OAs moved through lockdown and recovery.
+lockdown_start_q <- as.yearqtr("2020 Q2")
+lockdown_end_q   <- as.yearqtr("2021 Q1")
+recovery_start_q <- as.yearqtr("2021 Q2")
+recovery_end_q   <- as.yearqtr("2021 Q4")
+
 # Pre-COVID trajectory windows used to add simple outcome-path shape variables.
 # These complement the single whole-period slope used in Stage 2 matching.
 pre_covid_recent_start_q <- as.yearqtr("2018 Q1")
@@ -532,6 +539,87 @@ summary(
 # 10. ZERO-INJURY OA FLAG — PRE-TREATMENT PERIOD ONLY
 # ============================================================
 
+# ============================================================
+# 9B. PRE-COVID, LOCKDOWN, AND RECOVERY OUTCOME-PATH FEATURES
+# ============================================================
+
+# I create these period-specific outcome-history variables for Stage 2 matching.
+# They target the exact issue seen in the event-study diagnostics: treated and
+# control roads may have responded differently during lockdown/recovery before
+# some CAZ schemes opened.
+
+period_quarters <- OA_injuries_total %>%
+  distinct(quarter_year) %>%
+  filter(quarter_year <= recovery_end_q) %>%
+  arrange(quarter_year)
+
+OA_injuries_period_balanced <- all_oas %>%
+  cross_join(period_quarters) %>%
+  left_join(
+    OA_injuries_total,
+    by = c("OA", "quarter_year")
+  ) %>%
+  mutate(total_injuries = replace_na(total_injuries, 0)) %>%
+  left_join(oa_scheme_lookup, by = "OA") %>%
+  left_join(
+    OA_roads_clean %>%
+      select(OA, road_length_km),
+    by = "OA"
+  ) %>%
+  mutate(
+    road_length_km = replace_na(road_length_km, 0),
+    total_pkm = if_else(road_length_km > 0, total_injuries / road_length_km, 0),
+    period_for_matching = case_when(
+      quarter_year <= pre_covid_end_q ~ "precovid",
+      quarter_year >= lockdown_start_q & quarter_year <= lockdown_end_q ~ "lockdown",
+      quarter_year >= recovery_start_q & quarter_year <= recovery_end_q ~ "recovery",
+      TRUE ~ "other"
+    )
+  )
+
+injury_features_covid_response <- OA_injuries_period_balanced %>%
+  filter(period_for_matching %in% c("precovid", "lockdown", "recovery")) %>%
+  group_by(OA) %>%
+  summarise(
+    mean_precovid_total_pkm =
+      safe_mean(total_pkm[period_for_matching == "precovid"]),
+    mean_lockdown_total_pkm =
+      safe_mean(total_pkm[period_for_matching == "lockdown"]),
+    mean_recovery_total_pkm =
+      safe_mean(total_pkm[period_for_matching == "recovery"]),
+    zero_quarter_share_pre =
+      mean(total_injuries[period_for_matching == "precovid"] == 0, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    across(
+      c(
+        mean_precovid_total_pkm,
+        mean_lockdown_total_pkm,
+        mean_recovery_total_pkm,
+        zero_quarter_share_pre
+      ),
+      ~ replace_na(.x, 0)
+    ),
+    covid_minus_precovid_total_pkm =
+      mean_lockdown_total_pkm - mean_precovid_total_pkm,
+    recovery_minus_covid_total_pkm =
+      mean_recovery_total_pkm - mean_lockdown_total_pkm
+  )
+
+cat("\n--- COVID/recovery matching features ---\n")
+summary(
+  injury_features_covid_response %>%
+    select(
+      mean_precovid_total_pkm,
+      mean_lockdown_total_pkm,
+      mean_recovery_total_pkm,
+      covid_minus_precovid_total_pkm,
+      recovery_minus_covid_total_pkm,
+      zero_quarter_share_pre
+    )
+)
+
 # For treated OAs: use only quarters before their scheme's CAZ start
 # For control OAs: use only quarters up to the earliest CAZ start
 # This prevents dropping OAs whose injuries fell to zero post-treatment
@@ -678,6 +766,12 @@ vars_to_refresh <- c(
   "mean_total_pkm_early_pre_covid",
   "recent_minus_mid_total_pkm",
   "mid_minus_early_total_pkm",
+  "mean_precovid_total_pkm",
+  "mean_lockdown_total_pkm",
+  "mean_recovery_total_pkm",
+  "covid_minus_precovid_total_pkm",
+  "recovery_minus_covid_total_pkm",
+  "zero_quarter_share_pre",
   "log1p_total_injuries_pre_covid",
   "log1p_mean_total_inj_pre_covid",
   "total_injuries_all_periods",
@@ -721,6 +815,7 @@ OA_matching_data_pooled <- OA_base_unique %>%
       select(-road_length_km),
     by = "OA"
   ) %>%
+  left_join(injury_features_covid_response, by = "OA") %>%
   left_join(zero_injury_lookup, by = "OA") %>%
   mutate(
     across(
@@ -758,6 +853,12 @@ OA_matching_data_pooled <- OA_base_unique %>%
         "mean_total_pkm_early_pre_covid",
         "recent_minus_mid_total_pkm",
         "mid_minus_early_total_pkm",
+        "mean_precovid_total_pkm",
+        "mean_lockdown_total_pkm",
+        "mean_recovery_total_pkm",
+        "covid_minus_precovid_total_pkm",
+        "recovery_minus_covid_total_pkm",
+        "zero_quarter_share_pre",
         "log1p_total_injuries_pre_covid",
         "log1p_mean_total_inj_pre_covid",
         "total_injuries_all_periods",
@@ -781,12 +882,20 @@ stopifnot("log1p_mean_total_pkm" %in% names(OA_matching_data_pooled))
 stopifnot("trend_total_pkm" %in% names(OA_matching_data_pooled))
 stopifnot("recent_minus_mid_total_pkm" %in% names(OA_matching_data_pooled))
 stopifnot("mid_minus_early_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("mean_precovid_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("mean_lockdown_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("mean_recovery_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("covid_minus_precovid_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("recovery_minus_covid_total_pkm" %in% names(OA_matching_data_pooled))
+stopifnot("zero_quarter_share_pre" %in% names(OA_matching_data_pooled))
 
 # Matching-script reminder:
 # stage2_trends <- c(
 #   "trend_total_pkm",
 #   "recent_minus_mid_total_pkm",
-#   "mid_minus_early_total_pkm"
+#   "mid_minus_early_total_pkm",
+#   "covid_minus_precovid_total_pkm",
+#   "recovery_minus_covid_total_pkm"
 # )
 
 # ============================================================
@@ -873,6 +982,18 @@ if (all(c("treated_OA", "control_group2_OA") %in% names(OA_matching_data_pooled)
         mean(recent_minus_mid_total_pkm, na.rm = TRUE),
       mean_mid_minus_early_total_pkm =
         mean(mid_minus_early_total_pkm, na.rm = TRUE),
+      mean_precovid_total_pkm =
+        mean(mean_precovid_total_pkm, na.rm = TRUE),
+      mean_lockdown_total_pkm =
+        mean(mean_lockdown_total_pkm, na.rm = TRUE),
+      mean_recovery_total_pkm =
+        mean(mean_recovery_total_pkm, na.rm = TRUE),
+      mean_covid_minus_precovid_total_pkm =
+        mean(covid_minus_precovid_total_pkm, na.rm = TRUE),
+      mean_recovery_minus_covid_total_pkm =
+        mean(recovery_minus_covid_total_pkm, na.rm = TRUE),
+      mean_zero_quarter_share_pre =
+        mean(zero_quarter_share_pre, na.rm = TRUE),
       mean_pct_zero_total_inj_pre_covid =
         mean(pct_zero_total_inj_pre_covid, na.rm = TRUE),
       mean_road_length_km =
@@ -1004,6 +1125,12 @@ var_description <- tibble::tribble(
   "mean_total_pkm_early_pre_covid", "Mean quarterly total injuries per road-km in the early pre-COVID window (before 2016 Q1).",
   "recent_minus_mid_total_pkm", "Difference in mean quarterly total injuries per road-km between recent and mid pre-COVID windows. Stage 2 trajectory-shape variable.",
   "mid_minus_early_total_pkm", "Difference in mean quarterly total injuries per road-km between mid and early pre-COVID windows. Stage 2 trajectory-shape variable.",
+  "mean_precovid_total_pkm", "Mean quarterly total injuries per road-km in the pre-COVID window, used for period-specific Stage 2 matching.",
+  "mean_lockdown_total_pkm", "Mean quarterly total injuries per road-km in the lockdown window, 2020 Q2 to 2021 Q1.",
+  "mean_recovery_total_pkm", "Mean quarterly total injuries per road-km in the recovery window, 2021 Q2 to 2021 Q4.",
+  "covid_minus_precovid_total_pkm", "Difference between lockdown and pre-COVID mean total injuries per road-km.",
+  "recovery_minus_covid_total_pkm", "Difference between recovery and lockdown mean total injuries per road-km.",
+  "zero_quarter_share_pre", "Share of pre-COVID quarters with zero total injuries, scaled 0 to 1.",
   "log1p_total_injuries_pre_covid", "Log-transformed total pre-COVID injuries, log(1 + total_injuries_pre_covid).",
   "log1p_mean_total_inj_pre_covid", "Log-transformed mean quarterly pre-COVID injuries, log(1 + mean_total_inj_pre_covid).",
   "total_injuries_all_periods", "Total injuries observed in the OA across the full available injury dataset.",

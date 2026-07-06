@@ -1,3 +1,11 @@
-variable,label,smd_before,smd_after,balanced
-trend_total_pkm,Trend: total injuries/km,-0.0111,0.0181,TRUE
-log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7202,-0.0619,TRUE
+stage,variable,label,smd_before,smd_after,balanced
+Stage 2,trend_total_pkm,Trend: total injuries/km,-0.0111,0.025,TRUE
+Stage 2,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.1006,0.0802,TRUE
+Stage 2,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0611,-0.0335,TRUE
+Stage 2,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2442,-0.0368,TRUE
+Stage 2,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.1847,0.0254,TRUE
+Stage 2,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7202,0.1448,FALSE
+Stage 2,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7202,0.1448,FALSE
+Stage 2,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.2921,0.1175,FALSE
+Stage 2,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.4991,0.1023,FALSE
+Stage 2,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.49370000000000003,-0.1117,FALSE
