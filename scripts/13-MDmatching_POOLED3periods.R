@@ -7,11 +7,15 @@
 # I strengthened Stage 2 to target the parallel-trends problem directly, while
 # keeping the outcome-history distance parsimonious:
 #   1. I match on trajectory shape rather than only one blended slope.
-#   2. I use COVID-defined changes to capture lockdown and recovery responses.
+#   2. I construct COVID/recovery changes separately for each scheme and use
+#      only quarters strictly before that scheme's implementation.
 #   3. I keep only pre-COVID injury level and zero-quarter share as level/sparsity
 #      anchors, avoiding several highly correlated period-level variables.
 #   4. I exact-match on coarse pre-COVID baseline-injury and COVID-response strata.
-#   5. I select the matching ratio by prioritising COVID/recovery trend balance.
+#   5. Bath and Birmingham exclude the recovery change because they have fewer
+#      than two uncontaminated recovery quarters; later schemes retain it.
+#   6. I select the matching ratio by prioritising the approved, leakage-free
+#      trajectory variables and record a hard window audit.
 #
 # OUTPUTS:
 #   OA_matched_treated_pooled.rds
@@ -21,6 +25,7 @@
 #   OA_ratio_selection_pooled.rds
 #   OA_balance_tests_pooled.rds
 #   OA_matching_pairs_pooled.rds
+#   OA_scheme_history_window_audit.rds / .csv
 #
 # =============================================================================
 
@@ -34,6 +39,7 @@ library(ggrepel)
 library(tidyverse)
 library(patchwork)
 library(glue)
+library(zoo)
 
 set.seed(222)
 
@@ -51,6 +57,12 @@ min_unique_controls_per_treated <- 1
 # I use a stricter outcome-history balance threshold because the downstream
 # event study showed visible pre-treatment deviations around COVID/recovery.
 target_trend_smd <- 0.05
+
+# A recovery feature based on only one quarter is too noisy to be useful. Bath
+# has no uncontaminated recovery quarter and Birmingham has only one, so the
+# recovery-minus-lockdown variable is excluded for both. Later schemes have at
+# least three uncontaminated recovery quarters.
+min_recovery_quarters <- 2L
 
 OA_matching_dataset <- readRDS(here("data", "processed", "OA_matching_census.rds"))
 glimpse(OA_matching_dataset)
@@ -75,13 +87,9 @@ stage1_socdem <- c(
 )
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
-# Stage 2 outcome-history matching variables.
-# Parsimonious three-period trajectory design:
-#   - pre-COVID / normal-period trend proxy,
-#   - lockdown response relative to pre-COVID,
-#   - recovery response relative to lockdown.
-# This avoids relying on a single blended slope while not overloading the
-# Mahalanobis distance with many correlated shape and level summaries.
+# Possible Stage 2 outcome-history variables. The actual Stage 2 variable set is
+# selected separately for every scheme after its uncontaminated history window
+# is constructed below.
 stage2_trends <- c(
   "trend_total_pkm",
   "covid_minus_precovid_total_pkm",
@@ -95,37 +103,25 @@ stage2_levels <- c(
   "mean_precovid_total_pkm",
   "zero_quarter_share_pre"
 )
-stage2_vars <- c(stage2_trends, stage2_levels)
-
-# The ratio selector prioritises the same compact three-period trajectory
-# variables used in the Stage 2 matching distance.
-priority_trend_vars <- c(
-  "trend_total_pkm",
-  "covid_minus_precovid_total_pkm",
-  "recovery_minus_covid_total_pkm"
-)
 
 log_transform_s1 <- c("road_length_km", "pop_density", "dist_BUA_centroid",
                       "road_density_m_km2", "business_retail_per_km2")
 log_nozero_s1 <- c("area_km2")
-log_transform_s2_levels <- stage2_levels
 
 log_names_s1 <- paste0("log1p_", log_transform_s1)
 log_nozero_names_s1 <- paste0("log_", log_nozero_s1)
-log_names_s2 <- paste0("log1p_", log_transform_s2_levels)
 
 stage1_vars_log <- c(
   log_names_s1, log_nozero_names_s1,
   setdiff(stage1_vars, c(log_transform_s1, log_nozero_s1))
 )
-stage2_vars_log <- c(stage2_trends, log_names_s2)
 
-required_stage2_source_vars <- c(stage2_trends, stage2_levels)
+required_stage2_source_vars <- "trend_total_pkm"
 missing_stage2_source_vars <- setdiff(required_stage2_source_vars, names(OA_matching_dataset))
 
 if (length(missing_stage2_source_vars) > 0) {
   stop(
-    "Missing Stage 2 matching variables in OA_matching_census.rds: ",
+    "Missing safe pre-COVID Stage 2 variable in OA_matching_census.rds: ",
     paste(missing_stage2_source_vars, collapse = ", "),
     "\nRegenerate OA_matching_data_pooled.rds and OA_matching_census.rds first."
   )
@@ -203,6 +199,163 @@ prep_dataset <- function(data) {
 
 data_england <- prep_dataset(data_england)
 
+# =============================================================================
+# SCHEME-SPECIFIC, LEAKAGE-FREE OUTCOME-HISTORY FEATURES
+# =============================================================================
+
+# The original recovery feature always used 2021 Q2-Q4. That window is partly
+# post-treatment for Bath and Birmingham. Rebuild period summaries from the
+# quarterly OA data and enforce that the latest quarter used is strictly before
+# each scheme's treatment quarter.
+
+oa_quarterly_raw <- readRDS(
+  here("data", "processed", "OA_injuries_quarterly.rds")
+) %>%
+  transmute(
+    OA,
+    quarter_year = as.Date(as.yearqtr(quarter_year)),
+    total_injuries = replace_na(total_injuries, 0)
+  ) %>%
+  group_by(OA, quarter_year) %>%
+  summarise(total_injuries = sum(total_injuries), .groups = "drop")
+
+scheme_start_lookup <- readRDS(
+  here("data", "processed", "roads_caz_props.rds")
+) %>%
+  filter(!is.na(scheme), !is.na(caz_start_q)) %>%
+  transmute(
+    scheme,
+    treatment_start_q = as.Date(as.yearqtr(caz_start_q))
+  ) %>%
+  distinct()
+
+if (any(count(scheme_start_lookup, scheme)$n != 1L)) {
+  stop("Each scheme must have exactly one treatment quarter.")
+}
+
+history_quarters <- seq.Date(
+  as.Date("2015-01-01"),
+  as.Date("2021-10-01"),
+  by = "3 months"
+)
+
+matching_oa_lookup <- data_england %>%
+  distinct(OA, road_length_km)
+
+# OA_injuries_quarterly.rds contains injury-positive rows. Complete the grid so
+# zero-injury OA-quarters contribute correctly to period means and sparsity.
+oa_history_complete <- tidyr::crossing(
+  OA = matching_oa_lookup$OA,
+  quarter_year = history_quarters
+) %>%
+  left_join(oa_quarterly_raw, by = c("OA", "quarter_year")) %>%
+  mutate(total_injuries = replace_na(total_injuries, 0)) %>%
+  left_join(matching_oa_lookup, by = "OA")
+
+make_scheme_history_features <- function(oas, scheme_name, treatment_start_q) {
+  pre_covid_quarters <- history_quarters[
+    history_quarters <= as.Date("2019-10-01")
+  ]
+  lockdown_quarters <- history_quarters[
+    history_quarters >= as.Date("2020-04-01") &
+      history_quarters <= as.Date("2021-01-01")
+  ]
+  fixed_recovery_quarters <- history_quarters[
+    history_quarters >= as.Date("2021-04-01") &
+      history_quarters <= as.Date("2021-10-01")
+  ]
+  
+  previous_treatment_quarter <- seq.Date(
+    treatment_start_q,
+    by = "-3 months",
+    length.out = 2
+  )[2]
+  
+  safe_recovery_quarters <- fixed_recovery_quarters[
+    fixed_recovery_quarters <= previous_treatment_quarter
+  ]
+  use_recovery <- length(safe_recovery_quarters) >= min_recovery_quarters
+  
+  # If recovery is excluded, the latest matching outcome is lockdown 2021 Q1.
+  latest_feature_q <- if (use_recovery) {
+    max(safe_recovery_quarters)
+  } else {
+    max(lockdown_quarters)
+  }
+  
+  if (latest_feature_q >= treatment_start_q) {
+    stop(
+      "Outcome-history leakage for ", scheme_name,
+      ": latest feature quarter ", latest_feature_q,
+      " is not before treatment ", treatment_start_q
+    )
+  }
+  
+  features <- oa_history_complete %>%
+    filter(OA %in% oas) %>%
+    group_by(OA, road_length_km) %>%
+    summarise(
+      mean_precovid_total_pkm =
+        mean(total_injuries[quarter_year %in% pre_covid_quarters]) /
+        pmax(first(road_length_km), 0.001),
+      mean_lockdown_total_pkm =
+        mean(total_injuries[quarter_year %in% lockdown_quarters]) /
+        pmax(first(road_length_km), 0.001),
+      mean_recovery_total_pkm = if (use_recovery) {
+        mean(total_injuries[quarter_year %in% safe_recovery_quarters]) /
+          pmax(first(road_length_km), 0.001)
+      } else {
+        NA_real_
+      },
+      zero_quarter_share_pre =
+        mean(total_injuries[quarter_year %in% pre_covid_quarters] == 0),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      covid_minus_precovid_total_pkm =
+        mean_lockdown_total_pkm - mean_precovid_total_pkm,
+      recovery_minus_covid_total_pkm = if (use_recovery) {
+        mean_recovery_total_pkm - mean_lockdown_total_pkm
+      } else {
+        NA_real_
+      }
+    )
+  
+  if (nrow(features) != length(unique(oas))) {
+    stop("Incomplete OA history features for scheme: ", scheme_name)
+  }
+  
+  audit <- tibble(
+    scheme = scheme_name,
+    treatment_start_q = treatment_start_q,
+    latest_feature_q = latest_feature_q,
+    n_safe_recovery_quarters = length(safe_recovery_quarters),
+    recovery_feature_included = use_recovery,
+    response_feature = if_else(
+      use_recovery,
+      "recovery_minus_covid_total_pkm",
+      "covid_minus_precovid_total_pkm"
+    ),
+    passes_no_leakage_check = latest_feature_q < treatment_start_q
+  )
+  
+  list(data = features, audit = audit)
+}
+
+assert_complete_matching_vars <- function(data, vars, label) {
+  bad <- vars[map_lgl(vars, function(v) {
+    !v %in% names(data) || any(!is.finite(data[[v]]))
+  })]
+  
+  if (length(bad) > 0) {
+    stop(
+      "Non-finite or missing matching variables for ", label, ": ",
+      paste(bad, collapse = ", ")
+    )
+  }
+  invisible(TRUE)
+}
+
 winsorise_and_log_s1 <- function(data, raw_vars, log_vars,
                                  log_nozero_vars = character(0)) {
   treated_only <- data %>% filter(treat_indicator == 1)
@@ -274,16 +427,11 @@ add_baseline_injury_strata <- function(data, n_strata = 4) {
   }
 }
 
-add_covid_response_strata <- function(data, n_strata = 4) {
-  # I exact-match on a coarse COVID/recovery response stratum so treated OAs are
-  # not paired with controls that had a very different pandemic-era outcome path.
-  response_var <- case_when(
-    "recovery_minus_covid_total_pkm" %in% names(data) ~ "recovery_minus_covid_total_pkm",
-    "covid_minus_precovid_total_pkm" %in% names(data) ~ "covid_minus_precovid_total_pkm",
-    TRUE ~ NA_character_
-  )
-  
-  if (is.na(response_var)) {
+add_covid_response_strata <- function(data, response_var, n_strata = 4) {
+  # Use only the response variable approved by the scheme-specific window
+  # audit. Bath and Birmingham use lockdown-minus-pre-COVID; later schemes use
+  # recovery-minus-lockdown.
+  if (is.na(response_var) || !response_var %in% names(data)) {
     return(data %>% mutate(covid_response_stratum = factor("all")))
   }
   
@@ -449,7 +597,9 @@ extract_reuse_diagnostics <- function(matchit_obj, data) {
   )
 }
 
-prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
+prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars,
+                                 trend_vars_raw, level_vars_raw,
+                                 response_var, label) {
   s1v <- check_vars(data_clean, s1_vars, paste("S1 ratio prep", label))
   formula_s1 <- reformulate(s1v, response = "treat_indicator")
   
@@ -472,25 +622,27 @@ prepare_s2_for_ratio <- function(data_clean, s1_vars, s2_vars, label) {
   s2_raw <- bind_rows(treated_s1, controls_s1)
   treated_ref <- s2_raw %>% filter(treat_indicator == 1)
   
-  for (v in intersect(stage2_levels, names(s2_raw))) {
+  for (v in intersect(level_vars_raw, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
     s2_raw[[paste0("log1p_", v)]] <-
       log1p(pmax(pmin(pmax(s2_raw[[v]], q_lo), q_hi), 0))
   }
-  for (v in intersect(stage2_trends, names(s2_raw))) {
+  for (v in intersect(trend_vars_raw, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
     s2_raw[[v]] <- pmin(pmax(s2_raw[[v]], q_lo), q_hi)
   }
   
   s2_raw <- add_baseline_injury_strata(s2_raw)
-  s2_raw <- add_covid_response_strata(s2_raw)
+  s2_raw <- add_covid_response_strata(s2_raw, response_var)
+  assert_complete_matching_vars(s2_raw, s2_vars, paste("S2 ratio prep", label))
   s2v <- check_vars(s2_raw, s2_vars, paste("S2 ratio prep", label))
   list(data = s2_raw, s2_vars = s2v)
 }
 
-select_ratio <- function(data, s2_vars, trend_vars, total_trend_var, label,
+select_ratio <- function(data, s2_vars, trend_vars, total_trend_var,
+                         priority_trend_vars, label,
                          ratios_to_test = 1:10,
                          reuse_max = stage2_reuse_max) {
   n_t <- sum(data$treat_indicator == 1)
@@ -499,7 +651,7 @@ select_ratio <- function(data, s2_vars, trend_vars, total_trend_var, label,
   
   cat("\n--- Ratio selection:", label, "---\n")
   cat("  Treated:", n_t, "| Controls:", n_c, "\n")
-  cat("  Selection criterion: COVID/recovery trend balance, then overall trend balance, then reuse/diversity\n")
+  cat("  Selection criterion: approved trajectory balance, then overall trend balance, then reuse/diversity\n")
   
   formula_s2 <- reformulate(s2_vars, response = "treat_indicator")
   
@@ -615,6 +767,7 @@ select_ratio <- function(data, s2_vars, trend_vars, total_trend_var, label,
 
 run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
                          label, trend_vars,
+                         trend_vars_raw, level_vars_raw, response_var,
                          reuse_max = stage2_reuse_max) {
   cat("\n", paste(rep("=", 60), collapse = ""), "\n")
   cat("MATCHING -", label, "| ratio 1:", ratio,
@@ -707,12 +860,12 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
     select(-any_of(c("weights", "subclass", "distance")))
   treated_ref <- s2_raw %>% filter(treat_indicator == 1)
   
-  for (v in intersect(stage2_trends, names(s2_raw))) {
+  for (v in intersect(trend_vars_raw, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
     s2_raw[[v]] <- pmin(pmax(s2_raw[[v]], q_lo), q_hi)
   }
-  for (v in intersect(stage2_levels, names(s2_raw))) {
+  for (v in intersect(level_vars_raw, names(s2_raw))) {
     q_lo <- quantile(treated_ref[[v]], 0.01, na.rm = TRUE)
     q_hi <- quantile(treated_ref[[v]], 0.99, na.rm = TRUE)
     s2_raw[[paste0("log1p_", v)]] <-
@@ -720,7 +873,8 @@ run_matching <- function(data_clean, s1_vars, s2_vars, ratio,
   }
   
   s2_raw <- add_baseline_injury_strata(s2_raw)
-  s2_raw <- add_covid_response_strata(s2_raw)
+  s2_raw <- add_covid_response_strata(s2_raw, response_var)
+  assert_complete_matching_vars(s2_raw, s2_vars, paste("S2", label))
   s2v <- check_vars(s2_raw, s2_vars, paste("S2", label))
   formula_s2 <- reformulate(s2v, response = "treat_indicator")
   
@@ -806,6 +960,7 @@ cat("\nEligible controls before scheme-specific exclusions:",
 
 all_results <- list()
 all_ratio_tables <- list()
+history_window_log <- list()
 
 for (s in english_schemes) {
   cat("\n", paste(rep("#", 60), collapse = ""), "\n")
@@ -825,6 +980,52 @@ for (s in english_schemes) {
   
   scheme_data <- bind_rows(scheme_treated, scheme_control_pool)
   
+  treatment_start_q <- scheme_start_lookup %>%
+    filter(scheme == s) %>%
+    pull(treatment_start_q)
+  
+  if (length(treatment_start_q) != 1L) {
+    stop("Missing or non-unique treatment quarter for scheme: ", s)
+  }
+  
+  scheme_history <- make_scheme_history_features(
+    oas = unique(scheme_data$OA),
+    scheme_name = s,
+    treatment_start_q = treatment_start_q
+  )
+  history_window_log[[s]] <- scheme_history$audit
+  
+  # Remove the old fixed-window summaries before joining the leakage-free
+  # scheme-specific versions.
+  scheme_data <- scheme_data %>%
+    select(-any_of(c(
+      "mean_precovid_total_pkm",
+      "mean_lockdown_total_pkm",
+      "mean_recovery_total_pkm",
+      "covid_minus_precovid_total_pkm",
+      "recovery_minus_covid_total_pkm",
+      "zero_quarter_share_pre",
+      "log1p_mean_precovid_total_pkm",
+      "log1p_zero_quarter_share_pre"
+    ))) %>%
+    left_join(
+      scheme_history$data %>% select(-road_length_km),
+      by = "OA"
+    )
+  
+  recovery_included <- scheme_history$audit$recovery_feature_included
+  response_var_scheme <- scheme_history$audit$response_feature
+  stage2_trends_scheme_raw <- c(
+    "trend_total_pkm",
+    "covid_minus_precovid_total_pkm",
+    if (recovery_included) "recovery_minus_covid_total_pkm"
+  )
+  stage2_levels_scheme_raw <- stage2_levels
+  stage2_vars_scheme_requested <- c(
+    stage2_trends_scheme_raw,
+    paste0("log1p_", stage2_levels_scheme_raw)
+  )
+  
   overlap_check <- scheme_data %>%
     filter(treat_indicator == 0, OA %in% scheme_treated_oas) %>%
     nrow()
@@ -832,6 +1033,13 @@ for (s in english_schemes) {
   cat("Treated OAs:", nrow(scheme_treated),
       "| Scheme-specific control pool:", nrow(scheme_control_pool),
       "| Same-scheme OA overlap after exclusion:", overlap_check, "\n")
+  cat(
+    "  Treatment quarter:", as.character(treatment_start_q),
+    "| Latest outcome-history quarter:",
+    as.character(scheme_history$audit$latest_feature_q),
+    "| Recovery feature included:", recovery_included,
+    "| Response stratum:", response_var_scheme, "\n"
+  )
   
   scheme_clean <- winsorise_and_log_s1(
     scheme_data,
@@ -841,16 +1049,21 @@ for (s in english_schemes) {
   )
   scheme_clean <- winsorise_and_log_s2(
     scheme_clean,
-    stage2_levels,
-    log_transform_s2_levels
+    stage2_levels_scheme_raw,
+    stage2_levels_scheme_raw
   )
   
   s1_vars_scheme <- check_vars(scheme_clean, stage1_vars_log,
                                paste("S1", s))
-  s2_vars_scheme <- check_vars(scheme_clean, stage2_vars_log,
+  assert_complete_matching_vars(
+    scheme_clean,
+    stage2_vars_scheme_requested,
+    paste("pre-match S2", s)
+  )
+  s2_vars_scheme <- check_vars(scheme_clean, stage2_vars_scheme_requested,
                                paste("S2", s))
   
-  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends)
+  trend_vars_scheme <- intersect(s2_vars_scheme, stage2_trends_scheme_raw)
   total_trend_var_scheme <- intersect(
     trend_vars_scheme,
     c("trend_total_pkm", "trend_total_ksi",
@@ -867,7 +1080,10 @@ for (s in english_schemes) {
     scheme_clean,
     s1_vars_scheme,
     s2_vars_scheme,
-    s
+    trend_vars_raw = stage2_trends_scheme_raw,
+    level_vars_raw = stage2_levels_scheme_raw,
+    response_var = response_var_scheme,
+    label = s
   )
   
   ratio_result <- select_ratio(
@@ -875,6 +1091,7 @@ for (s in english_schemes) {
     s2_prep$s2_vars,
     trend_vars = trend_vars_scheme,
     total_trend_var = total_trend_var_scheme,
+    priority_trend_vars = trend_vars_scheme,
     label = s,
     ratios_to_test = 1:10,
     reuse_max = stage2_reuse_max
@@ -882,7 +1099,10 @@ for (s in english_schemes) {
   optimal_ratio <- ratio_result$optimal_ratio
   
   all_ratio_tables[[s]] <- ratio_result$ratio_results %>%
-    mutate(scheme = s)
+    mutate(
+      scheme = s,
+      selected = ratio == optimal_ratio
+    )
   
   result <- run_matching(
     data_clean = scheme_clean,
@@ -891,12 +1111,19 @@ for (s in english_schemes) {
     ratio = optimal_ratio,
     label = s,
     trend_vars = trend_vars_scheme,
+    trend_vars_raw = stage2_trends_scheme_raw,
+    level_vars_raw = stage2_levels_scheme_raw,
+    response_var = response_var_scheme,
     reuse_max = stage2_reuse_max
   )
   
   if (!is.null(result)) {
     result$matched_data <- result$matched_data %>%
-      mutate(scheme = s)
+      mutate(
+        scheme = s,
+        recovery_feature_included = recovery_included,
+        stage2_response_feature = response_var_scheme
+      )
     result$pairs <- result$pairs %>%
       mutate(scheme = s)
     result$isolated_OAs <- result$isolated_OAs %>%
@@ -915,6 +1142,17 @@ cat("\n")
 cat(paste(rep("=", 70), collapse = ""), "\n")
 cat("COMBINING RESULTS ACROSS SCHEMES\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
+
+history_window_audit <- bind_rows(history_window_log) %>%
+  arrange(treatment_start_q, scheme)
+
+cat("Scheme-specific outcome-history window audit:\n")
+print(history_window_audit, n = Inf)
+
+if (nrow(history_window_audit) != length(english_schemes) ||
+    !all(history_window_audit$passes_no_leakage_check)) {
+  stop("The scheme-specific outcome-history leakage audit failed.")
+}
 
 matched_full <- bind_rows(map(all_results, ~ .x$matched_data))
 isolated_combined <- bind_rows(map(all_results, ~ .x$isolated_OAs))
@@ -949,11 +1187,17 @@ print(stage1_summary_combined)
 
 matched_treated <- matched_full %>%
   filter(treat_indicator == 1) %>%
-  select(OA, weights, baseline_injury_stratum, covid_response_stratum, scheme)
+  select(
+    OA, weights, baseline_injury_stratum, covid_response_stratum, scheme,
+    recovery_feature_included, stage2_response_feature
+  )
 
 matched_controls <- matched_full %>%
   filter(treat_indicator == 0) %>%
-  select(OA, weights, baseline_injury_stratum, covid_response_stratum, scheme)
+  select(
+    OA, weights, baseline_injury_stratum, covid_response_stratum, scheme,
+    recovery_feature_included, stage2_response_feature
+  )
 
 stopifnot(
   "treated weights == 1" = all(matched_treated$weights == 1),
@@ -975,6 +1219,8 @@ saveRDS(bind_rows(balance_test_log),
         here("data", "processed", "OA_balance_tests_pooled.rds"))
 saveRDS(pairs_pooled,
         here("data", "processed", "OA_matching_pairs_pooled.rds"))
+saveRDS(history_window_audit,
+        here("data", "processed", "OA_scheme_history_window_audit.rds"))
 
 ratio_combined <- bind_rows(all_ratio_tables)
 saveRDS(ratio_combined,
@@ -984,6 +1230,10 @@ write_csv(stage1_summary_combined,
           here("output", "diagnostics", "pooled", "OA_stage1_retention_pooled.csv"))
 write_csv(scheme_summary,
           here("output", "diagnostics", "pooled", "OA_scheme_matching_summary_pooled.csv"))
+write_csv(
+  history_window_audit,
+  here("output", "diagnostics", "pooled", "OA_scheme_history_window_audit.csv")
+)
 
 # =============================================================================
 # DIAGNOSTIC PLOTS AND BALANCE SUMMARIES
@@ -1031,12 +1281,7 @@ ggsave(file.path(outdir, "fig_ratio_unique_controls_pooled.png"),
 
 cat("\n=== STAGE 2 RATIO SELECTION PER SCHEME ===\n\n")
 ratio_summary <- ratio_combined %>%
-  filter(!is.na(max_trend_smd)) %>%
-  group_by(scheme) %>%
-  arrange(max_priority_trend_smd, max_trend_smd, total_trend_smd,
-          desc(n_unique_controls), max_reuse, mean_smd) %>%
-  slice(1) %>%
-  ungroup() %>%
+  filter(selected, !is.na(max_trend_smd)) %>%
   left_join(
     matched_full %>%
       group_by(scheme) %>%
@@ -1274,5 +1519,7 @@ cat("  OA_common_support_flags_pooled.rds\n")
 cat("  OA_ratio_selection_pooled.rds\n")
 cat("  OA_balance_tests_pooled.rds\n")
 cat("  OA_matching_pairs_pooled.rds\n")
+cat("  OA_scheme_history_window_audit.rds\n")
+cat("  OA_scheme_history_window_audit.csv\n")
 cat("  fig_ratio_selection_pooled.png\n")
 cat("  fig_ratio_unique_controls_pooled.png\n")

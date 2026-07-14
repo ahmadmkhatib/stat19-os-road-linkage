@@ -1030,3 +1030,40 @@ message("Saved plot and CSV to: ", outdir)
 
 
 
+
+# Does the "raw index" divergence show up in Leeds and Kirklees too
+# (same force, no CAZ), or is it Bradford-specific even within its own force?
+
+west_yorks_district_check <- injuries_raw %>%
+  filter(LAD24CD %in% c("E08000032", "E08000035", "E08000034")) %>%  # Bradford, Leeds, Kirklees
+  mutate(district = case_when(
+    LAD24CD == "E08000032" ~ "Bradford",
+    LAD24CD == "E08000035" ~ "Leeds",
+    LAD24CD == "E08000034" ~ "Kirklees"
+  )) %>%
+  group_by(quarter_year, district) %>%
+  summarise(n_casualties = n(), .groups = "drop")
+
+baseline_wy_districts <- west_yorks_district_check %>%
+  filter(quarter_year >= as.yearqtr("2019 Q1"), quarter_year <= as.yearqtr("2019 Q4")) %>%
+  group_by(district) %>%
+  summarise(base = mean(n_casualties), .groups = "drop")
+
+west_yorks_district_indexed <- west_yorks_district_check %>%
+  left_join(baseline_wy_districts, by = "district") %>%
+  mutate(index = 100 * n_casualties / base)
+
+ggplot(west_yorks_district_indexed, aes(x = quarter_year, y = index, colour = district)) +
+  geom_hline(yintercept = 100, linetype = "dashed", colour = "grey60") +
+  geom_vline(xintercept = as.numeric(as.yearqtr("2021 Q1")), linetype = "dotted", colour = "grey50") +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.2) +
+  labs(title = "Casualty count index, West Yorkshire districts",
+       subtitle = "Bradford vs. Leeds vs. Kirklees (all same police force)",
+       x = "Quarter", y = "Index (2019 = 100)", colour = NULL) +
+  theme_minimal(base_size = 12) + theme(legend.position = "top")
+
+#### The evidence now points fairly clearly toward a genuine West Yorkshire-wide reporting/recording shift, not a Bradford-specific artifact and not a genuine CAZ effect.
+
+
+
+

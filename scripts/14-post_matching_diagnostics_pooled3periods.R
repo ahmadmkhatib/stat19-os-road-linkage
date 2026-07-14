@@ -1,10 +1,10 @@
 # =============================================================================
-# POST-MATCHING DIAGNOSTICS & DESCRIPTIVES â€” POOLED MATCHING
+# POST-MATCHING DIAGNOSTICS & DESCRIPTIVES  POOLED MATCHING
 # =============================================================================
 #
 ## matching pipeline (total injuries only, England only).
 #
-# PART A â€” Overall diagnostics (script 17 equivalent):
+# PART A  Overall diagnostics (script 17 equivalent):
 #   1. Descriptive summary tables (treated vs control)
 #   2. SMD tables (Stage 1 + Stage 2)
 #   3. Love plots (Stage 1 + Stage 2)
@@ -14,7 +14,7 @@
 #   7. Mahalanobis distance diagnostics
 #   8. Parallel trends density plots
 #
-# PART B â€” Per-scheme diagnostics (script 18b equivalent):
+# PART B  Per-scheme diagnostics (script 18b equivalent):
 #   9. Per-scheme SMD computation
 #  10. Per-scheme love plots (faceted)
 #  11. SMD heatmap across schemes
@@ -58,7 +58,7 @@ COL_CONTROL <- "#2E6FAB"
 COL_BEFORE  <- "#E74C3C"
 COL_AFTER   <- "#2ECC71"
 
-# Central text-size constants â€” change these to rescale everything uniformly
+# Central text-size constants  change these to rescale everything uniformly
 BASE_SIZE       <- 16   # base for theme_diag (axis text, strip text, etc.)
 TITLE_SIZE      <- 19   # plot titles
 SUBTITLE_SIZE   <- 15   # plot subtitles
@@ -125,20 +125,35 @@ stage1_vars_log <- c(
   setdiff(stage1_vars_raw, c(log_transform_s1, log_nozero_s1))
 )
 
-# Stage 2 - pooled outcome-history variables.
-# This matches the parsimonious matching script: three trajectory terms plus
-# pre-COVID level and zero-quarter sparsity. Other historical summaries can be
-# inspected separately, but they are not part of the primary Stage 2 balance.
+# Stage 2 outcome-history variables.
+# Bath and Birmingham started too early for a valid pre-treatment recovery
+# window. They therefore use the four core variables only. The five later
+# schemes additionally use the recovery-response variable.
+stage2_core <- c(
+  "trend_total_pkm",
+  "covid_minus_precovid_total_pkm",
+  "log1p_mean_precovid_total_pkm",
+  "log1p_zero_quarter_share_pre"
+)
+
+stage2_recovery <- "recovery_minus_covid_total_pkm"
+stage2_vars_log <- c(stage2_core, stage2_recovery)
+
+# Raw variables are retained for descriptive summaries and transformed below.
 stage2_trends <- c(
   "trend_total_pkm",
   "covid_minus_precovid_total_pkm",
-  "recovery_minus_covid_total_pkm"
+  stage2_recovery
 )
-stage2_levels <- c(
-  "mean_precovid_total_pkm",
-  "zero_quarter_share_pre"
-)
-stage2_vars_log <- c(stage2_trends, paste0("log1p_", stage2_levels))
+stage2_levels <- c("mean_precovid_total_pkm", "zero_quarter_share_pre")
+
+stage2_vars_for_scheme <- function(scheme_name) {
+  if (scheme_name %in% c("Bath", "Birmingham")) {
+    stage2_core
+  } else {
+    stage2_vars_log
+  }
+}
 
 all_match_vars <- c(stage1_vars_log, stage2_vars_log)
 
@@ -391,15 +406,44 @@ if (length(missing_stage2_unmatched_vars) > 0) {
 # HELPER FUNCTIONS
 # =============================================================================
 
-compute_smd <- function(data, var, treat_col = "treat_indicator") {
-  t_vals <- data[[var]][data[[treat_col]] == 1]
-  c_vals <- data[[var]][data[[treat_col]] == 0]
-  t_vals <- t_vals[!is.na(t_vals)]
-  c_vals <- c_vals[!is.na(c_vals)]
-  if (length(t_vals) < 2 || length(c_vals) < 2) return(NA_real_)
-  pooled_sd <- sqrt((var(t_vals) + var(c_vals)) / 2)
-  if (pooled_sd == 0) return(0)
-  (mean(t_vals) - mean(c_vals)) / pooled_sd
+compute_smd <- function(data, var, treat_col = "treat_indicator",
+                        weight_col = NULL) {
+  keep <- !is.na(data[[var]]) & !is.na(data[[treat_col]])
+  x <- data[[var]][keep]
+  z <- data[[treat_col]][keep]
+  
+  if (is.null(weight_col)) {
+    w <- rep(1, length(x))
+  } else {
+    if (!weight_col %in% names(data)) {
+      stop("Weight column not found: ", weight_col)
+    }
+    w <- data[[weight_col]][keep]
+  }
+  
+  valid <- is.finite(x) & is.finite(w) & w > 0 & z %in% c(0, 1)
+  x <- x[valid]
+  z <- z[valid]
+  w <- w[valid]
+  
+  if (sum(z == 1) < 2 || sum(z == 0) < 2) return(NA_real_)
+  
+  weighted_mean <- function(values, weights) {
+    sum(weights * values) / sum(weights)
+  }
+  weighted_var <- function(values, weights) {
+    centre <- weighted_mean(values, weights)
+    sum(weights * (values - centre)^2) / sum(weights)
+  }
+  
+  mean_t <- weighted_mean(x[z == 1], w[z == 1])
+  mean_c <- weighted_mean(x[z == 0], w[z == 0])
+  var_t  <- weighted_var(x[z == 1], w[z == 1])
+  var_c  <- weighted_var(x[z == 0], w[z == 0])
+  pooled_sd <- sqrt((var_t + var_c) / 2)
+  
+  if (!is.finite(pooled_sd) || pooled_sd == 0) return(0)
+  (mean_t - mean_c) / pooled_sd
 }
 
 desc_stats <- function(data, var) {
@@ -466,12 +510,12 @@ summarise_balance_groups <- function(smd_df, group_vars = character()) {
 }
 
 # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-# â•‘                     PART A â€” OVERALL DIAGNOSTICS                    â•‘
+# â•‘                     PART A  OVERALL DIAGNOSTICS                    â•‘
 # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 cat("\n")
 cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("PART A â€” OVERALL POST-MATCHING DIAGNOSTICS\n")
+cat("PART A  OVERALL POST-MATCHING DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
 # =============================================================================
 # SCHEME-LEVEL MATCHING SUMMARY
@@ -561,13 +605,14 @@ cat("--- 2. SMD tables ---\n")
 smd_table <- function(vars, before_data, after_data, label) {
   vars_avail <- intersect(vars, intersect(names(before_data), names(after_data)))
   map_df(vars_avail, function(v) {
+    smd_after <- compute_smd(after_data, v, weight_col = "weights")
     tibble(
       stage         = label,
       variable      = v,
       label         = coalesce(var_labels[v], v),
       smd_before    = round(compute_smd(before_data, v), 4),
-      smd_after     = round(compute_smd(after_data,  v), 4),
-      balanced      = abs(compute_smd(after_data, v)) < 0.10
+      smd_after     = round(smd_after, 4),
+      balanced      = !is.na(smd_after) & abs(smd_after) < 0.10
     )
   })
 }
@@ -814,7 +859,7 @@ if ("mdist" %in% names(matched_full)) {
   
   save_fig(p_mdist, "fig07_mahalanobis_distance.png", width = 10, height = 7)
 } else {
-  cat("  No mdist column in matched data â€” skipping.\n")
+  cat("  No mdist column in matched data  skipping.\n")
 }
 cat("\n")
 
@@ -892,11 +937,18 @@ if (length(trend_vars) > 0) {
     distinct(scheme, caz_start_q) %>%
     filter(!is.na(scheme))
   
+  # One membership row per OA-scheme is required. An OA can legitimately be a
+  # donor in more than one scheme, so joining quarterly OA observations to
+  # scheme membership is an intentional many-to-many expansion.
+  matched_scheme_membership <- matched_full %>%
+    select(OA, treat_indicator, weights, scheme, road_length_km) %>%
+    distinct(OA, scheme, .keep_all = TRUE)
+  
   oa_panel <- oa_q %>%
     inner_join(
-      matched_full %>%
-        select(OA, treat_indicator, weights, scheme, road_length_km),
-      by = "OA"
+      matched_scheme_membership,
+      by = "OA",
+      relationship = "many-to-many"
     ) %>%
     left_join(scheme_starts, by = "scheme") %>%
     mutate(injuries_per_km = total_injuries / pmax(road_length_km, 0.001))
@@ -937,7 +989,7 @@ if (length(trend_vars) > 0) {
     ) +
     facet_wrap(~scheme, ncol = 3, scales = "free_y") +
     labs(
-      title    = "Pre-treatment injury trends by scheme â€” pooled matching",
+      title    = "Pre-treatment injury trends by scheme  pooled matching",
       subtitle = "Quarterly weighted mean injuries per km | dotted line = scheme start",
       x = NULL, y = "Weighted mean injuries per km",
       colour = NULL, linetype = NULL
@@ -1010,11 +1062,11 @@ if (length(trend_vars) > 0) {
 cat("\n")
 
 # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-# â•‘                  PART B â€” PER-SCHEME DIAGNOSTICS                    â•‘
+# â•‘                  PART B  PER-SCHEME DIAGNOSTICS                    â•‘
 # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 cat(paste(rep("=", 70), collapse = ""), "\n")
-cat("PART B â€” PER-SCHEME DIAGNOSTICS\n")
+cat("PART B  PER-SCHEME DIAGNOSTICS\n")
 cat(paste(rep("=", 70), collapse = ""), "\n\n")
 
 # Schemes
@@ -1048,30 +1100,43 @@ smd_for_scheme <- function(scheme_name, vars) {
   
   # Before: this scheme's treated vs full unmatched control pool
   before_df <- unmatched_pool %>%
-    filter(treated_OA == 1 & OA %in% treated_oas | control_group2_OA == 1) %>%
+    filter(
+      (treated_OA == 1 & OA %in% treated_oas) |
+        control_group2_OA == 1
+    ) %>%
     mutate(treat_indicator = as.integer(OA %in% treated_oas))
   
-  # After: this scheme's treated + their matched controls
+  # After: restrict to this scheme's stack. Filtering only by OA would pull in
+  # rows for controls reused by other schemes and contaminate the SMD.
   after_df <- matched_full %>%
-    filter(OA %in% c(treated_oas, control_oas)) %>%
+    filter(
+      scheme == scheme_name,
+      OA %in% c(treated_oas, control_oas)
+    ) %>%
     mutate(treat_indicator = as.integer(OA %in% treated_oas))
   
   vars_avail <- intersect(vars, intersect(names(before_df), names(after_df)))
   
   map_df(vars_avail, function(v) {
+    smd_after <- compute_smd(after_df, v, weight_col = "weights")
     tibble(
       scheme     = scheme_name,
       variable   = v,
       label      = coalesce(var_labels[v], v),
       smd_before = round(compute_smd(before_df, v), 4),
-      smd_after  = round(compute_smd(after_df,  v), 4)
+      smd_after  = round(smd_after, 4),
+      used_in_matching = v %in% stage2_vars_for_scheme(scheme_name) |
+        v %in% stage1_vars_log
     )
   })
 }
 
 smd_all_schemes <- map_df(schemes, function(s) {
   cat("  Computing SMD:", s, "\n")
-  smd_for_scheme(s, all_match_vars)
+  smd_for_scheme(
+    s,
+    c(stage1_vars_log, stage2_vars_for_scheme(s))
+  )
 })
 
 write_csv(smd_all_schemes, file.path(outdir, "09_smd_per_scheme.csv"))
@@ -1240,15 +1305,25 @@ save_fig(p_heatmap_full, "fig11b_smd_heatmap_full.png",
 
 cat("--- 12. Per-scheme balance summary ---\n\n")
 
-scheme_balance <- smd_all_schemes %>%
-  filter(variable %in% stage2_vars_log) %>%
+scheme_stage2_smd <- map_df(schemes, function(s) {
+  smd_all_schemes %>%
+    filter(
+      scheme == s,
+      variable %in% stage2_vars_for_scheme(s)
+    )
+})
+
+scheme_balance <- scheme_stage2_smd %>%
   group_by(scheme) %>%
   summarise(
-    mean_stage2_smd_before = round(mean(abs(smd_before), na.rm = TRUE), 4),
-    mean_stage2_smd_after  = round(mean(abs(smd_after),  na.rm = TRUE), 4),
-    max_stage2_smd_after   = round(max_or_na(abs(smd_after)), 4),
-    n_stage2_imbalanced    = sum(abs(smd_after) >= 0.10, na.rm = TRUE),
-    all_stage2_balanced    = all(abs(smd_after) < 0.10, na.rm = TRUE),
+    n_stage2_variables     = n(),
+    mean_stage2_smd_before = round(mean(abs(smd_before)), 4),
+    mean_stage2_smd_after  = round(mean(abs(smd_after)), 4),
+    max_stage2_smd_after   = round(max(abs(smd_after)), 4),
+    n_stage2_imbalanced    = sum(abs(smd_after) >= 0.10),
+    all_stage2_available   = all(!is.na(smd_after)),
+    all_stage2_balanced    = all(!is.na(smd_after)) &&
+      all(abs(smd_after) < 0.10),
     .groups = "drop"
   ) %>%
   left_join(

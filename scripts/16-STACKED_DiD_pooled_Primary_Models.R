@@ -1,859 +1,1046 @@
 # =============================================================================
-# CAZ INJURY DID -  PRIMARY PPML 
+# CAZ INJURY DIFFERENCE-IN-DIFFERENCES: PRIMARY PPML ANALYSIS
 # =============================================================================
 #
-# 
-#   1. Build a matched, stacked road-quarter panel.
-#   2. Estimate the headline equal-scheme average post-CAZ effect.
-#   3. Estimate the pooled event-study path.
-#   4. Check whether Bradford or other schemes drive the result.
-#   5. Check pre-treatment slope diagnostics after the revised matching.
+# Purpose
+#   Estimate the average effect of seven Clean Air Zone (CAZ) schemes on road
+#   injuries using the complete matched road-quarter panel.
 #
-# Main estimand
-#   Equal-weighted average effect across CAZ schemes. Within each scheme,
-#   treated roads sum to weight 1 and matched controls sum to weight 1, so the
-#   pooled estimate is an average scheme effect, not an average road-link effect.
+# Primary estimand
+#   The equal-scheme average effect during event times 0:5, relative to the
+#   four quarters immediately before implementation (event times -4:-1).
 #
+# Primary model structure
+#   - Complete panel retained.
+#   - Road-by-scheme fixed effects.
+#   - Scheme-by-calendar-quarter fixed effects.
+#   - Treated roads and matched controls each sum to weight one per scheme.
+#   - Standard errors clustered by Output Area (OA).
+#
+# Why police-force-by-quarter FE are not pooled across schemes
+#   Bath, Bristol, Newcastle and Sheffield have no same-force control OAs;
+#   Portsmouth has only three and Birmingham has only 22. A pooled police-force
+#   model would therefore rely on unsupported cross-force extrapolation and can
+#   become collinear. Bradford has 132 same-force control OAs, so police-force
+#   adjustment is used only as a Bradford robustness analysis.
+#
+# Output
+#   All tables and tests print to the R console. No files are saved.
+#
+# Run this script from the project root containing data/processed/.
 # =============================================================================
 
-library(tidyverse)
-library(arrow)
-library(fixest)
-library(sf)
-library(here)
-library(lubridate)
-library(zoo)
+suppressPackageStartupMessages({
+  library(arrow)
+  library(fixest)
+  library(here)
+  library(lubridate)
+  library(sf)
+  library(tidyverse)
+  library(zoo)
+})
 
+# Avoid namespace conflicts in interactive sessions.
 select <- dplyr::select
 filter <- dplyr::filter
 mutate <- dplyr::mutate
 rename <- dplyr::rename
 count  <- dplyr::count
 
-
-
+# =============================================================================
+# 1. Settings
+# =============================================================================
 
 OUTCOME_VAR <- "total_inj_adj_All"
-COMMON_POST_MAX <- 5
-OUTDIR <- here("output", "pooled", "All_clean")
-dir.create(OUTDIR, showWarnings = FALSE, recursive = TRUE)
+
+REFERENCE_MIN <- -4L
+REFERENCE_MAX <- -1L
+POST_MAX      <- 5L
+
+BRADFORD_ANNOUNCEMENT_Q <- as.yearqtr("2021 Q1")
+
+# Set to FALSE if the script is run non-interactively and plots are not wanted.
+SHOW_PLOTS <- TRUE
 
 # =============================================================================
-# Console Helpers
+# 2. Console and result helpers
 # =============================================================================
 
 section <- function(title) {
-  cat("\n\n")
-  cat(strrep("=", 79), "\n", sep = "")
-  cat(title, "\n", sep = "")
-  cat(strrep("=", 79), "\n", sep = "")
+  cat(
+    "\n\n", strrep("=", 79), "\n",
+    title, "\n",
+    strrep("=", 79), "\n",
+    sep = ""
+  )
 }
 
 subsection <- function(title) {
-  cat("\n", title, "\n", sep = "")
-  cat(strrep("-", nchar(title)), "\n", sep = "")
+  cat("\n", title, "\n", strrep("-", nchar(title)), "\n", sep = "")
 }
 
-print_table <- function(x, n = Inf) {
-  print(x, n = n, width = Inf)
+print_table <- function(x) {
+  print(x, n = Inf, width = Inf)
 }
 
-# =============================================================================
-# Model Helpers
-# =============================================================================
+drop_geometry <- function(x) {
+  if (inherits(x, "sf")) sf::st_drop_geometry(x) else x
+}
 
-add_irr_columns <- function(df, estimate_col = "estimate", se_col = "se") {
-  df %>%
+add_effect_scale <- function(data, estimate_col = "estimate", se_col = "se") {
+  data %>%
     mutate(
-      ci_lo      = .data[[estimate_col]] - 1.96 * .data[[se_col]],
-      ci_hi      = .data[[estimate_col]] + 1.96 * .data[[se_col]],
-      irr        = exp(.data[[estimate_col]]),
-      irr_lo     = exp(ci_lo),
-      irr_hi     = exp(ci_hi),
+      ci_lo = .data[[estimate_col]] - 1.96 * .data[[se_col]],
+      ci_hi = .data[[estimate_col]] + 1.96 * .data[[se_col]],
+      irr = exp(.data[[estimate_col]]),
+      irr_lo = exp(ci_lo),
+      irr_hi = exp(ci_hi),
       pct_change = 100 * (irr - 1),
-      pct_lo     = 100 * (irr_lo - 1),
-      pct_hi     = 100 * (irr_hi - 1)
+      pct_lo = 100 * (irr_lo - 1),
+      pct_hi = 100 * (irr_hi - 1)
     )
 }
 
-add_significance <- function(df, p_col = "p_value") {
-  df %>%
-    mutate(sig = case_when(
-      .data[[p_col]] < 0.001 ~ "***",
-      .data[[p_col]] < 0.01  ~ "**",
-      .data[[p_col]] < 0.05  ~ "*",
-      .data[[p_col]] < 0.10  ~ ".",
-      TRUE ~ ""
-    ))
-}
-
-extract_event_study <- function(model, var_prefix) {
-  ct <- coeftable(model)
-  
-  tibble(
-    term     = rownames(ct),
-    estimate = ct[, "Estimate"],
-    se       = ct[, "Std. Error"]
-  ) %>%
-    filter(str_detect(term, paste0("^", var_prefix, "::"))) %>%
+add_significance <- function(data, p_col = "p_value") {
+  data %>%
     mutate(
-      event_time = str_match(
-        term,
-        paste0("^", var_prefix, "::(-?\\d+):treat_group$")
-      )[, 2] %>% as.numeric()
-    ) %>%
-    filter(!is.na(event_time)) %>%
-    add_irr_columns() %>%
-    arrange(event_time)
+      sig = case_when(
+        .data[[p_col]] < 0.001 ~ "***",
+        .data[[p_col]] < 0.01  ~ "**",
+        .data[[p_col]] < 0.05  ~ "*",
+        .data[[p_col]] < 0.10  ~ ".",
+        TRUE ~ ""
+      )
+    )
 }
 
-extract_scheme_effects <- function(model, var_prefix) {
+tidy_coefficient <- function(model, term, label = term) {
+  ct <- coeftable(model)
+  available_terms <- rownames(ct)
+  
+  # fixest normally keeps a numeric regressor's original name, but some
+  # versions append a level suffix after internal coercion. Prefer the exact
+  # name; otherwise accept one unique coefficient containing the requested
+  # stem. If nothing matches, report the actual model terms for diagnosis.
+  resolved_term <- term
+  if (!resolved_term %in% available_terms) {
+    candidates <- available_terms[str_detect(available_terms, fixed(term))]
+    
+    if (length(candidates) == 1) {
+      resolved_term <- candidates
+    } else {
+      stop(
+        "Coefficient '", term, "' was not available. Model coefficients: ",
+        paste(available_terms, collapse = ", "),
+        if (length(model$collin.var) > 0) {
+          paste0(
+            ". Collinear variables removed: ",
+            paste(model$collin.var, collapse = ", ")
+          )
+        } else {
+          ""
+        }
+      )
+    }
+  }
+  
+  tibble(
+    term = label,
+    model_term = resolved_term,
+    estimate = ct[resolved_term, "Estimate"],
+    se = ct[resolved_term, "Std. Error"],
+    p_value = ct[resolved_term, "Pr(>|z|)"]
+  ) %>%
+    add_effect_scale() %>%
+    add_significance()
+}
+
+extract_scheme_effects <- function(model, prefix) {
   ct <- coeftable(model)
   
   tibble(
-    term             = rownames(ct),
-    estimate_log_irr = ct[, "Estimate"],
-    se               = ct[, "Std. Error"],
-    p_value          = ct[, "Pr(>|z|)"]
+    term = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se = ct[, "Std. Error"],
+    p_value = ct[, "Pr(>|z|)"]
   ) %>%
-    filter(str_detect(term, paste0("^", var_prefix, "::"))) %>%
-    mutate(scheme = str_remove(term, paste0("^", var_prefix, "::"))) %>%
-    add_irr_columns("estimate_log_irr", "se") %>%
+    filter(str_detect(term, paste0("^", prefix, "::"))) %>%
+    mutate(scheme = str_remove(term, paste0("^", prefix, "::"))) %>%
+    add_effect_scale() %>%
     add_significance() %>%
     select(
-      scheme, estimate_log_irr, se, irr, irr_lo, irr_hi,
-      pct_change, pct_lo, pct_hi, p_value, sig
+      scheme, estimate_log_irr = estimate, se,
+      irr, irr_lo, irr_hi,
+      pct_change, pct_lo, pct_hi,
+      p_value, sig
     ) %>%
     arrange(pct_change)
 }
 
-average_scheme_effect <- function(model, schemes, term_prefix, label) {
+extract_event_study <- function(model, prefix = "event_time_ref") {
+  ct <- coeftable(model)
+  
+  tibble(
+    term = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se = ct[, "Std. Error"],
+    p_value = ct[, "Pr(>|z|)"]
+  ) %>%
+    filter(str_detect(term, paste0("^", prefix, "::"))) %>%
+    mutate(
+      event_time = str_match(
+        term,
+        paste0("^", prefix, "::(-?\\d+):treat_group$")
+      )[, 2] %>% as.integer()
+    ) %>%
+    filter(!is.na(event_time)) %>%
+    add_effect_scale() %>%
+    arrange(event_time)
+}
+
+average_scheme_effect <- function(model, schemes, prefix, label) {
   beta <- coef(model)
-  V <- vcov(model)
-  terms <- paste0(term_prefix, "::", schemes)
+  variance <- vcov(model)
+  terms <- paste0(prefix, "::", schemes)
   
   missing_terms <- setdiff(terms, names(beta))
   if (length(missing_terms) > 0) {
-    stop("Missing model terms: ", paste(missing_terms, collapse = ", "))
+    stop(
+      "The primary model did not identify: ",
+      paste(missing_terms, collapse = ", ")
+    )
   }
   
   weights <- rep(1 / length(terms), length(terms))
-  b <- beta[terms]
-  V_sub <- V[terms, terms, drop = FALSE]
-  
-  estimate_log_irr <- as.numeric(sum(weights * b))
-  se <- as.numeric(sqrt(t(weights) %*% V_sub %*% weights))
-  z <- estimate_log_irr / se
+  estimate <- as.numeric(sum(weights * beta[terms]))
+  se <- as.numeric(
+    sqrt(t(weights) %*% variance[terms, terms, drop = FALSE] %*% weights)
+  )
+  z <- estimate / se
   
   tibble(
-    spec = label,
+    specification = label,
     n_schemes = length(schemes),
-    estimate_log_irr = estimate_log_irr,
+    estimate = estimate,
     se = se,
     z = z,
     p_value = 2 * pnorm(abs(z), lower.tail = FALSE)
   ) %>%
-    add_irr_columns("estimate_log_irr", "se")
+    add_effect_scale() %>%
+    add_significance()
 }
 
-run_post_wald <- function(model, var_prefix, post_max = COMMON_POST_MAX) {
-  wald(
-    model,
-    keep = paste0(var_prefix, "::[0-", post_max, "]:treat_group")
+joint_event_test <- function(model, period = c("recent_pre", "post"),
+                             prefix = "event_time_ref") {
+  period <- match.arg(period)
+  
+  pattern <- if (period == "recent_pre") {
+    paste0(prefix, "::-[5-8]:treat_group")
+  } else {
+    paste0(prefix, "::[0-5]:treat_group")
+  }
+  
+  wald(model, keep = pattern)
+}
+
+# =============================================================================
+# 3. Build the complete matched road-quarter panel
+# =============================================================================
+
+adjust_scheme_start_quarter <- function(road_caz_properties) {
+  road_caz_properties %>%
+    distinct(scheme, startDt, caz_start_q) %>%
+    filter(!is.na(startDt)) %>%
+    mutate(
+      start_date = dmy(startDt),
+      raw_quarter = as.yearqtr(start_date),
+      quarter_start = as.Date(raw_quarter),
+      quarter_end = as.Date(raw_quarter + 0.25) - 1,
+      quarter_midpoint = quarter_start +
+        as.integer(difftime(quarter_end, quarter_start, units = "days")) / 2,
+      adjusted_start_quarter = if_else(
+        start_date > quarter_midpoint,
+        raw_quarter + 0.25,
+        raw_quarter
+      )
+    ) %>%
+    select(scheme, adjusted_start_quarter)
+}
+
+make_force_overlap_table <- function(stacked) {
+  treated_forces <- stacked %>%
+    filter(treat_group == 1) %>%
+    distinct(stack_scheme, police_force_fe)
+  
+  control_oas <- stacked %>%
+    filter(treat_group == 0) %>%
+    distinct(stack_scheme, OA, police_force_fe)
+  
+  totals <- control_oas %>%
+    count(stack_scheme, name = "total_control_oas")
+  
+  same_force <- control_oas %>%
+    inner_join(treated_forces, by = c("stack_scheme", "police_force_fe")) %>%
+    count(stack_scheme, name = "same_force_control_oas")
+  
+  totals %>%
+    left_join(same_force, by = "stack_scheme") %>%
+    mutate(
+      same_force_control_oas = replace_na(same_force_control_oas, 0L),
+      pct_same_force = 100 * same_force_control_oas / total_control_oas,
+      police_fe_assessment = case_when(
+        same_force_control_oas == 0 ~ "No within-force support",
+        same_force_control_oas < 10 ~ "Essentially no support",
+        same_force_control_oas < 50 ~ "Thin support",
+        TRUE ~ "Meaningful support"
+      )
+    ) %>%
+    arrange(stack_scheme)
+}
+
+build_analysis_data <- function() {
+  section("1. Build the matched analysis panel")
+  
+  road_panel <- arrow::read_parquet(
+    here("data", "processed", "road_panel_matched_pooled.parquet")
+  ) %>%
+    mutate(quarter_year = as.yearqtr(quarter_year))
+  
+  oa_lookup <- readRDS(
+    here("data", "processed", "OA_matching_census.rds")
+  ) %>%
+    drop_geometry() %>%
+    select(OA, LAD24CD, LAD24NM) %>%
+    distinct()
+  
+  if (!"LAD24CD" %in% names(road_panel)) {
+    road_panel <- road_panel %>% left_join(oa_lookup, by = "OA")
+  } else if (!"LAD24NM" %in% names(road_panel)) {
+    road_panel <- road_panel %>%
+      left_join(
+        oa_lookup %>% distinct(LAD24CD, LAD24NM),
+        by = "LAD24CD"
+      )
+  }
+  
+  scheme_start <- readRDS(
+    here("data", "processed", "roads_caz_props.rds")
+  ) %>%
+    adjust_scheme_start_quarter() %>%
+    rename(start_from_properties = adjusted_start_quarter)
+  
+  if (!"caz_start_q" %in% names(road_panel)) {
+    road_panel <- road_panel %>% mutate(caz_start_q = as.yearqtr(NA))
+  }
+  
+  road_panel <- road_panel %>%
+    left_join(scheme_start, by = "scheme") %>%
+    mutate(
+      caz_start_q = coalesce(as.yearqtr(caz_start_q), start_from_properties)
+    ) %>%
+    select(-start_from_properties)
+  
+  injuries <- readRDS(
+    here("data", "processed", "injuries_final.rds")
+  ) %>%
+    drop_geometry()
+  
+  # The dominant force is used because the injury data identify reporting force
+  # at record level while the road panel is indexed by LAD and OA.
+  lad_force_lookup <- injuries %>%
+    filter(!is.na(LAD24CD), !is.na(police_force)) %>%
+    count(LAD24CD, police_force, name = "n_records") %>%
+    group_by(LAD24CD) %>%
+    slice_max(n_records, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    transmute(
+      LAD24CD,
+      dominant_police_force = police_force,
+      police_force_fe = factor(police_force)
+    )
+  
+  road_panel <- road_panel %>%
+    left_join(lad_force_lookup, by = "LAD24CD")
+  
+  if (anyNA(road_panel$caz_start_q)) {
+    missing_schemes <- road_panel %>%
+      filter(is.na(caz_start_q)) %>%
+      distinct(scheme) %>%
+      pull(scheme)
+    stop("Missing implementation date for: ", paste(missing_schemes, collapse = ", "))
+  }
+  
+  if (anyNA(road_panel$police_force_fe)) {
+    missing_lads <- road_panel %>%
+      filter(is.na(police_force_fe)) %>%
+      distinct(LAD24CD, LAD24NM)
+    print_table(missing_lads)
+    stop("Police-force lookup is incomplete.")
+  }
+  
+  scheme_timing <- road_panel %>%
+    filter(treat_group == 1) %>%
+    distinct(scheme, caz_start_q) %>%
+    arrange(caz_start_q)
+  
+  if (any(count(scheme_timing, scheme)$n != 1)) {
+    stop("Each scheme must have exactly one implementation quarter.")
+  }
+  
+  first_quarter <- min(as.numeric(road_panel$quarter_year), na.rm = TRUE)
+  
+  panel_all <- road_panel %>%
+    select(
+      panel_id, identifier, OA, LAD24CD, LAD24NM,
+      dominant_police_force, police_force_fe,
+      scheme, quarter_year, caz_start_q, treat_group,
+      all_of(OUTCOME_VAR)
+    ) %>%
+    rename(outcome_raw = all_of(OUTCOME_VAR)) %>%
+    filter(!is.na(outcome_raw)) %>%
+    mutate(
+      uid_stack = paste(panel_id, scheme, sep = "__"),
+      qtr_int = as.integer(
+        round((as.numeric(quarter_year) - first_quarter) * 4)
+      ) + 1L,
+      event_time = as.integer(
+        round((as.numeric(quarter_year) - as.numeric(caz_start_q)) * 4)
+      ),
+      group = if_else(treat_group == 1, "CAZ roads", "Matched controls")
+    ) %>%
+    group_by(uid_stack) %>%
+    mutate(unit_outcome_total = sum(outcome_raw, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # All-zero roads do not contribute to a conditional road-FE Poisson model.
+  # Removing them before weighting matches what fixest would do automatically.
+  panel <- panel_all %>%
+    filter(unit_outcome_total > 0) %>%
+    select(-unit_outcome_total)
+  
+  schemes <- sort(unique(panel$scheme))
+  
+  stacked <- panel %>%
+    mutate(
+      stack_scheme = factor(scheme, levels = schemes),
+      fixed_reference = event_time >= REFERENCE_MIN &
+        event_time <= REFERENCE_MAX,
+      event_time_ref = if_else(
+        fixed_reference,
+        "ref_year",
+        as.character(event_time)
+      ),
+      event_time_ref = relevel(factor(event_time_ref), ref = "ref_year")
+    )
+  
+  # Equal-scheme weighting: within every scheme, all treated roads together
+  # receive weight one and all matched controls together receive weight one.
+  unit_counts <- stacked %>%
+    distinct(stack_scheme, treat_group, uid_stack) %>%
+    count(stack_scheme, treat_group, name = "n_units")
+  
+  stacked <- stacked %>%
+    left_join(unit_counts, by = c("stack_scheme", "treat_group")) %>%
+    mutate(analysis_weight = 1 / n_units) %>%
+    select(-n_units)
+  
+  sample_summary <- stacked %>%
+    distinct(stack_scheme, treat_group, uid_stack, .keep_all = TRUE) %>%
+    count(stack_scheme, treat_group, name = "road_units") %>%
+    arrange(stack_scheme, treat_group)
+  
+  # Assess police-force overlap in the original matched design, before PPML
+  # removes all-zero road units. This keeps the diagnostic about the quality of
+  # the matching/control pool rather than about outcome-driven model retention.
+  force_overlap <- panel_all %>%
+    mutate(stack_scheme = factor(scheme, levels = schemes)) %>%
+    make_force_overlap_table()
+  
+  subsection("Scheme implementation timing")
+  print_table(scheme_timing)
+  
+  subsection("Road units by scheme and treatment group")
+  print_table(sample_summary)
+  
+  subsection("Police-force overlap diagnostic")
+  print_table(force_overlap)
+  
+  list(
+    stacked = stacked,
+    schemes = schemes,
+    scheme_timing = scheme_timing,
+    sample_summary = sample_summary,
+    force_overlap = force_overlap
   )
 }
 
-plot_event_study <- function(df, title, subtitle, colour = "#1f77b4") {
-  ggplot(df, aes(x = event_time, y = estimate)) +
+# =============================================================================
+# 4. Full-panel static model
+# =============================================================================
+
+prepare_static_full_panel <- function(stacked, schemes) {
+  stacked %>%
+    filter(stack_scheme %in% schemes) %>%
+    mutate(
+      static_period = case_when(
+        event_time < REFERENCE_MIN ~ "early_pre",
+        fixed_reference ~ "reference",
+        event_time >= 0 & event_time <= POST_MAX ~ "post_common",
+        event_time > POST_MAX ~ "late_post",
+        TRUE ~ NA_character_
+      ),
+      
+      # The three scheme factors are defined only for treated roads. Controls
+      # remain in ref_year. Omitting the reference-period treated interaction
+      # makes every coefficient relative to event times -4:-1.
+      scheme_early_pre = if_else(
+        treat_group == 1 & static_period == "early_pre",
+        as.character(stack_scheme),
+        "ref_year"
+      ),
+      scheme_post_common = if_else(
+        treat_group == 1 & static_period == "post_common",
+        as.character(stack_scheme),
+        "ref_year"
+      ),
+      scheme_late_post = if_else(
+        treat_group == 1 & static_period == "late_post",
+        as.character(stack_scheme),
+        "ref_year"
+      ),
+      
+      scheme_early_pre = factor(
+        scheme_early_pre,
+        levels = c("ref_year", schemes)
+      ),
+      scheme_post_common = factor(
+        scheme_post_common,
+        levels = c("ref_year", schemes)
+      ),
+      scheme_late_post = factor(
+        scheme_late_post,
+        levels = c("ref_year", schemes)
+      )
+    ) %>%
+    droplevels()
+}
+
+fit_static_full_panel <- function(stacked, schemes, label) {
+  data <- prepare_static_full_panel(stacked, schemes)
+  
+  model <- feglm(
+    outcome_raw ~
+      i(scheme_early_pre, ref = "ref_year") +
+      i(scheme_post_common, ref = "ref_year") +
+      i(scheme_late_post, ref = "ref_year") |
+      uid_stack + stack_scheme^qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  list(
+    model = model,
+    average = average_scheme_effect(
+      model,
+      schemes = schemes,
+      prefix = "scheme_post_common",
+      label = label
+    ),
+    scheme_effects = extract_scheme_effects(model, "scheme_post_common")
+  )
+}
+
+# =============================================================================
+# 5. Full-panel pooled event study
+# =============================================================================
+
+fit_event_study_full_panel <- function(stacked, schemes, label) {
+  data <- stacked %>%
+    filter(stack_scheme %in% schemes) %>%
+    droplevels()
+  
+  model <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack + stack_scheme^qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  list(
+    model = model,
+    results = extract_event_study(model, "event_time_ref") %>%
+      mutate(specification = label, .before = 1),
+    recent_pre_wald = joint_event_test(
+      model,
+      "recent_pre",
+      "event_time_ref"
+    ),
+    post_wald = joint_event_test(model, "post", "event_time_ref")
+  )
+}
+
+# =============================================================================
+# 6. Bradford robustness analyses
+# =============================================================================
+
+prepare_bradford_periods <- function(data) {
+  data %>%
+    mutate(
+      early_pre_treat = as.integer(
+        treat_group == 1 & event_time < REFERENCE_MIN
+      ),
+      post_common_treat = as.integer(
+        treat_group == 1 & event_time >= 0 & event_time <= POST_MAX
+      ),
+      late_post_treat = as.integer(
+        treat_group == 1 & event_time > POST_MAX
+      )
+    )
+}
+
+fit_bradford_police_fe <- function(stacked) {
+  # This uses Bradford's complete matched-control pool. Police-force-by-quarter
+  # FE absorb reporting and calendar shocks separately for every represented
+  # force. Bradford has enough controls in its own force to identify the treated
+  # post coefficient. Other schemes do not, so this model is not pooled.
+  data <- stacked %>%
+    filter(stack_scheme == "Bradford") %>%
+    prepare_bradford_periods() %>%
+    droplevels()
+  
+  static_model <- feglm(
+    outcome_raw ~
+      early_pre_treat + post_common_treat + late_post_treat |
+      uid_stack + police_force_fe^qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  event_model <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack + police_force_fe^qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  list(
+    static_model = static_model,
+    static_result = tidy_coefficient(
+      static_model,
+      "post_common_treat",
+      "Bradford: police-force x quarter FE"
+    ),
+    event_model = event_model,
+    event_results = extract_event_study(event_model, "event_time_ref"),
+    recent_pre_wald = joint_event_test(
+      event_model,
+      "recent_pre",
+      "event_time_ref"
+    ),
+    post_wald = joint_event_test(event_model, "post", "event_time_ref")
+  )
+}
+
+make_bradford_same_force_sample <- function(stacked) {
+  bradford_forces <- stacked %>%
+    filter(stack_scheme == "Bradford", treat_group == 1) %>%
+    distinct(police_force_fe)
+  
+  bradford <- stacked %>%
+    filter(stack_scheme == "Bradford") %>%
+    semi_join(bradford_forces, by = "police_force_fe") %>%
+    droplevels()
+  
+  # Restricting the control pool changes its size, so weights are recalculated
+  # once for the complete same-force panel. They are not window-specific.
+  unit_counts <- bradford %>%
+    distinct(treat_group, uid_stack) %>%
+    count(treat_group, name = "n_units_same_force")
+  
+  bradford %>%
+    select(-analysis_weight) %>%
+    left_join(unit_counts, by = "treat_group") %>%
+    mutate(analysis_weight = 1 / n_units_same_force) %>%
+    select(-n_units_same_force)
+}
+
+fit_bradford_same_force <- function(bradford) {
+  data <- bradford %>%
+    prepare_bradford_periods()
+  
+  # Because every road is now in the same police force, ordinary calendar-
+  # quarter FE are equivalent to police-force-by-quarter FE.
+  static_model <- feglm(
+    outcome_raw ~
+      early_pre_treat + post_common_treat + late_post_treat |
+      uid_stack + qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  event_model <- feglm(
+    outcome_raw ~
+      i(event_time_ref, treat_group, ref = "ref_year") |
+      uid_stack + qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  list(
+    static_model = static_model,
+    static_result = tidy_coefficient(
+      static_model,
+      "post_common_treat",
+      "Bradford: same-force controls"
+    ),
+    event_model = event_model,
+    event_results = extract_event_study(event_model, "event_time_ref"),
+    recent_pre_wald = joint_event_test(
+      event_model,
+      "recent_pre",
+      "event_time_ref"
+    ),
+    post_wald = joint_event_test(event_model, "post", "event_time_ref")
+  )
+}
+
+fit_bradford_phase_model <- function(bradford) {
+  implementation_q <- unique(bradford$caz_start_q)
+  if (length(implementation_q) != 1) {
+    stop("Bradford must have exactly one implementation quarter.")
+  }
+  
+  # Use four quarters before the announcement as the phase-model reference.
+  pre_announcement_start <- BRADFORD_ANNOUNCEMENT_Q - 1
+  
+  data <- bradford %>%
+    filter(
+      quarter_year >= pre_announcement_start,
+      event_time <= POST_MAX
+    ) %>%
+    mutate(
+      policy_phase = case_when(
+        quarter_year < BRADFORD_ANNOUNCEMENT_Q ~ "pre_announcement",
+        quarter_year < implementation_q ~ "anticipation",
+        event_time >= 0 & event_time <= POST_MAX ~ "implementation",
+        TRUE ~ NA_character_
+      ),
+      policy_phase = factor(
+        policy_phase,
+        levels = c("pre_announcement", "anticipation", "implementation")
+      )
+    ) %>%
+    filter(!is.na(policy_phase)) %>%
+    droplevels()
+  
+  model <- feglm(
+    outcome_raw ~
+      i(policy_phase, treat_group, ref = "pre_announcement") |
+      uid_stack + qtr_int,
+    data = data,
+    family = "poisson",
+    cluster = ~OA,
+    weights = ~analysis_weight,
+    lean = FALSE
+  )
+  
+  ct <- coeftable(model)
+  phase_results <- tibble(
+    term = rownames(ct),
+    estimate = ct[, "Estimate"],
+    se = ct[, "Std. Error"],
+    p_value = ct[, "Pr(>|z|)"]
+  ) %>%
+    filter(str_detect(term, "^policy_phase::")) %>%
+    mutate(
+      phase = str_match(
+        term,
+        "^policy_phase::([^:]+):treat_group$"
+      )[, 2]
+    ) %>%
+    add_effect_scale() %>%
+    add_significance()
+  
+  beta <- coef(model)
+  variance <- vcov(model)
+  anticipation_term <- "policy_phase::anticipation:treat_group"
+  implementation_term <- "policy_phase::implementation:treat_group"
+  
+  if (!all(c(anticipation_term, implementation_term) %in% names(beta))) {
+    stop("Could not identify both Bradford phase coefficients.")
+  }
+  
+  contrast_estimate <- beta[implementation_term] - beta[anticipation_term]
+  contrast_se <- sqrt(
+    variance[implementation_term, implementation_term] +
+      variance[anticipation_term, anticipation_term] -
+      2 * variance[implementation_term, anticipation_term]
+  )
+  contrast_z <- contrast_estimate / contrast_se
+  
+  launch_increment <- tibble(
+    term = "Implementation minus anticipation",
+    estimate = as.numeric(contrast_estimate),
+    se = as.numeric(contrast_se),
+    p_value = 2 * pnorm(abs(contrast_z), lower.tail = FALSE)
+  ) %>%
+    add_effect_scale() %>%
+    add_significance()
+  
+  list(
+    model = model,
+    phase_results = phase_results,
+    launch_increment = launch_increment
+  )
+}
+
+# =============================================================================
+# 7. Optional plots (display only; never saved)
+# =============================================================================
+
+plot_scheme_effects <- function(results) {
+  ggplot(
+    results,
+    aes(x = pct_change, y = forcats::fct_reorder(scheme, pct_change))
+  ) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    geom_errorbarh(aes(xmin = pct_lo, xmax = pct_hi), height = 0.15) +
+    geom_point(size = 2.2, colour = "#1f5a94") +
+    labs(
+      title = "Scheme-specific CAZ effects",
+      subtitle = "Common post 0:5 relative to -4:-1; full-panel PPML",
+      x = "Estimated percentage change in injuries",
+      y = NULL
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(panel.grid.minor = element_blank())
+}
+
+plot_event_study <- function(results, title, colour = "#1f5a94") {
+  # The model uses the full panel. The plot focuses on the policy-relevant
+  # interval so distant, noisy coefficients do not dominate the scale.
+  displayed <- results %>%
+    filter(event_time >= -8, event_time <= POST_MAX)
+  
+  ggplot(displayed, aes(x = event_time, y = estimate)) +
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
     geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
-    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15, fill = colour) +
-    geom_line(linewidth = 0.8, colour = colour) +
-    geom_point(size = 1.8, colour = colour) +
-    scale_x_continuous(breaks = pretty(df$event_time, n = 10)) +
+    geom_ribbon(
+      aes(ymin = ci_lo, ymax = ci_hi),
+      fill = colour,
+      alpha = 0.15
+    ) +
+    geom_line(colour = colour, linewidth = 0.8) +
+    geom_point(colour = colour, size = 2) +
+    scale_x_continuous(breaks = c(-8:-5, 0:POST_MAX)) +
     labs(
       title = title,
-      subtitle = subtitle,
-      x = "Quarters relative to CAZ implementation",
-      y = "Log incidence rate ratio"
+      subtitle = "Full-panel estimation; reference = event times -4:-1",
+      x = "Quarters relative to implementation",
+      y = "Log incidence-rate ratio"
     ) +
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank())
 }
 
 # =============================================================================
-# Data Helpers
+# 8. Run analysis and print all principal output
 # =============================================================================
 
-drop_geom_if_needed <- function(x) {
-  if (inherits(x, "sf")) sf::st_drop_geometry(x) else x
-}
+section("CAZ injury PPML analysis")
+cat("Outcome: ", OUTCOME_VAR, "\n", sep = "")
+cat("Static estimand: event times 0:5 relative to -4:-1\n")
+cat("Estimation sample: complete matched panel\n")
+cat("Police-force x quarter FE: Bradford robustness analysis only\n")
 
-adjust_scheme_start_quarter <- function(road_caz_props) {
-  road_caz_props %>%
-    distinct(scheme, startDt, caz_start_q) %>%
-    filter(!is.na(startDt)) %>%
-    mutate(
-      start_date = dmy(startDt),
-      raw_q = as.yearqtr(start_date),
-      q_start = as.Date(raw_q),
-      q_end = as.Date(raw_q + 0.25) - 1,
-      q_mid = q_start + as.integer(difftime(q_end, q_start, units = "days")) / 2,
-      caz_start_q_adj = if_else(start_date > q_mid, raw_q + 0.25, raw_q)
-    ) %>%
-    select(scheme, caz_start_q_adj)
-}
+analysis_data <- build_analysis_data()
+stacked <- analysis_data$stacked
+schemes_all <- analysis_data$schemes
 
-make_clean_reference <- function(stacked_data) {
-  stacked_data %>%
-    mutate(
-      is_covid = covid_period %in% c("lockdown", "recovery"),
-      pre_covid_ref = quarter_year >= as.yearqtr("2019 Q2") &
-        quarter_year <= as.yearqtr("2020 Q1")
-    ) %>%
-    group_by(stack_scheme) %>%
-    mutate(
-      normal_ref = event_time >= -4 & event_time <= -1,
-      normal_ref_has_covid = any(normal_ref & is_covid, na.rm = TRUE),
-      clean_ref_year = case_when(
-        !normal_ref_has_covid & normal_ref ~ TRUE,
-        normal_ref_has_covid & pre_covid_ref & event_time < 0 ~ TRUE,
-        TRUE ~ FALSE
-      ),
-      event_time_ref_clean = if_else(
-        clean_ref_year,
-        "ref_year",
-        as.character(event_time)
-      )
-    ) %>%
-    ungroup() %>%
-    mutate(
-      event_time_ref_clean = relevel(
-        factor(event_time_ref_clean),
-        ref = "ref_year"
-      )
-    )
-}
+# -----------------------------------------------------------------------------
+# Primary static model
+# -----------------------------------------------------------------------------
 
-build_analysis_data <- function() {
-  section("1. Build Matched Analysis Panel")
+section("2. Primary full-panel static model")
+
+primary_static <- fit_static_full_panel(
+  stacked,
+  schemes = schemes_all,
+  label = "Primary: all seven schemes"
+)
+
+subsection("Equal-scheme average post effect")
+print_table(primary_static$average)
+
+subsection("Scheme-specific post effects")
+print_table(primary_static$scheme_effects)
+
+# -----------------------------------------------------------------------------
+# Primary event study
+# -----------------------------------------------------------------------------
+
+section("3. Primary full-panel event study")
+
+primary_event <- fit_event_study_full_panel(
+  stacked,
+  schemes = schemes_all,
+  label = "Primary pooled event study"
+)
+
+subsection("Policy-relevant event-time coefficients")
+print_table(
+  primary_event$results %>%
+    filter(event_time %in% c(-8:-5, 0:POST_MAX))
+)
+
+subsection("Joint recent-pre test: event times -8:-5")
+print(primary_event$recent_pre_wald)
+
+subsection("Joint post test: event times 0:5")
+print(primary_event$post_wald)
+
+# -----------------------------------------------------------------------------
+# Major sensitivity: exclude Bradford
+# -----------------------------------------------------------------------------
+
+section("4. Sensitivity excluding Bradford")
+
+schemes_no_bradford <- setdiff(schemes_all, "Bradford")
+
+no_bradford_static <- fit_static_full_panel(
+  stacked,
+  schemes = schemes_no_bradford,
+  label = "Sensitivity: exclude Bradford"
+)
+
+no_bradford_event <- fit_event_study_full_panel(
+  stacked,
+  schemes = schemes_no_bradford,
+  label = "Sensitivity event study: exclude Bradford"
+)
+
+subsection("Equal-scheme average excluding Bradford")
+print_table(no_bradford_static$average)
+
+subsection("Event-study tests excluding Bradford")
+print(no_bradford_event$recent_pre_wald)
+print(no_bradford_event$post_wald)
+
+# -----------------------------------------------------------------------------
+# Bradford-only police-force and same-force analyses
+# -----------------------------------------------------------------------------
+
+section("5. Bradford robustness analyses")
+
+subsection("Why police-force adjustment is restricted to Bradford")
+print_table(analysis_data$force_overlap)
+
+bradford_police <- fit_bradford_police_fe(stacked)
+
+subsection("Bradford using full controls and police-force x quarter FE")
+print_table(bradford_police$static_result)
+
+subsection("Bradford police-FE event-study tests")
+print(bradford_police$recent_pre_wald)
+print(bradford_police$post_wald)
+
+bradford_same_force_data <- make_bradford_same_force_sample(stacked)
+
+bradford_same_force_counts <- bradford_same_force_data %>%
+  distinct(treat_group, uid_stack) %>%
+  count(treat_group, name = "road_units")
+
+subsection("Bradford same-force road units")
+print_table(bradford_same_force_counts)
+
+bradford_same_force <- fit_bradford_same_force(bradford_same_force_data)
+
+subsection("Bradford using only same-force controls")
+print_table(bradford_same_force$static_result)
+
+subsection("Bradford same-force event-study coefficients")
+print_table(
+  bradford_same_force$event_results %>%
+    filter(event_time %in% c(-8:-5, 0:POST_MAX))
+)
+
+subsection("Bradford same-force event-study tests")
+print(bradford_same_force$recent_pre_wald)
+print(bradford_same_force$post_wald)
+
+bradford_phases <- fit_bradford_phase_model(bradford_same_force_data)
+
+subsection("Bradford announcement/anticipation and implementation phases")
+print_table(bradford_phases$phase_results)
+
+subsection("Additional implementation effect relative to anticipation")
+print_table(bradford_phases$launch_increment)
+
+# -----------------------------------------------------------------------------
+# Display figures
+# -----------------------------------------------------------------------------
+
+if (SHOW_PLOTS) {
+  section("6. Display figures")
   
-  road_panel <- arrow::read_parquet(
-    here("data", "processed", "road_panel_matched_pooled.parquet")
-  ) %>%
-    mutate(
-      quarter_year = as.yearqtr(quarter_year)
+  print(plot_scheme_effects(primary_static$scheme_effects))
+  print(plot_event_study(primary_event$results, "Pooled CAZ event study"))
+  print(
+    plot_event_study(
+      bradford_same_force$event_results,
+      "Bradford event study: same-force controls",
+      colour = "#b33a3a"
     )
-  
-  if (!"LAD24CD" %in% names(road_panel)) {
-    oa_lad_lookup <- readRDS(here("data", "processed", "OA_matching_census.rds")) %>%
-      drop_geom_if_needed() %>%
-      select(OA, LAD24CD, LAD24NM) %>%
-      distinct()
-    
-    road_panel <- road_panel %>%
-      left_join(oa_lad_lookup, by = "OA")
-  } else if (!"LAD24NM" %in% names(road_panel)) {
-    lad_name_lookup <- readRDS(here("data", "processed", "OA_matching_census.rds")) %>%
-      drop_geom_if_needed() %>%
-      select(LAD24CD, LAD24NM) %>%
-      distinct()
-    
-    road_panel <- road_panel %>%
-      left_join(lad_name_lookup, by = "LAD24CD")
-  }
-  
-  scheme_start <- readRDS(here("data", "processed", "roads_caz_props.rds")) %>%
-    adjust_scheme_start_quarter() %>%
-    rename(caz_start_q_from_props = caz_start_q_adj)
-  
-  if (!"caz_start_q" %in% names(road_panel)) {
-    road_panel <- road_panel %>%
-      mutate(caz_start_q = as.yearqtr(NA))
-  }
-  
-  road_panel <- road_panel %>%
-    left_join(scheme_start, by = "scheme") %>%
-    mutate(
-      caz_start_q = coalesce(as.yearqtr(caz_start_q), caz_start_q_from_props)
-    ) %>%
-    select(-caz_start_q_from_props)
-  
-  injuries_raw <- readRDS(here("data", "processed", "injuries_final.rds")) %>%
-    drop_geom_if_needed()
-  
-  lad_force_lookup <- injuries_raw %>%
-    filter(!is.na(LAD24CD), !is.na(police_force)) %>%
-    count(LAD24CD, police_force, name = "n_records") %>%
-    group_by(LAD24CD) %>%
-    slice_max(n_records, n = 1, with_ties = FALSE) %>%
-    ungroup() %>%
-    select(LAD24CD, dominant_police_force = police_force)
-  
-  road_panel <- road_panel %>%
-    left_join(lad_force_lookup, by = "LAD24CD") %>%
-    mutate(police_force_fe = factor(dominant_police_force))
-  
-  if (anyNA(road_panel$caz_start_q)) {
-    missing_start <- road_panel %>%
-      filter(is.na(caz_start_q)) %>%
-      distinct(scheme) %>%
-      pull(scheme)
-    stop("Missing CAZ start quarter for scheme(s): ", paste(missing_start, collapse = ", "))
-  }
-  
-  if (anyNA(road_panel$police_force_fe)) {
-    missing_force <- road_panel %>%
-      filter(is.na(police_force_fe)) %>%
-      distinct(LAD24CD, LAD24NM) %>%
-      arrange(LAD24CD)
-    print(missing_force, n = Inf)
-    stop("Missing police-force lookup for some LADs. See printed LADs above.")
-  }
-  
-  scheme_timing <- road_panel %>%
-    filter(treat_group == 1, !is.na(caz_start_q)) %>%
-    distinct(scheme, caz_start_q) %>%
-    arrange(caz_start_q)
-  
-  min_qtr <- min(as.numeric(road_panel$quarter_year), na.rm = TRUE)
-  
-  model_panel_all <- road_panel %>%
-    select(
-      panel_id, identifier, OA, LAD24CD, LAD24NM,
-      dominant_police_force, police_force_fe,
-      scheme, quarter_year, caz_start_q, treat_group, all_of(OUTCOME_VAR)
-    ) %>%
-    rename(outcome_raw = all_of(OUTCOME_VAR)) %>%
-    mutate(
-      uid = paste0(panel_id, "_", scheme),
-      uid_int = as.integer(factor(uid)),
-      qtr_int = as.integer(round((as.numeric(quarter_year) - min_qtr) * 4)) + 1L,
-      covid_period = factor(
-        case_when(
-          quarter_year >= as.yearqtr("2020 Q2") &
-            quarter_year <= as.yearqtr("2021 Q1") ~ "lockdown",
-          quarter_year >= as.yearqtr("2021 Q2") &
-            quarter_year <= as.yearqtr("2021 Q4") ~ "recovery",
-          TRUE ~ "non_pandemic"
-        ),
-        levels = c("non_pandemic", "lockdown", "recovery")
-      ),
-      group = if_else(treat_group == 1, "CAZ roads", "Matched controls")
-    ) %>%
-    filter(!is.na(outcome_raw)) %>%
-    group_by(uid) %>%
-    mutate(unit_total_injury_all_periods = sum(outcome_raw, na.rm = TRUE)) %>%
-    ungroup()
-  
-  model_panel_for_zero_diag <- model_panel_all
-  
-  model_panel <- model_panel_all %>%
-    filter(unit_total_injury_all_periods > 0) %>%
-    select(-unit_total_injury_all_periods)
-  
-  schemes_all <- sort(unique(model_panel$scheme))
-  
-  stacked <- map_dfr(schemes_all, function(sc) {
-    sc_start <- scheme_timing %>%
-      filter(scheme == sc) %>%
-      pull(caz_start_q)
-    
-    if (length(sc_start) == 0 || is.na(sc_start)) return(NULL)
-    
-    sc_start_int <- as.integer(round((as.numeric(sc_start) - min_qtr) * 4)) + 1L
-    
-    model_panel %>%
-      filter(scheme == sc) %>%
-      mutate(
-        stack_scheme = sc,
-        event_time = qtr_int - sc_start_int,
-        uid_stack = paste0(uid_int, "_", sc)
-      )
-  }) %>%
-    mutate(
-      stack_scheme = factor(stack_scheme),
-      treat_scheme = interaction(treat_group, stack_scheme, drop = TRUE)
-    )
-  
-  analysis_weight_counts <- stacked %>%
-    distinct(stack_scheme, treat_group, uid_stack) %>%
-    count(stack_scheme, treat_group, name = "n_units")
-  
-  stacked <- stacked %>%
-    left_join(analysis_weight_counts, by = c("stack_scheme", "treat_group")) %>%
-    mutate(analysis_weight = 1 / n_units) %>%
-    select(-n_units) %>%
-    make_clean_reference() %>%
-    mutate(
-      fixed_ref_year = event_time >= -4 & event_time <= -1,
-      event_time_ref = if_else(fixed_ref_year, "ref_year", as.character(event_time)),
-      event_time_ref = relevel(factor(event_time_ref), ref = "ref_year"),
-      period_bucket = case_when(
-        fixed_ref_year ~ "ref_year",
-        treat_group == 1 &
-          event_time >= 0 &
-          event_time <= COMMON_POST_MAX ~ "post_common",
-        TRUE ~ "other"
-      ),
-      post_common = as.integer(period_bucket == "post_common"),
-      other_flag = as.integer(period_bucket == "other"),
-      scheme_post_bucket = if_else(
-        post_common == 1,
-        as.character(stack_scheme),
-        "ref_year"
-      ),
-      scheme_post_bucket = factor(
-        scheme_post_bucket,
-        levels = c("ref_year", schemes_all)
-      )
-    )
-  
-  sample_summary <- model_panel %>%
-    group_by(group) %>%
-    summarise(
-      units = n_distinct(uid),
-      observations = n(),
-      total_RTI = sum(outcome_raw, na.rm = TRUE),
-      mean_RTI_per_road_quarter = mean(outcome_raw, na.rm = TRUE),
-      pct_zero = 100 * mean(outcome_raw == 0, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
-  scheme_sample_summary <- model_panel %>%
-    distinct(scheme, uid_int, treat_group) %>%
-    group_by(scheme) %>%
-    summarise(
-      treated_units = sum(treat_group == 1),
-      control_units = sum(treat_group == 0),
-      .groups = "drop"
-    )
-  
-  subsection("Scheme timing")
-  print_table(scheme_timing)
-  
-  subsection("Analysis sample")
-  print_table(sample_summary)
-  
-  subsection("Scheme unit counts")
-  print_table(scheme_sample_summary)
-  
-  list(
-    stacked = stacked,
-    schemes_all = schemes_all,
-    scheme_timing = scheme_timing,
-    sample_summary = sample_summary,
-    scheme_sample_summary = scheme_sample_summary,
-    model_panel_for_zero_diag = model_panel_for_zero_diag
   )
 }
+
+# Keep a compact results object in the R session for subsequent inspection.
+# It is not written to disk.
+results <- list(
+  primary_static = primary_static,
+  primary_event = primary_event,
+  no_bradford_static = no_bradford_static,
+  no_bradford_event = no_bradford_event,
+  bradford_police = bradford_police,
+  bradford_same_force = bradford_same_force,
+  bradford_phases = bradford_phases,
+  force_overlap = analysis_data$force_overlap
+)
+
 
 # =============================================================================
-# Primary Models
+# FORMAL PRE-TREND TESTS FOR BATH AND BIRMINGHAM
+# (self-contained -- includes both helper functions, not previously defined
+# in the current script)
 # =============================================================================
 
-fit_model1_average <- function(data, schemes, label) {
-  fit <- feglm(
-    outcome_raw ~
-      i(scheme_post_bucket, ref = "ref_year") +
-      other_flag:treat_scheme |
-      uid_stack +
-      stack_scheme^qtr_int,
-    data = data,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = FALSE
-  )
-  
-  list(
-    model = fit,
-    average = average_scheme_effect(
-      fit,
-      schemes = schemes,
-      term_prefix = "scheme_post_bucket",
-      label = label
-    ),
-    scheme_effects = extract_scheme_effects(fit, "scheme_post_bucket")
-  )
-}
-
-fit_model1_bradford_anticipation <- function(data, schemes,
-                                             bradford_anticipation_q = "2021 Q1",
-                                             post_max = COMMON_POST_MAX) {
-  if (!"Bradford" %in% schemes) {
-    stop("Bradford must be present in schemes for the anticipation-adjusted model.")
-  }
-  
-  data_ant <- data %>%
-    mutate(
-      bradford_anticipation_q = as.yearqtr(bradford_anticipation_q),
-      bradford_anticipation_period =
-        stack_scheme == "Bradford" &
-        quarter_year >= bradford_anticipation_q &
-        event_time < 0,
-      bradford_post_period =
-        stack_scheme == "Bradford" &
-        event_time >= 0 &
-        event_time <= post_max,
-      bradford_other_period =
-        stack_scheme == "Bradford" &
-        !(bradford_anticipation_period | bradford_post_period),
-      non_bradford_post_period =
-        stack_scheme != "Bradford" &
-        post_common == 1,
-      non_bradford_other_period =
-        stack_scheme != "Bradford" &
-        other_flag == 1,
-      scheme_post_ant_bucket = case_when(
-        treat_group == 1 & bradford_post_period ~ "Bradford",
-        treat_group == 1 & non_bradford_post_period ~ as.character(stack_scheme),
-        TRUE ~ "ref_year"
-      ),
-      scheme_post_ant_bucket = factor(
-        scheme_post_ant_bucket,
-        levels = c("ref_year", schemes)
-      ),
-      bradford_anticipation_treat =
-        as.integer(treat_group == 1 & bradford_anticipation_period),
-      bradford_other_treat =
-        as.integer(treat_group == 1 & bradford_other_period),
-      non_bradford_other_bucket = if_else(
-        treat_group == 1 & non_bradford_other_period,
-        as.character(stack_scheme),
-        "ref_year"
-      ),
-      non_bradford_other_bucket = factor(
-        non_bradford_other_bucket,
-        levels = c("ref_year", setdiff(schemes, "Bradford"))
-      )
-    )
-  
-  fit <- feglm(
-    outcome_raw ~
-      i(scheme_post_ant_bucket, ref = "ref_year") +
-      bradford_anticipation_treat +
-      bradford_other_treat +
-      i(non_bradford_other_bucket, ref = "ref_year") |
-      uid_stack +
-      stack_scheme^qtr_int,
-    data = data_ant,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = FALSE
-  )
-  
-  beta <- coef(fit)
-  vc <- vcov(fit)
-  terms <- paste0("scheme_post_ant_bucket::", schemes)
-  missing_terms <- setdiff(terms, names(beta))
-  
-  if (length(missing_terms) > 0) {
-    stop("Missing anticipation-adjusted post terms: ",
-         paste(missing_terms, collapse = ", "))
-  }
-  
-  weights <- rep(1 / length(terms), length(terms))
-  estimate_log_irr <- as.numeric(sum(weights * beta[terms]))
-  se <- as.numeric(sqrt(t(weights) %*% vc[terms, terms, drop = FALSE] %*% weights))
-  z <- estimate_log_irr / se
-  
-  average <- tibble(
-    spec = "Primary sensitivity: Bradford anticipation-adjusted",
-    n_schemes = length(schemes),
-    estimate_log_irr = estimate_log_irr,
-    se = se,
-    z = z,
-    p_value = 2 * pnorm(abs(z), lower.tail = FALSE)
-  ) %>%
-    add_irr_columns("estimate_log_irr", "se")
-  
-  bradford_anticipation <- tidy_period_terms(
-    fit,
-    terms = "bradford_anticipation_treat",
-    labels = "Bradford anticipation: 2021 Q1 to 2022 Q3"
-  )
-  
-  list(
-    model = fit,
-    average = average,
-    scheme_effects = extract_scheme_effects(fit, "scheme_post_ant_bucket"),
-    bradford_anticipation = bradford_anticipation,
-    data = data_ant
-  )
-}
-
-fit_model2_event_study <- function(data, label, ref_var = "event_time_ref") {
-  formula <- as.formula(paste0(
-    "outcome_raw ~ i(", ref_var, ", treat_group, ref = 'ref_year') | ",
-    "uid_stack + stack_scheme^qtr_int"
-  ))
-  
-  fit <- feglm(
-    formula,
-    data = data,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = TRUE
-  )
-  
-  list(
-    model = fit,
-    results = extract_event_study(fit, ref_var) %>%
-      mutate(spec = label, .before = 1),
-    post_wald = run_post_wald(fit, ref_var)
-  )
-}
-
-fit_model1_average_police_qtr <- function(data, schemes, label) {
-  fit <- feglm(
-    outcome_raw ~
-      i(scheme_post_bucket, ref = "ref_year") +
-      other_flag:treat_scheme |
-      uid_stack +
-      police_force_fe^qtr_int,
-    data = data,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = FALSE
-  )
-  
-  list(
-    model = fit,
-    average = average_scheme_effect(
-      fit,
-      schemes = schemes,
-      term_prefix = "scheme_post_bucket",
-      label = label
-    ),
-    scheme_effects = extract_scheme_effects(fit, "scheme_post_bucket")
-  )
-}
-
-fit_model2_event_study_police_qtr <- function(data, label, ref_var = "event_time_ref") {
-  formula <- as.formula(paste0(
-    "outcome_raw ~ i(", ref_var, ", treat_group, ref = 'ref_year') | ",
-    "uid_stack + police_force_fe^qtr_int"
-  ))
-  
-  fit <- feglm(
-    formula,
-    data = data,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = TRUE
-  )
-  
-  list(
-    model = fit,
-    results = extract_event_study(fit, ref_var) %>%
-      mutate(spec = label, .before = 1),
-    post_wald = run_post_wald(fit, ref_var)
-  )
-}
-
-run_primary_models <- function(stacked, schemes_all) {
-  section("2. Primary Models")
-  
-  subsection("Model 1: equal-scheme average post effect")
-  m1 <- fit_model1_average(
-    stacked,
-    schemes_all,
-    "Primary: all schemes"
-  )
-  print_table(m1$average)
-  print_table(m1$scheme_effects)
-  
-  subsection("Model 1b: Bradford anticipation-adjusted post effect")
-  m1_bradford_anticipation <- fit_model1_bradford_anticipation(
-    stacked,
-    schemes_all,
-    bradford_anticipation_q = "2021 Q1",
-    post_max = COMMON_POST_MAX
-  )
-  print_table(m1_bradford_anticipation$average)
-  print_table(m1_bradford_anticipation$scheme_effects)
-  cat("\nBradford anticipation coefficient:\n")
-  print_table(m1_bradford_anticipation$bradford_anticipation)
-  
-  subsection("Model 2: pooled fixed-reference event study")
-  m2 <- fit_model2_event_study(
-    stacked,
-    "Primary: fixed reference -4:-1",
-    ref_var = "event_time_ref"
-  )
-  print_table(m2$results %>% filter(event_time %in% c(-9, -6, -5, 0:COMMON_POST_MAX)))
-  cat("\nJoint Wald test for post-treatment event times 0-", COMMON_POST_MAX, ":\n", sep = "")
-  print(m2$post_wald)
-  
-  subsection("Model 2 sensitivity: clean pre-COVID reference where needed")
-  m2_clean <- fit_model2_event_study(
-    stacked,
-    "Sensitivity: clean reference",
-    ref_var = "event_time_ref_clean"
-  )
-  print_table(m2_clean$results %>% filter(event_time %in% c(-9, -6, -5, 0:COMMON_POST_MAX)))
-  cat("\nClean-reference post-treatment Wald test:\n")
-  print(m2_clean$post_wald)
-  
-  subsection("Model 1 sensitivity: police-force by quarter fixed effects")
-  m1_police_qtr <- fit_model1_average_police_qtr(
-    stacked,
-    schemes_all,
-    "Sensitivity: police force x quarter FE"
-  )
-  print_table(m1_police_qtr$average)
-  print_table(m1_police_qtr$scheme_effects)
-  
-  subsection("Model 2 sensitivity: event study with police-force by quarter fixed effects")
-  m2_police_qtr <- fit_model2_event_study_police_qtr(
-    stacked,
-    "Sensitivity: police force x quarter FE",
-    ref_var = "event_time_ref"
-  )
-  print_table(m2_police_qtr$results %>% filter(event_time %in% c(-9, -6, -5, 0:COMMON_POST_MAX)))
-  cat("\nPolice-force x quarter FE post-treatment Wald test:\n")
-  print(m2_police_qtr$post_wald)
-  
-  list(
-    m1 = m1,
-    m1_bradford_anticipation = m1_bradford_anticipation,
-    m2 = m2,
-    m2_clean = m2_clean,
-    m1_police_qtr = m1_police_qtr,
-    m2_police_qtr = m2_police_qtr
-  )
-}
-
-# =============================================================================
-# Sensitivity Models
-# =============================================================================
-
-run_sensitivities <- function(stacked, schemes_all) {
-  section("3. Sensitivity Checks")
-  
-  no_bradford <- stacked %>%
-    filter(stack_scheme != "Bradford") %>%
-    droplevels()
-  
-  bradford_restricted <- stacked %>%
-    filter(stack_scheme != "Bradford" | quarter_year >= as.yearqtr("2021 Q2")) %>%
-    droplevels()
-  
-  no_newcastle <- stacked %>%
-    filter(stack_scheme != "Newcastle") %>%
-    droplevels()
-  
-  m1_no_bradford <- fit_model1_average(
-    no_bradford,
-    setdiff(schemes_all, "Bradford"),
-    "Sensitivity: exclude Bradford"
-  )
-  
-  m1_bradford_restricted <- fit_model1_average(
-    bradford_restricted,
-    schemes_all,
-    "Sensitivity: Bradford from 2021 Q2 onward"
-  )
-  
-  m1_no_newcastle <- fit_model1_average(
-    no_newcastle,
-    setdiff(schemes_all, "Newcastle"),
-    "Sensitivity: exclude Newcastle"
-  )
-  
-  model1_comparison <- bind_rows(
-    fit_model1_average(stacked, schemes_all, "Primary: all schemes")$average,
-    m1_no_bradford$average,
-    m1_bradford_restricted$average,
-    m1_no_newcastle$average
-  )
-  
-  subsection("Model 1 sensitivity comparison")
-  print_table(model1_comparison)
-  
-  m2_no_bradford <- fit_model2_event_study(
-    no_bradford,
-    "Sensitivity: exclude Bradford",
-    ref_var = "event_time_ref"
-  )
-  
-  m2_bradford_restricted <- fit_model2_event_study(
-    bradford_restricted,
-    "Sensitivity: Bradford from 2021 Q2 onward",
-    ref_var = "event_time_ref"
-  )
-  
-  m2_no_newcastle <- fit_model2_event_study(
-    no_newcastle,
-    "Sensitivity: exclude Newcastle",
-    ref_var = "event_time_ref"
-  )
-  
-  model2_comparison <- bind_rows(
-    m2_no_bradford$results,
-    m2_bradford_restricted$results,
-    m2_no_newcastle$results
-  ) %>%
-    filter(event_time %in% c(-9, -6, 0:COMMON_POST_MAX)) %>%
-    select(spec, event_time, estimate, se, pct_change, pct_lo, pct_hi)
-  
-  subsection("Model 2 sensitivity comparison")
-  print_table(model2_comparison)
-  
-  list(
-    model1_comparison = model1_comparison,
-    model2_comparison = model2_comparison,
-    m1_no_bradford = m1_no_bradford,
-    m1_bradford_restricted = m1_bradford_restricted,
-    m1_no_newcastle = m1_no_newcastle,
-    m2_no_bradford = m2_no_bradford,
-    m2_bradford_restricted = m2_bradford_restricted,
-    m2_no_newcastle = m2_no_newcastle
-  )
-}
-
-# =============================================================================
-# Scheme-Specific And Pre-Trend Diagnostics
-# =============================================================================
-
-fit_scheme_event_study <- function(stacked, sc, ref_var = "event_time_ref_clean") {
-  d <- stacked %>%
-    filter(stack_scheme == sc) %>%
-    droplevels()
-  
-  formula <- as.formula(paste0(
-    "outcome_raw ~ i(", ref_var, ", treat_group, ref = 'ref_year') | ",
-    "uid_stack + qtr_int"
-  ))
-  
-  fit <- tryCatch(
-    feglm(
-      formula,
-      data = d,
-      family = "poisson",
-      cluster = ~OA,
-      weights = ~analysis_weight,
-      lean = TRUE
-    ),
-    error = function(e) {
-      cat("Scheme event study failed for ", sc, ": ", conditionMessage(e), "\n", sep = "")
-      NULL
-    }
-  )
-  
-  if (is.null(fit)) return(NULL)
-  
-  list(
-    model = fit,
-    results = extract_event_study(fit, ref_var) %>%
-      mutate(scheme = sc, .before = 1)
-  )
-}
+# -----------------------------------------------------------------------
+#  Full pre-period linear slope test
+#    Fits ONE linear trend in event_time, interacted with treat_group,
+#    using ONLY pre-treatment quarters (event_time < 0). A significant
+#    coefficient means treated and control units were on different slopes
+#    before implementation.
+# -----------------------------------------------------------------------
 
 run_scheme_pretrend_test <- function(stacked, sc) {
   d <- stacked %>%
@@ -863,14 +1050,14 @@ run_scheme_pretrend_test <- function(stacked, sc) {
   fit <- tryCatch(
     feglm(
       outcome_raw ~ event_time:treat_group | uid_stack + qtr_int,
-      data = d,
-      family = "poisson",
+      data    = d,
+      family  = "poisson",
       cluster = ~OA,
       weights = ~analysis_weight,
-      lean = TRUE
+      lean    = TRUE
     ),
     error = function(e) {
-      cat("Pre-trend test failed for ", sc, ": ", conditionMessage(e), "\n", sep = "")
+      cat("Pre-trend test failed for", sc, "-", conditionMessage(e), "\n")
       NULL
     }
   )
@@ -879,1114 +1066,241 @@ run_scheme_pretrend_test <- function(stacked, sc) {
   
   ct <- coeftable(fit)
   tibble(
-    scheme = sc,
+    scheme    = sc,
     n_pre_obs = nrow(d),
-    slope = ct["event_time:treat_group", "Estimate"],
-    se = ct["event_time:treat_group", "Std. Error"],
-    p_value = ct["event_time:treat_group", "Pr(>|z|)"]
-  ) %>%
-    mutate(pct_slope_per_qtr = 100 * (exp(slope) - 1)) %>%
-    add_significance()
-}
-
-run_diagnostics <- function(stacked, schemes_all, primary) {
-  section("4. Scheme Heterogeneity And Pre-Trend Diagnostics")
-  
-  scheme_event_fits <- map(schemes_all, ~fit_scheme_event_study(stacked, .x))
-  names(scheme_event_fits) <- schemes_all
-  
-  scheme_event_results <- map_dfr(scheme_event_fits, "results")
-  
-  scheme_post_wald <- map_dfr(schemes_all, function(sc) {
-    fit <- scheme_event_fits[[sc]]$model
-    if (is.null(fit)) return(NULL)
-    
-    w <- tryCatch(
-      run_post_wald(fit, "event_time_ref_clean"),
-      error = function(e) NULL
-    )
-    if (is.null(w)) return(NULL)
-    
-    tibble(
-      scheme = sc,
-      stat = w$stat,
-      df1 = w$df1,
-      df2 = w$df2,
-      p_value = w$p,
-      conclusion = if_else(
-        p_value < 0.05,
-        "Reject H0: joint post effect",
-        "Fail to reject H0"
-      )
-    )
-  })
-  
-  subsection("Scheme event-study estimates around treatment")
-  print_table(
-    scheme_event_results %>%
-      filter(event_time %in% c(-6, -5, 0:COMMON_POST_MAX)) %>%
-      select(scheme, event_time, estimate, se, pct_change, pct_lo, pct_hi)
-  )
-  
-  subsection("Within-scheme post-treatment Wald tests")
-  print_table(scheme_post_wald)
-  
-  pretrend_slopes <- map_dfr(schemes_all, ~run_scheme_pretrend_test(stacked, .x)) %>%
-    arrange(p_value)
-  
-  subsection("Formal pre-treatment slope tests")
-  print_table(pretrend_slopes)
-  
-  bradford_slope <- pretrend_slopes %>%
-    filter(scheme == "Bradford") %>%
-    pull(slope)
-  
-  bradford_effect <- primary$m1$scheme_effects %>%
-    filter(scheme == "Bradford") %>%
-    pull(estimate_log_irr)
-  
-  if (length(bradford_slope) == 1 && length(bradford_effect) == 1) {
-    cat(
-      "\nBradford pre-trend drift by event time 2: ",
-      round(bradford_slope * 2, 3),
-      " log-points; Bradford Model 1 post effect: ",
-      round(bradford_effect, 3),
-      " log-points.\n",
-      sep = ""
-    )
-  }
-  
-  suspect_calendar_map <- stacked %>%
-    filter(event_time %in% c(-9, -6)) %>%
-    distinct(stack_scheme, event_time, quarter_year, covid_period) %>%
-    arrange(event_time, stack_scheme)
-  
-  subsection("Calendar mapping for suspect pre-period event times")
-  print_table(suspect_calendar_map)
-  
-  list(
-    scheme_event_fits = scheme_event_fits,
-    scheme_event_results = scheme_event_results,
-    scheme_post_wald = scheme_post_wald,
-    pretrend_slopes = pretrend_slopes,
-    suspect_calendar_map = suspect_calendar_map
-  )
-}
-
-# =============================================================================
-# Anticipation And Placebo Timing Checks
-# =============================================================================
-
-tidy_period_terms <- function(fit, terms, labels) {
-  ct <- coeftable(fit)
-  
-  map_dfr(seq_along(terms), function(i) {
-    term <- terms[i]
-    if (!term %in% rownames(ct)) {
-      return(tibble(
-        period = labels[i],
-        estimate_log_irr = NA_real_,
-        se = NA_real_,
-        p_value = NA_real_
-      ))
-    }
-    
-    tibble(
-      period = labels[i],
-      estimate_log_irr = ct[term, "Estimate"],
-      se = ct[term, "Std. Error"],
-      p_value = ct[term, "Pr(>|z|)"]
-    )
-  }) %>%
-    add_irr_columns("estimate_log_irr", "se") %>%
-    add_significance()
-}
-
-fit_anticipation_implementation_model <- function(stacked, sc, announcement_q,
-                                                  post_max = COMMON_POST_MAX) {
-  d <- stacked %>%
-    filter(stack_scheme == sc) %>%
-    droplevels()
-  
-  actual_q <- d %>%
-    filter(treat_group == 1, event_time == 0) %>%
-    distinct(quarter_year) %>%
-    pull(quarter_year) %>%
-    first()
-  
-  q_lookup <- d %>%
-    distinct(quarter_year, qtr_int)
-  
-  announcement_qtr_int <- q_lookup %>%
-    filter(quarter_year == as.yearqtr(announcement_q)) %>%
-    pull(qtr_int)
-  
-  implementation_qtr_int <- q_lookup %>%
-    filter(quarter_year == actual_q) %>%
-    pull(qtr_int)
-  
-  if (length(announcement_qtr_int) != 1 || length(implementation_qtr_int) != 1) {
-    return(list(
-      model = NULL,
-      results = tibble(
-        scheme = sc,
-        error = paste0(
-          "Announcement or implementation quarter not found: ",
-          announcement_q, " / ", actual_q
-        )
-      )
-    ))
-  }
-  
-  d_model <- d %>%
-    mutate(
-      rel_to_implementation = qtr_int - implementation_qtr_int,
-      pre_announcement = qtr_int < announcement_qtr_int,
-      anticipation_period =
-        qtr_int >= announcement_qtr_int & qtr_int < implementation_qtr_int,
-      implementation_period =
-        rel_to_implementation >= 0 & rel_to_implementation <= post_max,
-      other_period = !(pre_announcement | anticipation_period | implementation_period),
-      anticipation_treat = as.integer(anticipation_period & treat_group == 1),
-      implementation_treat = as.integer(implementation_period & treat_group == 1),
-      other_treat = as.integer(other_period & treat_group == 1)
-    ) %>%
-    droplevels()
-  
-  fit <- tryCatch(
-    feglm(
-      outcome_raw ~ anticipation_treat + implementation_treat + other_treat |
-        uid_stack + qtr_int,
-      data = d_model,
-      family = "poisson",
-      cluster = ~OA,
-      weights = ~analysis_weight,
-      lean = FALSE
-    ),
-    error = function(e) e
-  )
-  
-  if (inherits(fit, "error")) {
-    return(list(
-      model = NULL,
-      results = tibble(scheme = sc, error = conditionMessage(fit))
-    ))
-  }
-  
-  results <- tidy_period_terms(
-    fit,
-    terms = c("anticipation_treat", "implementation_treat"),
-    labels = c(
-      "Anticipation: announcement to quarter before implementation",
-      paste0("Implementation: event times 0-", post_max)
-    )
+    slope     = ct["event_time:treat_group", "Estimate"],
+    se        = ct["event_time:treat_group", "Std. Error"],
+    p_value   = ct["event_time:treat_group", "Pr(>|z|)"]
   ) %>%
     mutate(
-      scheme = sc,
-      announcement_q = as.character(as.yearqtr(announcement_q)),
-      implementation_q = as.character(actual_q),
-      reference_window = paste0(
-        min(d_model$quarter_year[d_model$pre_announcement], na.rm = TRUE),
-        " to ",
-        max(d_model$quarter_year[d_model$pre_announcement], na.rm = TRUE)
-      ),
-      anticipation_window = paste0(
-        min(d_model$quarter_year[d_model$anticipation_period], na.rm = TRUE),
-        " to ",
-        max(d_model$quarter_year[d_model$anticipation_period], na.rm = TRUE)
-      ),
-      implementation_window = paste0(
-        min(d_model$quarter_year[d_model$implementation_period], na.rm = TRUE),
-        " to ",
-        max(d_model$quarter_year[d_model$implementation_period], na.rm = TRUE)
-      ),
-      error = NA_character_,
-      .before = 1
-    )
-  
-  list(model = fit, results = results)
-}
-
-average_period_effect <- function(model, schemes, term_prefix, label, period) {
-  average_scheme_effect(
-    model = model,
-    schemes = schemes,
-    term_prefix = term_prefix,
-    label = label
-  ) %>%
-    mutate(period = period, .after = spec)
-}
-
-fit_pooled_anticipation_implementation_model <- function(stacked, policy_calendar,
-                                                         post_max = COMMON_POST_MAX) {
-  schemes <- policy_calendar$scheme
-  
-  implementation_calendar <- stacked %>%
-    filter(treat_group == 1, event_time == 0) %>%
-    distinct(stack_scheme, quarter_year) %>%
-    transmute(
-      scheme = as.character(stack_scheme),
-      implementation_q = quarter_year
-    )
-  
-  d_model <- stacked %>%
-    mutate(scheme = as.character(stack_scheme)) %>%
-    left_join(
-      policy_calendar %>%
-        transmute(
-          scheme,
-          announcement_q = as.yearqtr(announcement_q),
-          anticipation_note = note
-        ),
-      by = "scheme"
-    ) %>%
-    left_join(implementation_calendar, by = "scheme") %>%
-    filter(!is.na(announcement_q), !is.na(implementation_q)) %>%
-    mutate(
-      pre_announcement = quarter_year < announcement_q,
-      anticipation_period =
-        quarter_year >= announcement_q & quarter_year < implementation_q,
-      implementation_period =
-        event_time >= 0 & event_time <= post_max,
-      other_period = !(pre_announcement | anticipation_period | implementation_period),
-      scheme_anticipation_bucket = if_else(
-        treat_group == 1 & anticipation_period,
-        scheme,
-        "ref_year"
-      ),
-      scheme_implementation_bucket = if_else(
-        treat_group == 1 & implementation_period,
-        scheme,
-        "ref_year"
-      ),
-      scheme_other_bucket = if_else(
-        treat_group == 1 & other_period,
-        scheme,
-        "ref_year"
-      ),
-      scheme_anticipation_bucket = factor(
-        scheme_anticipation_bucket,
-        levels = c("ref_year", schemes)
-      ),
-      scheme_implementation_bucket = factor(
-        scheme_implementation_bucket,
-        levels = c("ref_year", schemes)
-      ),
-      scheme_other_bucket = factor(
-        scheme_other_bucket,
-        levels = c("ref_year", schemes)
+      pct_slope_per_qtr = 100 * (exp(slope) - 1),
+      sig = case_when(
+        p_value < 0.001 ~ "***", p_value < 0.01 ~ "**",
+        p_value < 0.05  ~ "*",   p_value < 0.10 ~ ".", TRUE ~ ""
       )
-    ) %>%
-    droplevels()
-  
-  fit <- feglm(
-    outcome_raw ~
-      i(scheme_anticipation_bucket, ref = "ref_year") +
-      i(scheme_implementation_bucket, ref = "ref_year") +
-      i(scheme_other_bucket, ref = "ref_year") |
-      uid_stack +
-      stack_scheme^qtr_int,
-    data = d_model,
-    family = "poisson",
-    cluster = ~OA,
-    weights = ~analysis_weight,
-    lean = FALSE
-  )
-  
-  scheme_effects <- bind_rows(
-    extract_scheme_effects(fit, "scheme_anticipation_bucket") %>%
-      mutate(period = "Anticipation: announcement to quarter before implementation", .after = scheme),
-    extract_scheme_effects(fit, "scheme_implementation_bucket") %>%
-      mutate(period = paste0("Implementation: event times 0-", post_max), .after = scheme)
-  )
-  
-  pooled_average <- bind_rows(
-    average_period_effect(
-      fit,
-      schemes = schemes,
-      term_prefix = "scheme_anticipation_bucket",
-      label = "Pooled equal-scheme: anticipation",
-      period = "Anticipation: announcement to quarter before implementation"
-    ),
-    average_period_effect(
-      fit,
-      schemes = schemes,
-      term_prefix = "scheme_implementation_bucket",
-      label = "Pooled equal-scheme: implementation",
-      period = paste0("Implementation: event times 0-", post_max)
     )
-  )
-  
-  list(
-    model = fit,
-    data = d_model,
-    scheme_effects = scheme_effects,
-    pooled_average = pooled_average
-  )
 }
 
-run_one_scheme_timing <- function(stacked, sc, timing_q, timing_label,
-                                  post_max = COMMON_POST_MAX) {
-  d <- stacked %>%
-    filter(stack_scheme == sc) %>%
-    droplevels()
-  
-  q_lookup <- d %>%
-    distinct(quarter_year, qtr_int)
-  
-  timing_qtr_int <- q_lookup %>%
-    filter(quarter_year == as.yearqtr(timing_q)) %>%
-    pull(qtr_int)
-  
-  if (length(timing_qtr_int) != 1) {
-    return(tibble(
-      scheme = sc,
-      timing = timing_label,
-      timing_q = timing_q,
-      error = paste0("Timing quarter not found or not unique: ", timing_q)
-    ))
-  }
-  
-  d_model <- d %>%
-    mutate(
-      event_time_test = qtr_int - timing_qtr_int,
-      ref_year = event_time_test >= -4 & event_time_test <= -1,
-      post_common = event_time_test >= 0 & event_time_test <= post_max,
-      other_flag = !(ref_year | post_common),
-      post_treat = as.integer(post_common & treat_group == 1),
-      other_treat = as.integer(other_flag & treat_group == 1)
-    ) %>%
-    filter(!is.na(event_time_test)) %>%
-    droplevels()
-  
-  fit <- tryCatch(
-    feglm(
-      outcome_raw ~ post_treat + other_treat | uid_stack + qtr_int,
-      data = d_model,
-      family = "poisson",
-      cluster = ~OA,
-      weights = ~analysis_weight,
-      lean = FALSE
-    ),
-    error = function(e) e
-  )
-  
-  if (inherits(fit, "error")) {
-    return(tibble(
-      scheme = sc,
-      timing = timing_label,
-      timing_q = timing_q,
-      error = conditionMessage(fit)
-    ))
-  }
-  
-  ct <- coeftable(fit)
-  
-  if (!"post_treat" %in% rownames(ct)) {
-    return(tibble(
-      scheme = sc,
-      timing = timing_label,
-      timing_q = timing_q,
-      error = "post_treat coefficient not estimated"
-    ))
-  }
-  
-  est <- ct["post_treat", "Estimate"]
-  se <- ct["post_treat", "Std. Error"]
-  
-  tibble(
-    scheme = sc,
-    timing = timing_label,
-    timing_q = timing_q,
-    reference_window = paste0(
-      min(d_model$quarter_year[d_model$ref_year]), " to ",
-      max(d_model$quarter_year[d_model$ref_year])
-    ),
-    post_window = paste0(
-      min(d_model$quarter_year[d_model$post_common]), " to ",
-      max(d_model$quarter_year[d_model$post_common])
-    ),
-    estimate_log_irr = est,
-    se = se,
-    p_value = ct["post_treat", "Pr(>|z|)"],
-    irr = exp(est),
-    pct_change = 100 * (exp(est) - 1),
-    pct_lo = 100 * (exp(est - 1.96 * se) - 1),
-    pct_hi = 100 * (exp(est + 1.96 * se) - 1),
-    error = NA_character_
-  )
-}
-
-run_all_scheme_placebos <- function(stacked, placebo_q = "2021 Q1",
-                                    post_max = COMMON_POST_MAX) {
-  schemes <- stacked %>%
-    distinct(stack_scheme) %>%
-    pull(stack_scheme) %>%
-    as.character() %>%
-    sort()
-  
-  actual_timing <- stacked %>%
-    filter(treat_group == 1, event_time == 0) %>%
-    distinct(stack_scheme, quarter_year) %>%
-    transmute(
-      scheme = as.character(stack_scheme),
-      actual_q = as.character(quarter_year)
-    )
-  
-  actual_results <- map_dfr(schemes, function(sc) {
-    actual_q <- actual_timing %>%
-      filter(scheme == sc) %>%
-      pull(actual_q)
-    
-    run_one_scheme_timing(
-      stacked = stacked,
-      sc = sc,
-      timing_q = actual_q,
-      timing_label = "Actual CAZ date",
-      post_max = post_max
-    )
-  })
-  
-  placebo_results <- map_dfr(schemes, function(sc) {
-    run_one_scheme_timing(
-      stacked = stacked,
-      sc = sc,
-      timing_q = placebo_q,
-      timing_label = paste0("Placebo date: ", placebo_q),
-      post_max = post_max
-    )
-  })
-  
-  combined <- bind_rows(actual_results, placebo_results)
-  
-  list(
-    long = combined %>%
-      select(
-        scheme, timing, timing_q, reference_window, post_window,
-        estimate_log_irr, se, p_value, pct_change, pct_lo, pct_hi, error
-      ) %>%
-      arrange(scheme, timing),
-    wide = combined %>%
-      filter(is.na(error)) %>%
-      select(scheme, timing, estimate_log_irr, p_value, pct_change, pct_lo, pct_hi) %>%
-      pivot_wider(
-        names_from = timing,
-        values_from = c(estimate_log_irr, p_value, pct_change, pct_lo, pct_hi)
-      )
-  )
-}
-
-make_raw_scheme_quarter_table <- function(stacked, scheme_timing) {
-  stacked %>%
-    group_by(scheme = stack_scheme, quarter_year, group) %>%
-    summarise(
-      n_units = n_distinct(uid_stack),
-      mean_injuries = mean(outcome_raw, na.rm = TRUE),
-      total_injuries = sum(outcome_raw, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    left_join(scheme_timing, by = "scheme") %>%
-    mutate(
-      implementation_period = case_when(
-        quarter_year < caz_start_q ~ "Pre implementation",
-        quarter_year == caz_start_q ~ "Implementation quarter",
-        quarter_year > caz_start_q ~ "Post implementation",
-        TRUE ~ NA_character_
-      )
-    ) %>%
-    arrange(scheme, quarter_year, group)
-}
-
-plot_raw_scheme_quarter <- function(raw_by_scheme_quarter) {
-  ggplot(
-    raw_by_scheme_quarter,
-    aes(x = quarter_year, y = mean_injuries, colour = group)
-  ) +
-    geom_line(linewidth = 0.5) +
-    geom_point(size = 1) +
-    geom_vline(
-      aes(xintercept = as.numeric(caz_start_q)),
-      linetype = "dashed"
-    ) +
-    facet_wrap(~scheme, scales = "free_y", ncol = 2) +
-    labs(
-      title = "Raw matched mean injuries by scheme and quarter",
-      subtitle = "Dashed line marks the adjusted implementation quarter",
-      x = "Quarter",
-      y = "Mean injuries",
-      colour = NULL
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(panel.grid.minor = element_blank(), strip.text = element_text(face = "bold"))
-}
-
-run_anticipation_placebo_checks <- function(stacked, scheme_timing,
-                                            post_max = COMMON_POST_MAX,
-                                            placebo_q = "2021 Q1") {
-  section("5. Anticipation And Placebo Timing Checks")
-  
-  cat(
-    "\nInterpretation guide:\n",
-    "  * Anticipation estimates use the announcement-to-implementation window.\n",
-    "  * Implementation estimates are the additional effect after formal launch.\n",
-    "  * Placebo estimates move the treatment date to a fake/common date.\n",
-    "  * If a placebo date is after policy approval, interpret it as an early-policy timing check, not a pure placebo.\n",
-    "  * Review the policy calendar dates below; they are explicit assumptions and can be edited in one place.\n",
-    sep = ""
-  )
-  
-  policy_calendar <- tibble(
-    scheme = c(
-      "Bath", "Birmingham", "Bradford", "Bristol",
-      "Newcastle", "Portsmouth", "Sheffield"
-    ),
-    announcement_q = as.yearqtr(c(
-      "2020 Q1", # Bath full business plan / planned 2020 launch before COVID delay
-      "2019 Q1", # Birmingham charging approval / full business case period
-      "2021 Q1", # Bradford council approval / planned rollout became credible
-      "2022 Q3", # Bristol final start date announced
-      "2022 Q3", # Newcastle/Gateshead final charging timetable becoming operationally salient
-      "2021 Q2", # Portsmouth approved/confirmed before late-2021 launch
-      "2022 Q3"  # Sheffield final charging timetable and support package period
-    )),
-    note = c(
-      "Bath: full business plan and planned 2020 launch before COVID delay.",
-      "Birmingham: charging approval/full business case period; long anticipation window.",
-      "Bradford: council approval/planned rollout became credible; formal launch was delayed.",
-      "Bristol: final CAZ start date announced before launch.",
-      "Newcastle: final charging timetable became operationally salient before staged launch.",
-      "Portsmouth: scheme approved/confirmed before late-2021 launch.",
-      "Sheffield: final charging timetable/support package period before 2023 launch."
-    )
-  )
-  
-  policy_calendar_print <- policy_calendar %>%
-    mutate(announcement_q = as.character(announcement_q))
-  
-  subsection("Policy calendar used for anticipation windows")
-  print_table(policy_calendar_print)
-  
-  anticipation_models <- pmap(
-    list(policy_calendar$scheme, policy_calendar$announcement_q),
-    ~fit_anticipation_implementation_model(
-      stacked = stacked,
-      sc = ..1,
-      announcement_q = ..2,
-      post_max = post_max
-    )
-  )
-  names(anticipation_models) <- policy_calendar$scheme
-  
-  anticipation_results <- map_dfr(anticipation_models, "results") %>%
-    left_join(policy_calendar %>% select(scheme, note), by = "scheme")
-  
-  pooled_anticipation <- fit_pooled_anticipation_implementation_model(
-    stacked = stacked,
-    policy_calendar = policy_calendar,
-    post_max = post_max
-  )
-  
-  subsection("Pooled equal-scheme anticipation versus implementation effects")
-  print_table(
-    pooled_anticipation$pooled_average %>%
-      select(
-        spec, period, n_schemes, estimate_log_irr, se, pct_change,
-        pct_lo, pct_hi, p_value
-      )
-  )
-  
-  subsection("Per-scheme anticipation versus implementation effects")
-  print_table(
-    anticipation_results %>%
-      select(
-        scheme, period, announcement_q, implementation_q,
-        estimate_log_irr, se, pct_change, pct_lo, pct_hi, p_value, sig,
-        note, error
-      )
-  )
-  
-  subsection("Per-scheme effects from pooled anticipation model")
-  print_table(
-    pooled_anticipation$scheme_effects %>%
-      select(
-        scheme, period, estimate_log_irr, se, pct_change,
-        pct_lo, pct_hi, p_value, sig
-      )
-  )
-  
-  placebo_all <- run_all_scheme_placebos(
-    stacked = stacked,
-    placebo_q = placebo_q,
-    post_max = post_max
-  )
-  
-  subsection("Actual implementation dates versus common placebo date")
-  print_table(placebo_all$long)
-  
-  raw_by_scheme_quarter <- make_raw_scheme_quarter_table(
-    stacked = stacked,
-    scheme_timing = scheme_timing
-  )
-  
-  raw_plot <- plot_raw_scheme_quarter(raw_by_scheme_quarter)
-  print(raw_plot)
-  
-  write_csv(
-    anticipation_results,
-    file.path(OUTDIR, "anticipation_implementation_by_scheme_separate_models.csv")
-  )
-  write_csv(
-    pooled_anticipation$pooled_average,
-    file.path(OUTDIR, "anticipation_implementation_pooled_equal_scheme.csv")
-  )
-  write_csv(
-    pooled_anticipation$scheme_effects,
-    file.path(OUTDIR, "anticipation_implementation_by_scheme_pooled_model.csv")
-  )
-  write_csv(
-    policy_calendar_print,
-    file.path(OUTDIR, "anticipation_policy_calendar.csv")
-  )
-  write_csv(
-    placebo_all$long,
-    file.path(OUTDIR, "placebo_actual_vs_common_date_long.csv")
-  )
-  write_csv(
-    placebo_all$wide,
-    file.path(OUTDIR, "placebo_actual_vs_common_date_wide.csv")
-  )
-  write_csv(
-    raw_by_scheme_quarter,
-    file.path(OUTDIR, "raw_mean_injuries_by_scheme_quarter.csv")
-  )
-  ggsave(
-    file.path(OUTDIR, "raw_mean_injuries_by_scheme_quarter.png"),
-    raw_plot,
-    width = 10,
-    height = 7,
-    dpi = 300
-  )
-  
-  list(
-    policy_calendar = policy_calendar,
-    anticipation_models = anticipation_models,
-    anticipation_results = anticipation_results,
-    pooled_anticipation = pooled_anticipation,
-    placebo_all = placebo_all,
-    raw_by_scheme_quarter = raw_by_scheme_quarter,
-    raw_plot = raw_plot
-  )
-}
-
-# =============================================================================
-# Save Outputs And Figures
-# =============================================================================
-
-save_outputs <- function(data, primary, sensitivities, diagnostics,
-                         anticipation_placebo) {
-  section("6. Save Outputs")
-  
-  p_model1 <- ggplot(
-    primary$m1$scheme_effects,
-    aes(x = pct_change, y = fct_reorder(scheme, pct_change))
-  ) +
-    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
-    geom_errorbar(aes(xmin = pct_lo, xmax = pct_hi), width = 0.2) +
-    geom_point(size = 3) +
-    labs(
-      title = "Model 1: scheme-specific post-CAZ effects",
-      subtitle = "Equal-scheme average reported separately in the console",
-      x = "% change in injuries",
-      y = NULL
-    ) +
-    theme_minimal(base_size = 12)
-  
-  p_model2 <- plot_event_study(
-    primary$m2$results,
-    "Model 2: pooled fixed-reference event study",
-    "Reference = event times -4:-1; common post window = event times 0:5"
-  )
-  
-  p_scheme_events <- ggplot(diagnostics$scheme_event_results, aes(x = event_time, y = estimate)) +
-    geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
-    geom_vline(xintercept = -0.5, linetype = "dotted", colour = "grey50") +
-    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.15) +
-    geom_line(linewidth = 0.6) +
-    geom_point(size = 1.2) +
-    facet_wrap(~scheme, scales = "free_y", ncol = 2) +
-    labs(
-      title = "Scheme-specific clean-reference event studies",
-      x = "Quarters relative to CAZ implementation",
-      y = "Log incidence rate ratio"
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(panel.grid.minor = element_blank(), strip.text = element_text(face = "bold"))
-  
-  ggsave(
-    file.path(OUTDIR, "primary_01_scheme_average_effects_clean.png"),
-    p_model1,
-    width = 9,
-    height = 5,
-    dpi = 300
-  )
-  ggsave(
-    file.path(OUTDIR, "primary_02_fixedref_event_study_clean.png"),
-    p_model2,
-    width = 10,
-    height = 7,
-    dpi = 300
-  )
-  ggsave(
-    file.path(OUTDIR, "diagnostic_scheme_cleanref_event_studies_clean.png"),
-    p_scheme_events,
-    width = 12,
-    height = 10,
-    dpi = 300
-  )
-  
-  results <- list(
-    data = list(
-      scheme_timing = data$scheme_timing,
-      sample_summary = data$sample_summary,
-      scheme_sample_summary = data$scheme_sample_summary
-    ),
-    primary = primary,
-    sensitivities = sensitivities,
-    diagnostics = diagnostics,
-    anticipation_placebo = anticipation_placebo
-  )
-  
-  saveRDS(results, here("data", "processed", "caz_primary_ppml_clean_results.rds"))
-  
-  support_objects <- list(
-    stacked = data$stacked,
-    schemes_all = data$schemes_all,
-    model_panel_for_zero_diag = data$model_panel_for_zero_diag
-  )
-  saveRDS(support_objects, here("data", "processed", "caz_primary_ppml_clean_support.rds"))
-  
-  cat("Saved figures to: ", OUTDIR, "\n", sep = "")
-  cat("Saved results: data/processed/caz_primary_ppml_clean_results.rds\n")
-  cat("Saved support data: data/processed/caz_primary_ppml_clean_support.rds\n")
-  
-  invisible(results)
-}
-
-# =============================================================================
-# Run Analysis
-# =============================================================================
-
-section("CAZ Injury DiD - Clean PPML Analysis")
-cat("Outcome: ", OUTCOME_VAR, "\n", sep = "")
-cat("Common post-treatment window: event times 0-", COMMON_POST_MAX, "\n", sep = "")
-
-analysis_data <- build_analysis_data()
-
-primary <- run_primary_models(
-  stacked = analysis_data$stacked,
-  schemes_all = analysis_data$schemes_all
-)
-
-sensitivities <- run_sensitivities(
-  stacked = analysis_data$stacked,
-  schemes_all = analysis_data$schemes_all
-)
-
-diagnostics <- run_diagnostics(
-  stacked = analysis_data$stacked,
-  schemes_all = analysis_data$schemes_all,
-  primary = primary
-)
-
-anticipation_placebo <- run_anticipation_placebo_checks(
-  stacked = analysis_data$stacked,
-  scheme_timing = analysis_data$scheme_timing,
-  post_max = COMMON_POST_MAX,
-  placebo_q = "2021 Q1"
-)
-
-all_results <- save_outputs(
-  data = analysis_data,
-  primary = primary,
-  sensitivities = sensitivities,
-  diagnostics = diagnostics,
-  anticipation_placebo = anticipation_placebo
-)
-
-section("Console Story")
-
-cat("\nHeadline pooled average effect:\n")
-print_table(primary$m1$average)
-
-cat("\nScheme effects, ordered by percent change:\n")
-print_table(primary$m1$scheme_effects)
-
-cat("\nPooled event-study post-treatment quarters:\n")
-print_table(
-  primary$m2$results %>%
-    filter(event_time %in% 0:COMMON_POST_MAX) %>%
-    select(event_time, estimate, se, pct_change, pct_lo, pct_hi)
-)
-
-cat("\nPolice-force x quarter FE sensitivity: pooled average effect:\n")
-print_table(primary$m1_police_qtr$average)
-
-cat("\nPolice-force x quarter FE sensitivity: scheme effects:\n")
-print_table(primary$m1_police_qtr$scheme_effects)
-
-cat("\nPolice-force x quarter FE sensitivity: event-study post-treatment quarters:\n")
-print_table(
-  primary$m2_police_qtr$results %>%
-    filter(event_time %in% 0:COMMON_POST_MAX) %>%
-    select(event_time, estimate, se, pct_change, pct_lo, pct_hi)
-)
-
-cat("\nSensitivity summary:\n")
-print_table(sensitivities$model1_comparison)
-
-cat("\nPre-trend slope tests:\n")
-print_table(diagnostics$pretrend_slopes)
-
-cat("\nAnticipation versus implementation timing check:\n")
-print_table(
-  anticipation_placebo$pooled_anticipation$pooled_average %>%
-    select(
-      spec, period, n_schemes, estimate_log_irr, se,
-      pct_change, pct_lo, pct_hi, p_value
-    )
-)
-
-cat("\nPer-scheme anticipation versus implementation timing check:\n")
-print_table(
-  anticipation_placebo$anticipation_results %>%
-    select(
-      scheme, period, announcement_q, implementation_q,
-      estimate_log_irr, se, pct_change, pct_lo, pct_hi, p_value, sig
-    )
-)
-
-cat("\nActual versus placebo timing checks:\n")
-print_table(anticipation_placebo$placebo_all$long)
-
-
-
-
-
-
-
-# =============================================================================
-# BRADFORD TIMING TABLE: actual date, placebo date, and actual date with
-# pre-2021 data excluded from the reference (pre-intervention) window
-# =============================================================================
-
-fit_bradford_timing <- function(d, timing_label, restrict_from = NULL) {
-  # d must already have event_time_test, computed relative to whichever
-  # implementation date this run is testing.
-  d_model <- d
-  
-  if (!is.null(restrict_from)) {
-    d_model <- d_model %>% filter(quarter_year >= as.yearqtr(restrict_from))
-  }
-  
-  d_model <- d_model %>%
-    mutate(
-      ref_year    = event_time_test >= -4 & event_time_test <= -1,
-      post_common = event_time_test >= 0 & event_time_test <= 5,
-      other_flag  = !(ref_year | post_common),
-      post_treat  = as.integer(post_common & treat_group == 1),
-      other_treat = as.integer(other_flag & treat_group == 1)
-    ) %>%
-    filter(!is.na(event_time_test)) %>%
-    droplevels()
-  
-  fit <- feglm(
-    outcome_raw ~ post_treat + other_treat | uid_stack + qtr_int,
-    data = d_model, family = "poisson", cluster = ~OA,
-    weights = ~analysis_weight, lean = FALSE
-  )
-  
-  ct <- coeftable(fit)
-  est <- ct["post_treat", "Estimate"]
-  se  <- ct["post_treat", "Std. Error"]
-  
-  tibble(
-    timing = timing_label,
-    reference_window = paste0(
-      min(d_model$quarter_year[d_model$ref_year]), " to ",
-      max(d_model$quarter_year[d_model$ref_year])
-    ),
-    post_window = paste0(
-      min(d_model$quarter_year[d_model$post_common]), " to ",
-      max(d_model$quarter_year[d_model$post_common])
-    ),
-    n_obs             = nrow(d_model),
-    estimate_log_irr  = est,
-    se                = se,
-    p_value           = ct["post_treat", "Pr(>|z|)"],
-    pct_change        = 100 * (exp(est) - 1),
-    pct_lo            = 100 * (exp(est - 1.96 * se) - 1),
-    pct_hi            = 100 * (exp(est + 1.96 * se) - 1)
-  )
-}
-
-d_bradford <- analysis_data$stacked %>%
-  filter(stack_scheme == "Bradford") %>%
-  droplevels()
-
-# Look up integer quarters for the actual and placebo implementation dates
-q_lookup <- d_bradford %>% distinct(quarter_year, qtr_int)
-
-actual_qtr_int  <- q_lookup %>% filter(quarter_year == as.yearqtr("2022 Q4")) %>% pull(qtr_int)
-placebo_qtr_int <- q_lookup %>% filter(quarter_year == as.yearqtr("2021 Q1")) %>% pull(qtr_int)
-
-d_actual  <- d_bradford %>% mutate(event_time_test = qtr_int - actual_qtr_int)
-d_placebo <- d_bradford %>% mutate(event_time_test = qtr_int - placebo_qtr_int)
-
-bradford_timing_table <- bind_rows(
-  fit_bradford_timing(d_actual,  "Actual CAZ date: 2022 Q4"),
-  fit_bradford_timing(d_placebo, "Placebo/early date: 2021 Q1"),
-  # NEW: actual implementation date, but reference window restricted to
-  # exclude any quarter before 2021 Q1 -- tests whether the "early date"
-  # signal depends on pre-2021 (COVID-era) data being in the comparison.
-  fit_bradford_timing(d_actual,  "Actual CAZ date, pre-2021 data excluded",
-                      restrict_from = "2021 Q1")
-)
-
-print(bradford_timing_table %>%
-        select(timing, reference_window, post_window, n_obs,
-               estimate_log_irr, pct_change, p_value),
-      n = Inf)
-
-
-
-
-# =============================================================================
-# BRADFORD-ONLY FIXED-REFERENCE EVENT STUDY PLOT
-# =============================================================================
-
-d_bradford <- analysis_data$stacked %>%
-  filter(stack_scheme == "Bradford") %>%
-  droplevels()
-
-m2_bradford <- feglm(
-  outcome_raw ~
-    i(event_time_ref, treat_group, ref = "ref_year") |
-    uid_stack + qtr_int,
-  data    = d_bradford,
-  family  = "poisson",
-  cluster = ~OA,
-  weights = ~analysis_weight,
-  lean    = TRUE
-)
-
-bradford_event_results <- extract_event_study(m2_bradford, "event_time_ref")
-
-p_bradford_event <- plot_event_study(
-  bradford_event_results,
-  title    = "Bradford: fixed-reference event study",
-  subtitle = "Reference = event times -4:-1; common post window = event times 0:5",
-  colour   = "#c0392b"   # distinct colour so it isn't confused with the pooled plot
-)
-
-print(p_bradford_event)
-
-ggsave(
-  file.path(OUTDIR, "bradford_only_fixedref_event_study.png"),
-  p_bradford_event, width = 10, height = 7, dpi = 300
-)
-
+# -----------------------------------------------------------------------
+# 2. Windowed (recent pre-period only) linear slope test
+#    Same idea, but restricted to the most recent `lookback` pre-treatment
+#    quarters -- better powered to catch a late-onset rise that a
+#    full-period slope might dilute.
+# -----------------------------------------------------------------------
 
 run_scheme_pretrend_test_windowed <- function(stacked, sc, lookback = 8) {
   d <- stacked %>%
     filter(stack_scheme == sc, event_time < 0, event_time >= -lookback) %>%
     droplevels()
   
-  fit <- feglm(
-    outcome_raw ~ event_time:treat_group | uid_stack + qtr_int,
-    data = d, family = "poisson", cluster = ~OA,
-    weights = ~analysis_weight, lean = TRUE
+  fit <- tryCatch(
+    feglm(
+      outcome_raw ~ event_time:treat_group | uid_stack + qtr_int,
+      data    = d,
+      family  = "poisson",
+      cluster = ~OA,
+      weights = ~analysis_weight,
+      lean    = TRUE
+    ),
+    error = function(e) {
+      cat("Windowed pre-trend test failed for", sc, "-", conditionMessage(e), "\n")
+      NULL
+    }
   )
+  
+  if (is.null(fit)) return(NULL)
   
   ct <- coeftable(fit)
   tibble(
-    scheme = sc, lookback_qtrs = lookback, n_pre_obs = nrow(d),
-    slope = ct["event_time:treat_group", "Estimate"],
-    se    = ct["event_time:treat_group", "Std. Error"],
-    p_value = ct["event_time:treat_group", "Pr(>|z|)"]
-  )
+    scheme        = sc,
+    lookback_qtrs = lookback,
+    n_pre_obs     = nrow(d),
+    slope         = ct["event_time:treat_group", "Estimate"],
+    se            = ct["event_time:treat_group", "Std. Error"],
+    p_value       = ct["event_time:treat_group", "Pr(>|z|)"]
+  ) %>%
+    mutate(
+      pct_slope_per_qtr = 100 * (exp(slope) - 1),
+      sig = case_when(
+        p_value < 0.001 ~ "***", p_value < 0.01 ~ "**",
+        p_value < 0.05  ~ "*",   p_value < 0.10 ~ ".", TRUE ~ ""
+      )
+    )
 }
 
-bradford_recent_pretrend <- run_scheme_pretrend_test_windowed(
-  analysis_data$stacked, "Bradford", lookback = 8
-)
-print(bradford_recent_pretrend)
+# -----------------------------------------------------------------------
+# 3. Bucketed contrast test (third, independent check used for Bradford)
+#    Compares the average of event_time -8:-5 against the -4:-1 reference
+#    directly, without assuming a linear relationship.
+# -----------------------------------------------------------------------
 
-
-
-d_bradford_bucket <- analysis_data$stacked %>%
-  filter(stack_scheme == "Bradford", event_time >= -8, event_time <= -1) %>%
-  mutate(
-    early_pre = as.integer(event_time >= -8 & event_time <= -5),
-    ref_bucket = as.integer(event_time >= -4 & event_time <= -1)
+run_scheme_bucket_test <- function(stacked, sc) {
+  d <- stacked %>%
+    filter(stack_scheme == sc, event_time >= -8, event_time <= -1) %>%
+    mutate(early_pre = as.integer(event_time >= -8 & event_time <= -5)) %>%
+    droplevels()
+  
+  fit <- tryCatch(
+    feglm(
+      outcome_raw ~ early_pre:treat_group | uid_stack + qtr_int,
+      data    = d,
+      family  = "poisson",
+      cluster = ~OA,
+      weights = ~analysis_weight,
+      lean    = TRUE
+    ),
+    error = function(e) {
+      cat("Bucket test failed for", sc, "-", conditionMessage(e), "\n")
+      NULL
+    }
+  )
+  
+  if (is.null(fit)) return(NULL)
+  
+  ct <- coeftable(fit)
+  tibble(
+    scheme  = sc,
+    n_obs   = nrow(d),
+    estimate = ct["early_pre:treat_group", "Estimate"],
+    se       = ct["early_pre:treat_group", "Std. Error"],
+    p_value  = ct["early_pre:treat_group", "Pr(>|z|)"]
   ) %>%
-  droplevels()
+    mutate(sig = case_when(
+      p_value < 0.001 ~ "***", p_value < 0.01 ~ "**",
+      p_value < 0.05  ~ "*",   p_value < 0.10 ~ ".", TRUE ~ ""
+    ))
+}
 
-m_bradford_bucket <- feglm(
-  outcome_raw ~ early_pre:treat_group | uid_stack + qtr_int,
-  data = d_bradford_bucket, family = "poisson", cluster = ~OA,
-  weights = ~analysis_weight, lean = TRUE
+# -----------------------------------------------------------------------
+# 4. Run all three tests for Bath and Birmingham
+# -----------------------------------------------------------------------
+
+bath_birmingham_pretrend_check <- bind_rows(
+  map_dfr(c("Bath", "Birmingham"), ~run_scheme_pretrend_test(stacked, .x)) %>%
+    mutate(test = "Full-period slope", .before = 1),
+  map_dfr(c("Bath", "Birmingham"), ~run_scheme_pretrend_test_windowed(stacked, .x, lookback = 8)) %>%
+    mutate(test = "8-qtr windowed slope", .before = 1)
 )
 
-print(coeftable(m_bradford_bucket))
+print(bath_birmingham_pretrend_check %>%
+        select(test, scheme, n_pre_obs, slope, se, p_value, sig),
+      n = Inf)
 
+bath_birmingham_bucket_check <- map_dfr(c("Bath", "Birmingham"), ~run_scheme_bucket_test(stacked, .x))
+print(bath_birmingham_bucket_check, n = Inf)
+
+# -----------------------------------------------------------------------
+#  run the same three tests for ALL schemes at once, for a
+#    single consolidated table (useful now that the matching logic differs
+#    between schemes)
+# -----------------------------------------------------------------------
+
+all_scheme_pretrend_check <- bind_rows(
+  map_dfr(schemes_all, ~run_scheme_pretrend_test(stacked, .x)) %>%
+    mutate(test = "Full-period slope", .before = 1),
+  map_dfr(schemes_all, ~run_scheme_pretrend_test_windowed(stacked, .x, lookback = 8)) %>%
+    mutate(test = "8-qtr windowed slope", .before = 1)
+)
+
+print(all_scheme_pretrend_check %>%
+        select(test, scheme, n_pre_obs, slope, p_value, sig) %>%
+        arrange(scheme, test),
+      n = Inf)
+
+bath_birmingham_pretrend_check <- map_dfr(c("Bath", "Birmingham"), function(sc) {
+  bind_rows(
+    run_scheme_pretrend_test(stacked, sc) %>% mutate(test = "full-period slope"),
+    run_scheme_pretrend_test_windowed(stacked, sc, lookback = 8) %>% mutate(test = "8-qtr windowed slope")
+  )
+})
+print(bath_birmingham_pretrend_check)
 
 
 # =============================================================================
-# BRADFORD: RAW INJURY TRENDS, TREATED VS CONTROL, BY QUARTER
+# WITH vs. WITHOUT BRADFORD -- HEADLINE COMPARISON
 # =============================================================================
 
-bradford_raw_trend <- analysis_data$stacked %>%
-  filter(stack_scheme == "Bradford") %>%
-  group_by(quarter_year, group) %>%
+headline_comparison <- bind_rows(
+  primary_static$average %>% mutate(spec = "All 7 schemes (with Bradford)", .before = 1),
+  no_bradford_static$average %>% mutate(spec = "6 schemes (Bradford excluded)", .before = 1)
+) %>%
+  select(spec, n_schemes, estimate, se, pct_change, pct_lo, pct_hi, p_value, sig)
+
+print(headline_comparison, n = Inf)
+
+# Event-study post-treatment window, same comparison
+event_comparison <- bind_rows(
+  primary_event$results %>% filter(event_time %in% 0:POST_MAX) %>%
+    mutate(spec = "All 7 schemes (with Bradford)", .before = 1),
+  no_bradford_event$results %>% filter(event_time %in% 0:POST_MAX) %>%
+    mutate(spec = "6 schemes (Bradford excluded)", .before = 1)
+) %>%
+  select(spec, event_time, estimate, se, pct_change, pct_lo, pct_hi)
+
+print(event_comparison, n = Inf)
+
+# Joint post-treatment Wald tests, side by side
+cat("\nWith Bradford:\n"); print(primary_event$post_wald)
+cat("\nWithout Bradford:\n"); print(no_bradford_event$post_wald)
+
+
+
+### ## #Bradford's individual effect collapses under police-force adjustment,
+# is  explained by a West Yorkshire-wide reporting/recording shift, 
+#and shows near-identical treated-vs-untreated-Bradford-OA changes
+## so . . . 
+ # There is no statistically  average CAZ effect on injuries across the six clean schemes.
+# The headline pooled estimate, excluding the compromised scheme, is small, positive, 
+#and not distinguishable from zero (+4.2%, p=0.658).
+#  The one place a joint significant pattern remains is when Bradford is included 
+#— and there is a strong reason to believe that's substantially an artifact of the reporting-regime 
+# confound, not a genuine, broader CAZ effect being diluted by exclusion. This is the opposite conclusion from where this conversation started (where Bradford's significance looked like the strongest evidence of a real effect) — the weight of evidence has moved from "Bradford is the clearest signal" to "Bradford is the clearest artifact."
+## the story
+
+
+
+
+
+
+cat("\nOutcome file used by models\n")
+stacked %>%
   summarise(
-    n_units        = n_distinct(uid_stack),
-    mean_injuries  = mean(outcome_raw, na.rm = TRUE),
+    rows = n(),
+    road_units = n_distinct(uid_stack),
     total_injuries = sum(outcome_raw, na.rm = TRUE),
+    nonzero_rows = sum(outcome_raw > 0, na.rm = TRUE)
+  ) %>%
+  print()
+
+stacked %>%
+  group_by(stack_scheme, treat_group) %>%
+  summarise(
+    road_units = n_distinct(uid_stack),
+    total_injuries = sum(outcome_raw, na.rm = TRUE),
+    nonzero_rows = sum(outcome_raw > 0, na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  arrange(quarter_year)
+  print(n = Inf)
 
-bradford_caz_start <- analysis_data$scheme_timing %>%
-  filter(scheme == "Bradford") %>%
-  pull(caz_start_q)
 
-p_bradford_raw <- ggplot(bradford_raw_trend, aes(x = quarter_year, y = mean_injuries, colour = group)) +
-  geom_vline(xintercept = as.numeric(bradford_caz_start), linetype = "dashed", colour = "grey40") +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 1.8) +
-  scale_colour_manual(values = c("CAZ roads" = "#e74c3c", "Matched controls" = "#2980b9")) +
-  labs(
-    title = "Bradford: mean injuries per road-link-quarter",
-    subtitle = "CAZ roads vs. matched controls; dashed line = CAZ implementation (2022 Q4)",
-    x = "Quarter",
-    y = "Mean injuries per road-link-quarter",
-    colour = NULL
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "top", panel.grid.minor = element_blank())
+#no injuries anywhere in the panel
 
-print(p_bradford_raw)
+stacked %>%
+  group_by(stack_scheme, treat_group, uid_stack) %>%
+  summarise(
+    injuries_all_quarters = sum(outcome_raw, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  count(
+    stack_scheme,
+    treat_group,
+    zero_injury_road = injuries_all_quarters == 0
+  ) %>%
+  print(n = Inf)
 
-ggsave(
-  file.path(OUTDIR, "bradford_raw_injury_trend.png"),
-  p_bradford_raw, width = 10, height = 6, dpi = 300
-)
 
-p_bradford_raw_annotated <- p_bradford_raw +
-  geom_vline(xintercept = as.numeric(as.yearqtr("2021 Q1")), linetype = "dotted", colour = "grey60") +
-  annotate("text", x = as.numeric(as.yearqtr("2021 Q1")), y = Inf,
-           label = "Announcement", angle = 90, vjust = 1.3, hjust = 1.1, size = 3, colour = "grey40") +
-  annotate("text", x = as.numeric(bradford_caz_start), y = Inf,
-           label = "Implementation", angle = 90, vjust = 1.3, hjust = -0.2, size = 3, colour = "grey40")
 
-print(p_bradford_raw_annotated)
+# .
+
+
+
