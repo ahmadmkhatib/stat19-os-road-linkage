@@ -363,3 +363,77 @@ cat("  Rows:", nrow(road_panel_matched),
     "| Quarters:", n_qtrs, "\n")
 
 
+
+# ============================================================
+# Descriptive Check: CAZ Roads vs Non-CAZ Roads vs Matched Controls
+# ============================================================
+#
+# Purpose:
+#   Check whether the positive DiD estimate may reflect broader post-COVID
+#   recovery/injury patterns rather than only a CAZ-specific effect.
+#
+# Groups:
+#   1. CAZ roads: from full unmatched road_panel, treated_any == 1
+#   2. Non-CAZ roads: from full unmatched road_panel, treated_any != 1
+#   3. Matched CAZ roads: from road_panel_matched_pooled.parquet
+#   4. Matched controls: from road_panel_matched_pooled.parquet
+#
+# ============================================================
+
+# ============================================================
+# Descriptive Check: Matched CAZ Roads vs Matched Controls vs Non-CAZ Roads
+# ============================================================
+
+dir.create(here("output", "diagnostics", "pooled"),
+           showWarnings = FALSE, recursive = TRUE)
+
+if (!exists("road_panel_matched")) {
+  road_panel_matched <- arrow::read_parquet(
+    here("data", "processed", "road_panel_matched_pooled.parquet")
+  )
+}
+
+raw_compare_non_caz <- road_panel %>%
+  mutate(
+    quarter_year = as.yearqtr(quarter_year),
+    group3 = if_else(treated_any == 1, NA_character_, "Non-CAZ roads")
+  ) %>%
+  filter(!is.na(group3)) %>%
+  group_by(group3, quarter_year) %>%
+  summarise(
+    n_roads = n_distinct(identifier),
+    mean_injuries = mean(total_inj_adj_All, na.rm = TRUE),
+    total_injuries = sum(total_inj_adj_All, na.rm = TRUE),
+    pct_zero = 100 * mean(total_inj_adj_All == 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+raw_compare_matched <- road_panel_matched %>%
+  mutate(
+    quarter_year = as.yearqtr(quarter_year),
+    group3 = if_else(treat_group == 1, "Matched CAZ roads", "Matched controls")
+  ) %>%
+  group_by(group3, quarter_year) %>%
+  summarise(
+    n_roads = n_distinct(identifier),
+    mean_injuries = mean(total_inj_adj_All, na.rm = TRUE),
+    total_injuries = sum(total_inj_adj_All, na.rm = TRUE),
+    pct_zero = 100 * mean(total_inj_adj_All == 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+raw_compare <- bind_rows(raw_compare_matched, raw_compare_non_caz)
+
+ggplot(raw_compare,
+       aes(x = quarter_year, y = mean_injuries, colour = group3)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1) +
+  labs(
+    title = "Raw mean injuries by road group",
+    x = "Quarter",
+    y = "Mean injuries per road-quarter",
+    colour = NULL
+  ) +
+  theme_minimal(base_size = 12)
+
+

@@ -4,11 +4,14 @@
 #
 # Matches treated OAs to other-city control OAs separately for each CAZ scheme.
 #
-# I strengthened Stage 2 to target the parallel-trends problem directly:
-#   1. I match on richer pre-treatment outcome history, not just one slope.
-#   2. I balance pre-COVID, lockdown, and recovery injury levels separately.
-#   3. I exact-match on coarse baseline-injury and COVID-response strata.
-#   4. I select the matching ratio by prioritising COVID/recovery trend balance.
+# I strengthened Stage 2 to target the parallel-trends problem directly, while
+# keeping the outcome-history distance parsimonious:
+#   1. I match on trajectory shape rather than only one blended slope.
+#   2. I use COVID-defined changes to capture lockdown and recovery responses.
+#   3. I keep only pre-COVID injury level and zero-quarter share as level/sparsity
+#      anchors, avoiding several highly correlated period-level variables.
+#   4. I exact-match on coarse pre-COVID baseline-injury and COVID-response strata.
+#   5. I select the matching ratio by prioritising COVID/recovery trend balance.
 #
 # OUTPUTS:
 #   OA_matched_treated_pooled.rds
@@ -42,7 +45,7 @@ dir.create(here("output", "diagnostics", "pooled"),
 outdir <- here("output", "diagnostics", "pooled")
 
 # Matching controls. Tune these for sensitivity checks.
-stage1_candidate_ratio <- 100
+stage1_candidate_ratio <- 300
 stage2_reuse_max <- 20
 min_unique_controls_per_treated <- 1
 # I use a stricter outcome-history balance threshold because the downstream
@@ -73,30 +76,29 @@ stage1_socdem <- c(
 stage1_vars <- c(stage1_road, stage1_urban, stage1_business, stage1_socdem)
 
 # Stage 2 outcome-history matching variables.
-# I match on the shape of the pre-treatment outcome path, not only the average
-# pre-COVID slope, because the parallel-trends concern shows up around specific
-# pre-treatment calendar shocks rather than as one smooth trend.
+# Parsimonious three-period trajectory design:
+#   - pre-COVID / normal-period trend proxy,
+#   - lockdown response relative to pre-COVID,
+#   - recovery response relative to lockdown.
+# This avoids relying on a single blended slope while not overloading the
+# Mahalanobis distance with many correlated shape and level summaries.
 stage2_trends <- c(
   "trend_total_pkm",
-  "recent_minus_mid_total_pkm",
-  "mid_minus_early_total_pkm",
   "covid_minus_precovid_total_pkm",
   "recovery_minus_covid_total_pkm"
 )
 
-# I keep both overall level and period-specific levels so the controls have
-# similar injury intensity before COVID, during lockdown, and during recovery.
+# Level/sparsity anchors used in the matching distance. I deliberately keep this
+# compact: slopes/changes identify trajectory shape, while pre-COVID level and
+# zero-quarter share anchor baseline injury intensity and rare-event sparsity.
 stage2_levels <- c(
-  "mean_total_pkm",
   "mean_precovid_total_pkm",
-  "mean_lockdown_total_pkm",
-  "mean_recovery_total_pkm",
   "zero_quarter_share_pre"
 )
 stage2_vars <- c(stage2_trends, stage2_levels)
 
-# I give the COVID/recovery contrasts special status in ratio selection because
-# these are the periods that made event times -9 and -6 hard to interpret.
+# The ratio selector prioritises the same compact three-period trajectory
+# variables used in the Stage 2 matching distance.
 priority_trend_vars <- c(
   "trend_total_pkm",
   "covid_minus_precovid_total_pkm",
@@ -236,14 +238,17 @@ winsorise_and_log_s2 <- function(data, raw_vars, log_vars,
 }
 
 add_baseline_injury_strata <- function(data, n_strata = 4) {
-  if (!"log1p_mean_total_pkm" %in% names(data)) {
+  # Exact-match on coarse pre-COVID baseline level, not overall mean level. The
+  # overall mean partly mixes lockdown/recovery behaviour that is already handled
+  # by the trajectory-change variables.
+  if (!"log1p_mean_precovid_total_pkm" %in% names(data)) {
     data <- data %>%
-      mutate(log1p_mean_total_pkm = log1p(pmax(mean_total_pkm, 0)))
+      mutate(log1p_mean_precovid_total_pkm = log1p(pmax(mean_precovid_total_pkm, 0)))
   }
   
   treated_vals <- data %>%
     filter(treat_indicator == 1) %>%
-    pull(log1p_mean_total_pkm)
+    pull(log1p_mean_precovid_total_pkm)
   
   breaks <- quantile(
     treated_vals,
@@ -259,7 +264,7 @@ add_baseline_injury_strata <- function(data, n_strata = 4) {
     data %>%
       mutate(
         baseline_injury_stratum = cut(
-          log1p_mean_total_pkm,
+          log1p_mean_precovid_total_pkm,
           breaks = breaks,
           include.lowest = TRUE,
           labels = FALSE
@@ -1151,7 +1156,7 @@ m_s1_diag <- matchit(
   data = stage1_diag_data,
   method = "nearest",
   distance = "mahalanobis",
-  ratio = 50,
+  ratio = 400,
   replace = TRUE
 )
 

@@ -14,6 +14,10 @@ library(sf)
 library(here)
 library(osmdata)
 
+
+select <- dplyr::select
+filter <- dplyr::filter
+
 lads_sub <- readRDS(here("data","processed","LADs_sub.rds"))
 
 oa <- st_read(here("data","processed","shp_files","OAs_comb.shp")) %>%
@@ -54,27 +58,56 @@ oa_area <- oa_sub %>%
   st_drop_geometry() %>%
   dplyr:: select(OA, total_area)
 
-#============================================================
-#  OA proportion inside CAZ
-#============================================================
+# ============================================================
+# OA proportion inside CAZ
+# ============================================================
+
 stopifnot(st_crs(oa_sub) == st_crs(caz))
+
+# Dissolve multiple polygon pieces belonging to the same scheme
+caz_by_scheme <- caz %>%
+  group_by(scheme) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_make_valid()
+
 oa_caz_intersection <- st_intersection(
-  oa_sub %>% dplyr:: select(OA),
-  caz %>% dplyr::select(scheme)
+  oa_sub %>% dplyr::select(OA),
+  caz_by_scheme %>% dplyr::select(scheme)
 ) %>%
-  mutate(int_area = st_area(geometry)) %>%
+  mutate(
+    int_area = as.numeric(st_area(geometry))
+  ) %>%
   st_drop_geometry()
 
+# Sum all intersected pieces before calculating the OA proportion
 oa_caz_prop <- oa_caz_intersection %>%
-  left_join(oa_area, by="OA") %>%
-  mutate(prop_caz = as.numeric(int_area / total_area))
+  left_join(
+    oa_area %>%
+      mutate(total_area = as.numeric(total_area)),
+    by = "OA"
+  ) %>%
+  group_by(OA, scheme) %>%
+  summarise(
+    int_area = sum(int_area, na.rm = TRUE),
+    total_area = first(total_area),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    prop_caz = int_area / total_area,
+    pct_inside_caz = 100 * prop_caz
+  )
 
-treated_OAs <- oa_caz_prop %>%
-  filter(prop_caz >= 0.5) %>%
-  arrange(OA, desc(prop_caz)) %>%   #
-  distinct(OA, .keep_all = TRUE) %>%
-  select(OA, scheme)
+# In the unlikely event that an OA intersects multiple CAZ schemes,
+# associate it with the scheme containing the largest area share.
+oa_caz_best <- oa_caz_prop %>%
+  group_by(OA) %>%
+  slice_max(prop_caz, n = 1, with_ties = FALSE) %>%
+  ungroup()
 
+# Primary majority-area treatment rule
+treated_OAs <- oa_caz_best %>%
+  filter(prop_caz >= 0.50) %>%
+  select(OA, scheme, prop_caz, pct_inside_caz)
 #============================================================
 # Create 1km CAZ buffer
 #============================================================
@@ -302,10 +335,204 @@ OA_analysis %>%
 glimpse(OA_analysis)
 
 
+
+
+
+
+# ============================================================
+# Diagnostics for OAs near the 50% treatment threshold
+# ============================================================
+
+oa_margin_diagnostic <- oa_caz_best %>%
+  mutate(
+    treated_50 = prop_caz >= 0.50,
+    
+    # "Marginal" is defined as within 10 percentage points
+    # on either side of the primary 50% threshold.
+    marginal_40_60 =
+      prop_caz >= 0.40 & prop_caz < 0.60,
+    
+    marginal_below =
+      prop_caz >= 0.40 & prop_caz < 0.50,
+    
+    marginal_above =
+      prop_caz >= 0.50 & prop_caz < 0.60,
+    
+    overlap_band = case_when(
+      prop_caz < 0.40 ~ "Below 40%",
+      prop_caz < 0.50 ~ "40% to <50%",
+      prop_caz < 0.60 ~ "50% to <60%",
+      prop_caz < 1.00 ~ "60% to <100%",
+      TRUE ~ "100% inside"
+    )
+  )
+
+# Overall numbers and percentages
+overall_margin_summary <- oa_margin_diagnostic %>%
+  summarise(
+    intersecting_OAs = n(),
+    treated_OAs = sum(treated_50),
+    marginal_OAs_40_60 = sum(marginal_40_60),
+    marginal_below_50 = sum(marginal_below),
+    marginal_above_50 = sum(marginal_above),
+    pct_marginal_among_intersecting =
+      100 * marginal_OAs_40_60 / intersecting_OAs,
+    pct_marginal_among_treated =
+      100 * marginal_above_50 / treated_OAs
+  )
+
+cat("\n--- OAs around the 50% CAZ threshold ---\n")
+print(overall_margin_summary)
+
+
+scheme_margin_summary <- oa_margin_diagnostic %>%
+  group_by(scheme) %>%
+  summarise(
+    intersecting_OAs = n(),
+    treated_OAs = sum(treated_50),
+    marginal_40_60 = sum(marginal_40_60),
+    marginal_below_50 = sum(marginal_below),
+    marginal_above_50 = sum(marginal_above),
+    pct_marginal_among_intersecting =
+      100 * marginal_40_60 / intersecting_OAs,
+    pct_marginal_among_treated =
+      if_else(
+        treated_OAs > 0,
+        100 * marginal_above_50 / treated_OAs,
+        NA_real_
+      ),
+    .groups = "drop"
+  )
+
+cat("\n--- Marginal OAs by scheme ---\n")
+print(scheme_margin_summary, n = Inf)
+
+
+
+threshold_sensitivity <- map_dfr(
+  c(40, 45, 50, 55, 60),
+  function(threshold_pct) {
+    
+    cutoff <- threshold_pct / 100
+    
+    oa_caz_best %>%
+      summarise(
+        threshold_pct = threshold_pct,
+        treated_OAs = sum(prop_caz >= cutoff),
+        OAs_switching_vs_50 = sum(
+          (prop_caz >= cutoff) != (prop_caz >= 0.50)
+        )
+      )
+  }
+)
+
+cat("\n--- Sensitivity to alternative area thresholds ---\n")
+print(threshold_sensitivity)
+
+# Create one clean overlap record per OA
+oa_overlap_lookup <- oa_caz_best %>%
+  st_drop_geometry() %>%
+  dplyr::select(OA, prop_caz, pct_inside_caz) %>%
+  distinct(OA, .keep_all = TRUE)
+
+# Remove overlap variables created by any previous run
+OA_analysis <- OA_analysis %>%
+  dplyr::select(
+    -dplyr::any_of(
+      c(
+        "prop_caz",
+        "pct_inside_caz",
+        "prop_caz.x",
+        "prop_caz.y",
+        "pct_inside_caz.x",
+        "pct_inside_caz.y"
+      )
+    )
+  ) %>%
+  left_join(
+    oa_overlap_lookup,
+    by = "OA"
+  ) %>%
+  mutate(
+    prop_caz = tidyr::replace_na(prop_caz, 0),
+    pct_inside_caz = tidyr::replace_na(pct_inside_caz, 0)
+  )
+
+OA_analysis %>%
+  summarise(
+    disagreement = sum(
+      treated_OA != as.integer(prop_caz >= 0.50)
+    )
+  ) %>%
+  print()
+
+OA_analysis %>%
+  dplyr::select(
+    OA,
+    assignment,
+    scheme,
+    prop_caz,
+    pct_inside_caz
+  ) %>%
+  dplyr::filter(prop_caz > 0) %>%
+  dplyr::arrange(dplyr::desc(prop_caz)) %>%
+  tibble::as_tibble() %>%
+  print(n = 30)
+
+
+
 saveRDS(
   OA_analysis,
   here("data","processed","OA_level_from_polygons.rds")
 )
+
+english_schemes <- c(
+  "Bath",
+  "Birmingham",
+  "Bradford",
+  "Bristol",
+  "Newcastle",
+  "Portsmouth",
+  "Sheffield"
+)
+
+english_oa_margin <- oa_margin_diagnostic %>%
+  dplyr::filter(scheme %in% english_schemes) %>%
+  mutate(
+    distance_from_50 = abs(prop_caz - 0.50)
+  )
+
+english_margin_summary <- english_oa_margin %>%
+  summarise(
+    intersecting_OAs = n(),
+    
+    treated_OAs =
+      sum(prop_caz >= 0.50),
+    
+    fully_inside_OAs =
+      sum(prop_caz >= 0.999999),
+    
+    partially_inside_treated_OAs =
+      sum(prop_caz >= 0.50 & prop_caz < 0.999999),
+    
+    marginal_OAs_40_60 =
+      sum(prop_caz >= 0.40 & prop_caz < 0.60),
+    
+    marginal_below_50 =
+      sum(prop_caz >= 0.40 & prop_caz < 0.50),
+    
+    marginal_above_50 =
+      sum(prop_caz >= 0.50 & prop_caz < 0.60),
+    
+    pct_marginal_among_intersecting =
+      100 * marginal_OAs_40_60 / intersecting_OAs,
+    
+    pct_marginal_among_treated =
+      100 * marginal_above_50 / treated_OAs
+  )
+
+print(english_margin_summary)
+
 
 st_write(
   oa_sub,

@@ -1,33 +1,28 @@
 variable,label,treated_mean,treated_sd,control_mean,control_sd
-road_density_m_km2,road_density_m_km2,22015.9378,9248.2912,19015.2504,7786.3754
-road_length_km,road_length_km,1.246,1.2939,1.153,0.9644
-pct_A_road,% A road,14.0635,18.1592,12.2514,17.1153
-pct_B_road,% B road,4.4439,10.9112,3.3521,9.7177
-pct_minor_road,% Minor road,81.2199,20.3291,84.0095,19.0439
-dist_BUA_centroid,dist_BUA_centroid,1943.9683,1139.6065,2373.8561,1362.7618
-pop_density,pop_density,11196.4325,10299.9854,8302.6156,6861.1292
-area_km2,area_km2,0.0662,0.0803,0.0697,0.069
-business_retail_per_km2,business_retail_per_km2,39.9929,32.7342,25.3368,22.4795
-IMD,IMD,40.6451,18.2469,33.5913,15.9432
-ethnic_minority_pct,% Ethnic minority,51.9787,27.3017,36.0646,23.5187
-no_car_households_pct,% No car household,49.7553,17.7849,39.5633,17.8054
-two_plus_car_households_pct,% 2+ car household,13.1585,9.9376,19.4747,12.1451
-car_commute_pct,% Car commute,40.7256,15.3435,49.097,15.8115
-public_transport_to_work_pct,% Public/paid transport to work,21.4236,7.771,19.1723,7.7553
-active_travel_to_work_pct,% Active travel to work,32.536,13.742,26.2376,13.5599
-work_from_home_pct,% Work from home,3.9801,2.8761,3.7033,2.5211
-children_0_19_pct,% Aged 0-19,24.1615,13.6903,23.6734,9.6997
-young_people_5_19_pct,% Aged 5-19,18.7592,11.8888,18.0853,8.4327
-young_adults_20_34_pct,% Aged 20-34,38.2355,20.4385,30.2104,15.6966
-working_age_20_64_pct,% Aged 20-64,68.032,15.1646,64.8086,11.4083
-older_65plus_pct,% Aged 65+,7.7162,6.7452,11.2591,7.3199
-trend_total_pkm,Trend: total injuries/km,-0.0304,2.2055,-0.0779,1.5376
-recent_minus_mid_total_pkm,Recent - mid injuries/km,0.0673,0.9902,-9e-4,0.6827
-mid_minus_early_total_pkm,Mid - early injuries/km,-0.0528,0.7256,-0.0302,0.6163
-covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2451,0.5906,-0.2253,0.4759
-recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.1807,0.7392,0.1634,0.618
-mean_total_pkm,mean_total_pkm,0.48,0.5274,0.4102,0.43
-mean_precovid_total_pkm,mean_precovid_total_pkm,0.48,0.5274,0.4102,0.43
-mean_lockdown_total_pkm,mean_lockdown_total_pkm,0.2318,0.4472,0.1826,0.332
-mean_recovery_total_pkm,mean_recovery_total_pkm,0.4149,0.6972,0.344,0.5668
-zero_quarter_share_pre,zero_quarter_share_pre,0.7249,0.2511,0.7488,0.2193
+road_density_m_km2,road_density_m_km2,22015.9378,9248.2912,18495.8505,7739.4226
+road_length_km,road_length_km,1.246,1.2939,1.2378,1.0198
+pct_A_road,% A road,14.0635,18.1592,12.4297,16.9375
+pct_B_road,% B road,4.4439,10.9112,3.5333,9.7936
+pct_minor_road,% Minor road,81.2199,20.3291,83.5318,18.9408
+dist_BUA_centroid,dist_BUA_centroid,1943.9683,1139.6065,2614.0114,1467.1798
+pop_density,pop_density,11196.4325,10299.9854,7616.9285,6666.3405
+area_km2,area_km2,0.0662,0.0803,0.0783,0.0789
+business_retail_per_km2,business_retail_per_km2,39.9929,32.7342,22.2873,20.4446
+IMD,IMD,40.6451,18.2469,33.786,16.8252
+ethnic_minority_pct,% Ethnic minority,51.9787,27.3017,32.6293,22.9752
+no_car_households_pct,% No car household,49.7553,17.7849,37.6592,18.0754
+two_plus_car_households_pct,% 2+ car household,13.1585,9.9376,20.9229,12.8074
+car_commute_pct,% Car commute,40.7256,15.3435,51.6157,15.5757
+public_transport_to_work_pct,% Public/paid transport to work,21.4236,7.771,19.1409,8.1003
+active_travel_to_work_pct,% Active travel to work,32.536,13.742,23.8517,12.5415
+work_from_home_pct,% Work from home,3.9801,2.8761,3.5399,2.3767
+children_0_19_pct,% Aged 0-19,24.1615,13.6903,23.7475,9.0445
+young_people_5_19_pct,% Aged 5-19,18.7592,11.8888,17.936,7.6875
+young_adults_20_34_pct,% Aged 20-34,38.2355,20.4385,28.0319,14.6273
+working_age_20_64_pct,% Aged 20-64,68.032,15.1646,63.7008,10.7029
+older_65plus_pct,% Aged 65+,7.7162,6.7452,12.1861,7.576
+trend_total_pkm,Trend: total injuries/km,-0.0304,2.2055,-0.1165,1.717
+covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2451,0.5906,-0.2238,0.4754
+recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.1807,0.7392,0.1751,0.6289
+mean_precovid_total_pkm,mean_precovid_total_pkm,0.48,0.5274,0.4133,0.4293
+zero_quarter_share_pre,zero_quarter_share_pre,0.7249,0.2511,0.7371,0.2293

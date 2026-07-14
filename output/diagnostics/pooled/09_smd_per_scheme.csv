@@ -1,225 +1,190 @@
 scheme,variable,label,smd_before,smd_after
-Bath,log1p_road_length_km,Road length (log),-0.5829,-0.0357
-Bath,log1p_pop_density,Pop. density (log),0.5206,-0.0109
-Bath,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-2.0433,-0.5876
-Bath,log1p_road_density_m_km2,Road density (log),0.2503,0.1724
-Bath,log1p_business_retail_per_km2,Retail density (log),1.1821,0.5292
-Bath,log_area_km2,Area (log),-0.6795,-0.1485
-Bath,pct_A_road,% A road,0.8228,0.6824
-Bath,pct_B_road,% B road,-0.2789,0.0982
-Bath,pct_minor_road,% Minor road,-0.648,-0.6736
-Bath,IMD,IMD,-0.7191,-0.3303
-Bath,ethnic_minority_pct,% Ethnic minority,-0.3119,-0.1597
-Bath,no_car_households_pct,% No car household,1.163,0.5101
-Bath,two_plus_car_households_pct,% 2+ car household,-1.3167,-0.533
-Bath,car_commute_pct,% Car commute,-2.9643,-0.9126
-Bath,public_transport_to_work_pct,% Public/paid transport to work,0.1168,-0.0555
-Bath,active_travel_to_work_pct,% Active travel to work,2.9662,0.9918
-Bath,work_from_home_pct,% Work from home,1.3569,0.6559
-Bath,children_0_19_pct,% Aged 0-19,-1.4163,-0.8494
-Bath,young_people_5_19_pct,% Aged 5-19,-1.109,-0.6361
-Bath,young_adults_20_34_pct,% Aged 20-34,1.799,0.7309
-Bath,working_age_20_64_pct,% Aged 20-64,1.5352,0.6102
-Bath,older_65plus_pct,% Aged 65+,-0.3623,-0.0559
-Bath,trend_total_pkm,Trend: total injuries/km,-0.1121,-0.0104
-Bath,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.3795,0.0131
-Bath,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0193,-0.0373
-Bath,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2095,0.085
-Bath,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.0946,-0.0341
-Bath,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.302,-0.078
-Bath,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.302,-0.078
-Bath,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),-0.0853,0.0237
-Bath,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.042,-0.0304
-Bath,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),0.0079,0.0104
-Birmingham,log1p_road_length_km,Road length (log),-0.4355,-0.0183
-Birmingham,log1p_pop_density,Pop. density (log),0.7448,0.0778
-Birmingham,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.7044,0.1735
-Birmingham,log1p_road_density_m_km2,Road density (log),0.3015,0.0089
-Birmingham,log1p_business_retail_per_km2,Retail density (log),2.0966,0.673
-Birmingham,log_area_km2,Area (log),-0.8183,-0.1603
-Birmingham,pct_A_road,% A road,0.1337,-0.1199
-Birmingham,pct_B_road,% B road,0.4137,0.1808
-Birmingham,pct_minor_road,% Minor road,-0.3848,-0.019
-Birmingham,IMD,IMD,0.6575,0.228
-Birmingham,ethnic_minority_pct,% Ethnic minority,1.704,0.6879
-Birmingham,no_car_households_pct,% No car household,1.8191,0.3935
-Birmingham,two_plus_car_households_pct,% 2+ car household,-1.9161,-0.7009
-Birmingham,car_commute_pct,% Car commute,-2.5586,-0.6363
-Birmingham,public_transport_to_work_pct,% Public/paid transport to work,1.3287,0.5292
-Birmingham,active_travel_to_work_pct,% Active travel to work,2.0319,0.4517
-Birmingham,work_from_home_pct,% Work from home,-0.1461,-0.0474
-Birmingham,children_0_19_pct,% Aged 0-19,-0.4405,-0.2147
-Birmingham,young_people_5_19_pct,% Aged 5-19,-0.4358,-0.2288
-Birmingham,young_adults_20_34_pct,% Aged 20-34,1.7735,0.554
-Birmingham,working_age_20_64_pct,% Aged 20-64,1.3235,0.4396
-Birmingham,older_65plus_pct,% Aged 65+,-1.4626,-0.6643
-Birmingham,trend_total_pkm,Trend: total injuries/km,0.0573,0.0504
-Birmingham,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.2072,0.1242
-Birmingham,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0198,-0.0055
-Birmingham,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.405,-0.0681
-Birmingham,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.2171,0.047
-Birmingham,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.2772,0.1251
-Birmingham,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.2772,0.1251
-Birmingham,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.4723,0.0774
-Birmingham,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.6628,0.0588
-Birmingham,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.6106,0.0585
-Bradford,log1p_road_length_km,Road length (log),-0.0594,0.135
-Bradford,log1p_pop_density,Pop. density (log),0.5739,0.2989
-Bradford,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.7537,-0.4127
-Bradford,log1p_road_density_m_km2,Road density (log),0.8035,0.5011
-Bradford,log1p_business_retail_per_km2,Retail density (log),1.3818,0.7736
-Bradford,log_area_km2,Area (log),-0.4272,-0.1765
-Bradford,pct_A_road,% A road,0.2669,0.1346
-Bradford,pct_B_road,% B road,-0.1788,-0.1074
-Bradford,pct_minor_road,% Minor road,-0.137,-0.0628
-Bradford,IMD,IMD,1.1292,0.7438
-Bradford,ethnic_minority_pct,% Ethnic minority,2.0169,1.1344
-Bradford,no_car_households_pct,% No car household,0.8632,0.3844
-Bradford,two_plus_car_households_pct,% 2+ car household,-0.8251,-0.3814
-Bradford,car_commute_pct,% Car commute,-0.6726,-0.2829
-Bradford,public_transport_to_work_pct,% Public/paid transport to work,0.745,0.3271
-Bradford,active_travel_to_work_pct,% Active travel to work,0.4039,0.1507
-Bradford,work_from_home_pct,% Work from home,-0.2825,-0.0343
-Bradford,children_0_19_pct,% Aged 0-19,0.9974,0.6986
-Bradford,young_people_5_19_pct,% Aged 5-19,0.9271,0.6578
-Bradford,young_adults_20_34_pct,% Aged 20-34,0.2965,0.0053
-Bradford,working_age_20_64_pct,% Aged 20-64,-0.0485,-0.2342
-Bradford,older_65plus_pct,% Aged 65+,-0.9363,-0.5542
-Bradford,trend_total_pkm,Trend: total injuries/km,-0.0487,-0.0181
-Bradford,recent_minus_mid_total_pkm,Recent - mid injuries/km,-0.0971,-0.0297
-Bradford,mid_minus_early_total_pkm,Mid - early injuries/km,-0.063,-0.0236
-Bradford,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.1862,0.003
-Bradford,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.3056,0.0769
-Bradford,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.3507,-0.0171
-Bradford,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.3507,-0.0171
-Bradford,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.092,-0.001
-Bradford,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.4503,0.0765
-Bradford,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.3764,-0.0601
-Bristol,log1p_road_length_km,Road length (log),-0.5114,-0.1176
-Bristol,log1p_pop_density,Pop. density (log),0.7887,0.2032
-Bristol,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.7079,-0.7606
-Bristol,log1p_road_density_m_km2,Road density (log),0.3507,-0.0576
-Bristol,log1p_business_retail_per_km2,Retail density (log),2.0604,0.5023
-Bristol,log_area_km2,Area (log),-0.8059,-0.2134
-Bristol,pct_A_road,% A road,0.6497,0.0776
-Bristol,pct_B_road,% B road,0.1767,0.2106
-Bristol,pct_minor_road,% Minor road,-0.6973,-0.1765
-Bristol,IMD,IMD,-0.0525,-0.1655
-Bristol,ethnic_minority_pct,% Ethnic minority,0.3094,-0.0474
-Bristol,no_car_households_pct,% No car household,1.2585,0.2957
-Bristol,two_plus_car_households_pct,% 2+ car household,-1.6781,-0.5718
-Bristol,car_commute_pct,% Car commute,-2.7493,-0.7918
-Bristol,public_transport_to_work_pct,% Public/paid transport to work,-0.2741,-0.3945
-Bristol,active_travel_to_work_pct,% Active travel to work,3.5953,0.9295
-Bristol,work_from_home_pct,% Work from home,0.4203,0.4186
-Bristol,children_0_19_pct,% Aged 0-19,-0.5239,-0.1953
-Bristol,young_people_5_19_pct,% Aged 5-19,-0.2901,-0.067
-Bristol,young_adults_20_34_pct,% Aged 20-34,2.0394,0.6217
-Bristol,working_age_20_64_pct,% Aged 20-64,1.3057,0.3502
-Bristol,older_65plus_pct,% Aged 65+,-1.0855,-0.309
-Bristol,trend_total_pkm,Trend: total injuries/km,0.0159,0.0068
-Bristol,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.3771,0.2576
-Bristol,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0755,-0.0933
-Bristol,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.6347,-0.058
-Bristol,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.2774,0.029
-Bristol,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.3382,0.1725
-Bristol,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.3382,0.1725
-Bristol,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.4843,0.1348
-Bristol,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.5941,0.0871
-Bristol,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.6736,-0.0259
-Newcastle,log1p_road_length_km,Road length (log),0.1207,0.1301
-Newcastle,log1p_pop_density,Pop. density (log),0.4019,-0.0916
-Newcastle,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.3798,0.8044
-Newcastle,log1p_road_density_m_km2,Road density (log),0.9303,0.1755
-Newcastle,log1p_business_retail_per_km2,Retail density (log),1.9452,0.236
-Newcastle,log_area_km2,Area (log),-0.3495,0.0457
-Newcastle,pct_A_road,% A road,0.7264,-0.0403
-Newcastle,pct_B_road,% B road,0.6196,0.481
-Newcastle,pct_minor_road,% Minor road,-1.1978,-0.2434
-Newcastle,IMD,IMD,0.3505,0.0613
-Newcastle,ethnic_minority_pct,% Ethnic minority,1.0762,0.378
-Newcastle,no_car_households_pct,% No car household,2.5381,0.692
-Newcastle,two_plus_car_households_pct,% 2+ car household,-2.1339,-0.9091
-Newcastle,car_commute_pct,% Car commute,-3.1171,-0.5009
-Newcastle,public_transport_to_work_pct,% Public/paid transport to work,1.2749,0.5219
-Newcastle,active_travel_to_work_pct,% Active travel to work,2.8968,0.2503
-Newcastle,work_from_home_pct,% Work from home,0.0396,0.0847
-Newcastle,children_0_19_pct,% Aged 0-19,-0.6533,-0.2872
-Newcastle,young_people_5_19_pct,% Aged 5-19,-0.348,-0.1665
-Newcastle,young_adults_20_34_pct,% Aged 20-34,2.464,0.7993
-Newcastle,working_age_20_64_pct,% Aged 20-64,1.5692,0.5621
-Newcastle,older_65plus_pct,% Aged 65+,-1.4389,-0.578
-Newcastle,trend_total_pkm,Trend: total injuries/km,-0.1915,-0.0622
-Newcastle,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.0456,-0.0845
-Newcastle,mid_minus_early_total_pkm,Mid - early injuries/km,-0.2152,-0.1363
-Newcastle,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.5756,0.058
-Newcastle,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.0913,-0.2003
-Newcastle,log1p_mean_total_pkm,Level: mean total injuries/km (log),1.1777,-0.0034
-Newcastle,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.1777,-0.0034
-Newcastle,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.5273,0.1024
-Newcastle,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.7005,-0.1533
-Newcastle,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-1.0982,-0.0031
-Portsmouth,log1p_road_length_km,Road length (log),-0.7224,-0.3221
-Portsmouth,log1p_pop_density,Pop. density (log),1.0581,0.5467
-Portsmouth,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.5473,0.0753
-Portsmouth,log1p_road_density_m_km2,Road density (log),0.6325,0.2479
-Portsmouth,log1p_business_retail_per_km2,Retail density (log),1.1561,-0.1981
-Portsmouth,log_area_km2,Area (log),-1.0008,-0.4991
-Portsmouth,pct_A_road,% A road,0.1165,-0.1801
-Portsmouth,pct_B_road,% B road,0.0013,-0.0756
-Portsmouth,pct_minor_road,% Minor road,-0.1024,0.182
-Portsmouth,IMD,IMD,1.3326,0.6783
-Portsmouth,ethnic_minority_pct,% Ethnic minority,0.3948,0.263
-Portsmouth,no_car_households_pct,% No car household,1.8799,0.7915
-Portsmouth,two_plus_car_households_pct,% 2+ car household,-1.608,-0.5742
-Portsmouth,car_commute_pct,% Car commute,-1.7631,-0.6041
-Portsmouth,public_transport_to_work_pct,% Public/paid transport to work,-0.0628,-0.1735
-Portsmouth,active_travel_to_work_pct,% Active travel to work,2.4199,0.8029
-Portsmouth,work_from_home_pct,% Work from home,-0.471,-0.2913
-Portsmouth,children_0_19_pct,% Aged 0-19,0.4635,0.1269
-Portsmouth,young_people_5_19_pct,% Aged 5-19,0.4226,0.0815
-Portsmouth,young_adults_20_34_pct,% Aged 20-34,0.4868,-0.0446
-Portsmouth,working_age_20_64_pct,% Aged 20-64,-0.0149,-0.2067
-Portsmouth,older_65plus_pct,% Aged 65+,-0.4868,0.0898
-Portsmouth,trend_total_pkm,Trend: total injuries/km,0.0184,-0.0387
-Portsmouth,recent_minus_mid_total_pkm,Recent - mid injuries/km,0.0918,0.1227
-Portsmouth,mid_minus_early_total_pkm,Mid - early injuries/km,-0.0981,-0.1837
-Portsmouth,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,0.1289,0.0261
-Portsmouth,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,-0.2247,-0.0014
-Portsmouth,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7651,-0.0495
-Portsmouth,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7651,-0.0495
-Portsmouth,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.527,-0.0346
-Portsmouth,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.3804,0.0748
-Portsmouth,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.4288,0.1242
-Sheffield,log1p_road_length_km,Road length (log),-0.1365,-0.0359
-Sheffield,log1p_pop_density,Pop. density (log),0.8115,0.3132
-Sheffield,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.4097,0.0049
-Sheffield,log1p_road_density_m_km2,Road density (log),1.1839,0.444
-Sheffield,log1p_business_retail_per_km2,Retail density (log),2.0066,0.7181
-Sheffield,log_area_km2,Area (log),-0.7213,-0.2375
-Sheffield,pct_A_road,% A road,0.1992,-0.1563
-Sheffield,pct_B_road,% B road,0.3107,0.2686
-Sheffield,pct_minor_road,% Minor road,-0.368,-0.0183
-Sheffield,IMD,IMD,0.2186,-0.072
-Sheffield,ethnic_minority_pct,% Ethnic minority,1.3271,0.5456
-Sheffield,no_car_households_pct,% No car household,2.837,0.8319
-Sheffield,two_plus_car_households_pct,% 2+ car household,-2.1962,-0.9731
-Sheffield,car_commute_pct,% Car commute,-3.1071,-0.8662
-Sheffield,public_transport_to_work_pct,% Public/paid transport to work,1.2697,0.4804
-Sheffield,active_travel_to_work_pct,% Active travel to work,3.2693,0.6817
-Sheffield,work_from_home_pct,% Work from home,-0.1309,0.0701
-Sheffield,children_0_19_pct,% Aged 0-19,-0.8384,-0.4271
-Sheffield,young_people_5_19_pct,% Aged 5-19,-0.6265,-0.3606
-Sheffield,young_adults_20_34_pct,% Aged 20-34,3.5397,1.1326
-Sheffield,working_age_20_64_pct,% Aged 20-64,2.1712,0.6441
-Sheffield,older_65plus_pct,% Aged 65+,-2.0534,-0.863
-Sheffield,trend_total_pkm,Trend: total injuries/km,0.1522,0.2065
-Sheffield,recent_minus_mid_total_pkm,Recent - mid injuries/km,-0.1607,-0.0316
-Sheffield,mid_minus_early_total_pkm,Mid - early injuries/km,-0.1587,-0.0248
-Sheffield,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2197,0.2263
-Sheffield,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.4152,-0.0111
-Sheffield,log1p_mean_total_pkm,Level: mean total injuries/km (log),0.7744,-0.117
-Sheffield,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7744,-0.117
-Sheffield,log1p_mean_lockdown_total_pkm,Level: lockdown injuries/km (log),0.3315,0.1818
-Sheffield,log1p_mean_recovery_total_pkm,Level: recovery injuries/km (log),0.6446,0.0636
-Sheffield,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.7051,0.1397
+Bath,log1p_road_length_km,Road length (log),-0.5829,-0.1292
+Bath,log1p_pop_density,Pop. density (log),0.5206,0.0358
+Bath,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-2.0433,-0.6686
+Bath,log1p_road_density_m_km2,Road density (log),0.2503,0.1389
+Bath,log1p_business_retail_per_km2,Retail density (log),1.1821,0.3609
+Bath,log_area_km2,Area (log),-0.6795,-0.2216
+Bath,pct_A_road,% A road,0.8228,0.8666
+Bath,pct_B_road,% B road,-0.2789,0.1614
+Bath,pct_minor_road,% Minor road,-0.648,-0.8726
+Bath,IMD,IMD,-0.7191,-0.5286
+Bath,ethnic_minority_pct,% Ethnic minority,-0.3119,-0.2289
+Bath,no_car_households_pct,% No car household,1.163,0.5816
+Bath,two_plus_car_households_pct,% 2+ car household,-1.3167,-0.5801
+Bath,car_commute_pct,% Car commute,-2.9643,-1.2471
+Bath,public_transport_to_work_pct,% Public/paid transport to work,0.1168,0.1395
+Bath,active_travel_to_work_pct,% Active travel to work,2.9662,0.9746
+Bath,work_from_home_pct,% Work from home,1.3569,1.0496
+Bath,children_0_19_pct,% Aged 0-19,-1.4163,-1.0831
+Bath,young_people_5_19_pct,% Aged 5-19,-1.109,-0.8107
+Bath,young_adults_20_34_pct,% Aged 20-34,1.799,0.9075
+Bath,working_age_20_64_pct,% Aged 20-64,1.5352,0.7356
+Bath,older_65plus_pct,% Aged 65+,-0.3623,0.0046
+Bath,trend_total_pkm,Trend: total injuries/km,-0.1121,0.0071
+Bath,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2095,0.0286
+Bath,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.0946,-0.1371
+Bath,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.302,-0.0358
+Bath,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),0.0079,0.0144
+Birmingham,log1p_road_length_km,Road length (log),-0.4355,-0.0568
+Birmingham,log1p_pop_density,Pop. density (log),0.7448,0.0902
+Birmingham,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.7044,0.1839
+Birmingham,log1p_road_density_m_km2,Road density (log),0.3015,0.0684
+Birmingham,log1p_business_retail_per_km2,Retail density (log),2.0966,0.7842
+Birmingham,log_area_km2,Area (log),-0.8183,-0.1866
+Birmingham,pct_A_road,% A road,0.1337,-0.123
+Birmingham,pct_B_road,% B road,0.4137,0.1066
+Birmingham,pct_minor_road,% Minor road,-0.3848,0.0358
+Birmingham,IMD,IMD,0.6575,0.2103
+Birmingham,ethnic_minority_pct,% Ethnic minority,1.704,0.7232
+Birmingham,no_car_households_pct,% No car household,1.8191,0.5785
+Birmingham,two_plus_car_households_pct,% 2+ car household,-1.9161,-0.8715
+Birmingham,car_commute_pct,% Car commute,-2.5586,-0.9136
+Birmingham,public_transport_to_work_pct,% Public/paid transport to work,1.3287,0.5216
+Birmingham,active_travel_to_work_pct,% Active travel to work,2.0319,0.7402
+Birmingham,work_from_home_pct,% Work from home,-0.1461,0.0276
+Birmingham,children_0_19_pct,% Aged 0-19,-0.4405,-0.3066
+Birmingham,young_people_5_19_pct,% Aged 5-19,-0.4358,-0.2899
+Birmingham,young_adults_20_34_pct,% Aged 20-34,1.7735,0.7148
+Birmingham,working_age_20_64_pct,% Aged 20-64,1.3235,0.5775
+Birmingham,older_65plus_pct,% Aged 65+,-1.4626,-0.7714
+Birmingham,trend_total_pkm,Trend: total injuries/km,0.0573,0.0529
+Birmingham,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.405,-0.0205
+Birmingham,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.2171,0.037
+Birmingham,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.2772,0.0442
+Birmingham,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.6106,0.1015
+Bradford,log1p_road_length_km,Road length (log),-0.0594,0.0699
+Bradford,log1p_pop_density,Pop. density (log),0.5739,0.4071
+Bradford,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.7537,-0.5035
+Bradford,log1p_road_density_m_km2,Road density (log),0.8035,0.5816
+Bradford,log1p_business_retail_per_km2,Retail density (log),1.3818,0.955
+Bradford,log_area_km2,Area (log),-0.4272,-0.2692
+Bradford,pct_A_road,% A road,0.2669,0.0952
+Bradford,pct_B_road,% B road,-0.1788,-0.1462
+Bradford,pct_minor_road,% Minor road,-0.137,-0.0081
+Bradford,IMD,IMD,1.1292,0.7824
+Bradford,ethnic_minority_pct,% Ethnic minority,2.0169,1.4217
+Bradford,no_car_households_pct,% No car household,0.8632,0.491
+Bradford,two_plus_car_households_pct,% 2+ car household,-0.8251,-0.4696
+Bradford,car_commute_pct,% Car commute,-0.6726,-0.3471
+Bradford,public_transport_to_work_pct,% Public/paid transport to work,0.745,0.3799
+Bradford,active_travel_to_work_pct,% Active travel to work,0.4039,0.1891
+Bradford,work_from_home_pct,% Work from home,-0.2825,-0.0406
+Bradford,children_0_19_pct,% Aged 0-19,0.9974,0.7992
+Bradford,young_people_5_19_pct,% Aged 5-19,0.9271,0.7707
+Bradford,young_adults_20_34_pct,% Aged 20-34,0.2965,0.0818
+Bradford,working_age_20_64_pct,% Aged 20-64,-0.0485,-0.2109
+Bradford,older_65plus_pct,% Aged 65+,-0.9363,-0.6744
+Bradford,trend_total_pkm,Trend: total injuries/km,-0.0487,-0.001
+Bradford,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.1862,0.0358
+Bradford,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.3056,0.0316
+Bradford,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.3507,-0.0358
+Bradford,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.3764,-0.0193
+Bristol,log1p_road_length_km,Road length (log),-0.5114,-0.0185
+Bristol,log1p_pop_density,Pop. density (log),0.7887,0.1502
+Bristol,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.7079,-0.7302
+Bristol,log1p_road_density_m_km2,Road density (log),0.3507,0.1199
+Bristol,log1p_business_retail_per_km2,Retail density (log),2.0604,0.7049
+Bristol,log_area_km2,Area (log),-0.8059,-0.1112
+Bristol,pct_A_road,% A road,0.6497,0.0515
+Bristol,pct_B_road,% B road,0.1767,0.2476
+Bristol,pct_minor_road,% Minor road,-0.6973,-0.1565
+Bristol,IMD,IMD,-0.0525,-0.3283
+Bristol,ethnic_minority_pct,% Ethnic minority,0.3094,-0.2671
+Bristol,no_car_households_pct,% No car household,1.2585,0.3234
+Bristol,two_plus_car_households_pct,% 2+ car household,-1.6781,-0.5905
+Bristol,car_commute_pct,% Car commute,-2.7493,-0.9393
+Bristol,public_transport_to_work_pct,% Public/paid transport to work,-0.2741,-0.6253
+Bristol,active_travel_to_work_pct,% Active travel to work,3.5953,1.1527
+Bristol,work_from_home_pct,% Work from home,0.4203,0.406
+Bristol,children_0_19_pct,% Aged 0-19,-0.5239,-0.2383
+Bristol,young_people_5_19_pct,% Aged 5-19,-0.2901,-0.054
+Bristol,young_adults_20_34_pct,% Aged 20-34,2.0394,0.6416
+Bristol,working_age_20_64_pct,% Aged 20-64,1.3057,0.3633
+Bristol,older_65plus_pct,% Aged 65+,-1.0855,-0.2238
+Bristol,trend_total_pkm,Trend: total injuries/km,0.0159,0.0164
+Bristol,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.6347,0.0709
+Bristol,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.2774,0.0357
+Bristol,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.3382,-0.0109
+Bristol,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.6736,-0.0262
+Newcastle,log1p_road_length_km,Road length (log),0.1207,0.1278
+Newcastle,log1p_pop_density,Pop. density (log),0.4019,0.129
+Newcastle,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.3798,0.1904
+Newcastle,log1p_road_density_m_km2,Road density (log),0.9303,0.5629
+Newcastle,log1p_business_retail_per_km2,Retail density (log),1.9452,0.5794
+Newcastle,log_area_km2,Area (log),-0.3495,-0.0901
+Newcastle,pct_A_road,% A road,0.7264,0.127
+Newcastle,pct_B_road,% B road,0.6196,0.552
+Newcastle,pct_minor_road,% Minor road,-1.1978,-0.4561
+Newcastle,IMD,IMD,0.3505,-0.1881
+Newcastle,ethnic_minority_pct,% Ethnic minority,1.0762,0.5055
+Newcastle,no_car_households_pct,% No car household,2.5381,0.8764
+Newcastle,two_plus_car_households_pct,% 2+ car household,-2.1339,-1.0547
+Newcastle,car_commute_pct,% Car commute,-3.1171,-0.8272
+Newcastle,public_transport_to_work_pct,% Public/paid transport to work,1.2749,0.5577
+Newcastle,active_travel_to_work_pct,% Active travel to work,2.8968,0.7095
+Newcastle,work_from_home_pct,% Work from home,0.0396,0.0878
+Newcastle,children_0_19_pct,% Aged 0-19,-0.6533,-0.4083
+Newcastle,young_people_5_19_pct,% Aged 5-19,-0.348,-0.2301
+Newcastle,young_adults_20_34_pct,% Aged 20-34,2.464,1.1545
+Newcastle,working_age_20_64_pct,% Aged 20-64,1.5692,0.7768
+Newcastle,older_65plus_pct,% Aged 65+,-1.4389,-0.7917
+Newcastle,trend_total_pkm,Trend: total injuries/km,-0.1915,-0.0265
+Newcastle,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.5756,0.0477
+Newcastle,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.0913,-0.1065
+Newcastle,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),1.1777,-0.0273
+Newcastle,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-1.0982,0.0184
+Portsmouth,log1p_road_length_km,Road length (log),-0.7224,-0.3263
+Portsmouth,log1p_pop_density,Pop. density (log),1.0581,0.5858
+Portsmouth,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.5473,0.2526
+Portsmouth,log1p_road_density_m_km2,Road density (log),0.6325,0.4088
+Portsmouth,log1p_business_retail_per_km2,Retail density (log),1.1561,-0.077
+Portsmouth,log_area_km2,Area (log),-1.0008,-0.4935
+Portsmouth,pct_A_road,% A road,0.1165,-0.1329
+Portsmouth,pct_B_road,% B road,0.0013,0.0344
+Portsmouth,pct_minor_road,% Minor road,-0.1024,0.1262
+Portsmouth,IMD,IMD,1.3326,1.0792
+Portsmouth,ethnic_minority_pct,% Ethnic minority,0.3948,0.1088
+Portsmouth,no_car_households_pct,% No car household,1.8799,0.7947
+Portsmouth,two_plus_car_households_pct,% 2+ car household,-1.608,-0.6657
+Portsmouth,car_commute_pct,% Car commute,-1.7631,-0.6533
+Portsmouth,public_transport_to_work_pct,% Public/paid transport to work,-0.0628,-0.2441
+Portsmouth,active_travel_to_work_pct,% Active travel to work,2.4199,0.9089
+Portsmouth,work_from_home_pct,% Work from home,-0.471,-0.2496
+Portsmouth,children_0_19_pct,% Aged 0-19,0.4635,0.5367
+Portsmouth,young_people_5_19_pct,% Aged 5-19,0.4226,0.4888
+Portsmouth,young_adults_20_34_pct,% Aged 20-34,0.4868,-0.2281
+Portsmouth,working_age_20_64_pct,% Aged 20-64,-0.0149,-0.4636
+Portsmouth,older_65plus_pct,% Aged 65+,-0.4868,-0.0844
+Portsmouth,trend_total_pkm,Trend: total injuries/km,0.0184,-0.0193
+Portsmouth,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,0.1289,0.0264
+Portsmouth,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,-0.2247,-0.0011
+Portsmouth,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7651,-0.0078
+Portsmouth,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.4288,0.0265
+Sheffield,log1p_road_length_km,Road length (log),-0.1365,-0.1116
+Sheffield,log1p_pop_density,Pop. density (log),0.8115,0.6022
+Sheffield,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-1.4097,-0.2043
+Sheffield,log1p_road_density_m_km2,Road density (log),1.1839,0.699
+Sheffield,log1p_business_retail_per_km2,Retail density (log),2.0066,0.682
+Sheffield,log_area_km2,Area (log),-0.7213,-0.4555
+Sheffield,pct_A_road,% A road,0.1992,-0.0912
+Sheffield,pct_B_road,% B road,0.3107,0.1979
+Sheffield,pct_minor_road,% Minor road,-0.368,-0.0569
+Sheffield,IMD,IMD,0.2186,-0.2066
+Sheffield,ethnic_minority_pct,% Ethnic minority,1.3271,0.5738
+Sheffield,no_car_households_pct,% No car household,2.837,0.7899
+Sheffield,two_plus_car_households_pct,% 2+ car household,-2.1962,-0.9607
+Sheffield,car_commute_pct,% Car commute,-3.1071,-1.0944
+Sheffield,public_transport_to_work_pct,% Public/paid transport to work,1.2697,0.5424
+Sheffield,active_travel_to_work_pct,% Active travel to work,3.2693,0.8559
+Sheffield,work_from_home_pct,% Work from home,-0.1309,-0.2225
+Sheffield,children_0_19_pct,% Aged 0-19,-0.8384,-0.4166
+Sheffield,young_people_5_19_pct,% Aged 5-19,-0.6265,-0.2216
+Sheffield,young_adults_20_34_pct,% Aged 20-34,3.5397,1.6071
+Sheffield,working_age_20_64_pct,% Aged 20-64,2.1712,0.9062
+Sheffield,older_65plus_pct,% Aged 65+,-2.0534,-1.1459
+Sheffield,trend_total_pkm,Trend: total injuries/km,0.1522,0.0262
+Sheffield,covid_minus_precovid_total_pkm,COVID - pre-COVID injuries/km,-0.2197,0.1057
+Sheffield,recovery_minus_covid_total_pkm,Recovery - COVID injuries/km,0.4152,-0.0119
+Sheffield,log1p_mean_precovid_total_pkm,Level: pre-COVID injuries/km (log),0.7744,-0.0936
+Sheffield,log1p_zero_quarter_share_pre,Zero-injury quarter share (log),-0.7051,0.1053

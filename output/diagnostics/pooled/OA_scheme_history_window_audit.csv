@@ -1,0 +1,8 @@
+scheme,treatment_start_q,latest_feature_q,n_safe_recovery_quarters,recovery_feature_included,response_feature,passes_no_leakage_check
+Bath,2021-04-01,2021-01-01,0,FALSE,covid_minus_precovid_total_pkm,TRUE
+Birmingham,2021-07-01,2021-01-01,1,FALSE,covid_minus_precovid_total_pkm,TRUE
+Portsmouth,2022-01-01,2021-10-01,3,TRUE,recovery_minus_covid_total_pkm,TRUE
+Bradford,2022-10-01,2021-10-01,3,TRUE,recovery_minus_covid_total_pkm,TRUE
+Bristol,2023-01-01,2021-10-01,3,TRUE,recovery_minus_covid_total_pkm,TRUE
+Sheffield,2023-04-01,2021-10-01,3,TRUE,recovery_minus_covid_total_pkm,TRUE
+Newcastle,2023-07-01,2021-10-01,3,TRUE,recovery_minus_covid_total_pkm,TRUE

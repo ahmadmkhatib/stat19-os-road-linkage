@@ -1,100 +1,61 @@
 # =============================================================================
-# England-only CAZ map using the latest pooled matching outputs
+# England CAZ map: zones only
 # =============================================================================
+#
+# The map deliberately excludes matched OA/road-sample layers. Matching data
+# are read only to identify the seven schemes included in the pooled analysis.
+#
+# "Newcastle" remains the internal scheme identifier used for data joins, but
+# it is displayed as "Tyneside" in the map and console summary.
 #
 # Inputs:
 #   data/processed/OA_matched_full_pooled.rds
-#   data/processed/shp_files/OA_subset.shp
 #   data/processed/shp_files/CAZ_areas.shp
 #
 # Output:
-#   outputs/England_CAZ_recent_matching_map.png
-#
-# Notes:
-#   - Scotland is removed entirely.
-#   - CAZ schemes and OA coverage are taken from the recent matched data.
-#   - Treated and matched-control OAs are mapped separately.
+#   outputs/England_CAZ_zones_only_map.png
 # =============================================================================
 
 library(sf)
 library(ggplot2)
 library(here)
-library(tidyverse)
+library(dplyr)
+library(stringr)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(ggspatial)
 
-select <- dplyr::select
-filter <- dplyr::filter
-rename <- dplyr::rename
-mutate <- dplyr::mutate
-
 target_crs <- 27700
 
 # =============================================================================
-# 1. Load recent matching data
+# 1. Identify the schemes in the current matched analysis
 # =============================================================================
 
-matched_full <- readRDS(here("data", "processed", "OA_matched_full_pooled.rds"))
-
-if (!"OA" %in% names(matched_full)) {
-  stop("OA column is missing from OA_matched_full_pooled.rds.")
-}
+matched_full <- readRDS(
+  here("data", "processed", "OA_matched_full_pooled.rds")
+)
 
 if (!"scheme" %in% names(matched_full)) {
   stop("scheme column is missing from OA_matched_full_pooled.rds.")
 }
 
-if (!"treat_indicator" %in% names(matched_full)) {
-  if ("treated_OA" %in% names(matched_full)) {
-    matched_full <- matched_full %>%
-      mutate(treat_indicator = as.integer(treated_OA == 1))
-  } else {
-    stop("Need treat_indicator or treated_OA in OA_matched_full_pooled.rds.")
-  }
-}
-
-matched_oa <- matched_full %>%
-  mutate(
-    group = if_else(treat_indicator == 1, "Treated OA", "Matched control OA")
-  ) %>%
-  distinct(scheme, OA, group)
-
-matched_schemes <- matched_oa %>%
+matched_schemes <- matched_full %>%
+  filter(!is.na(scheme)) %>%
   distinct(scheme) %>%
   pull(scheme) %>%
   sort()
 
-cat("\nMatched schemes in current data:\n")
-print(matched_schemes)
+cat("\nSchemes in the current matched analysis:\n")
+print(if_else(matched_schemes == "Newcastle", "Tyneside", matched_schemes))
 
 # =============================================================================
-# 2. Load spatial data and filter to England/current matched sample
+# 2. Load CAZ boundaries and construct the England base map
 # =============================================================================
 
-oa_sf <- st_read(here("data", "processed", "shp_files", "OA_subset.shp"),
-                 quiet = TRUE) %>%
-  st_transform(target_crs)
-
-if (!"OA" %in% names(oa_sf)) {
-  stop("OA column is missing from OA_subset.shp.")
-}
-
-if ("LAD24CD" %in% names(oa_sf)) {
-  oa_sf <- oa_sf %>%
-    filter(substr(LAD24CD, 1, 1) == "E")
-}
-
-matched_oa_sf <- oa_sf %>%
-  inner_join(matched_oa, by = "OA") %>%
-  st_make_valid()
-
-if (nrow(matched_oa_sf) == 0) {
-  stop("No matched OAs joined to OA_subset.shp. Check OA identifiers.")
-}
-
-caz_raw <- st_read(here("data", "processed", "shp_files", "CAZ_areas.shp"),
-                   quiet = TRUE) %>%
+caz_raw <- st_read(
+  here("data", "processed", "shp_files", "CAZ_areas.shp"),
+  quiet = TRUE
+) %>%
   st_make_valid() %>%
   st_transform(target_crs)
 
@@ -105,34 +66,51 @@ if (!"scheme" %in% names(caz_raw)) {
 caz_england_sf <- caz_raw %>%
   filter(
     scheme %in% matched_schemes,
-    !str_detect(scheme, regex("Oxford|Glasgow|Aberdeen|Dundee|Edinburgh", ignore_case = TRUE))
+    !str_detect(
+      scheme,
+      regex("Oxford|Glasgow|Aberdeen|Dundee|Edinburgh", ignore_case = TRUE)
+    )
   ) %>%
-  rename(zone_name = scheme) %>%
-  group_by(zone_name) %>%
+  group_by(scheme) %>%
   summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  mutate(
+    display_name = if_else(scheme == "Newcastle", "Tyneside", scheme)
+  ) %>%
   st_make_valid()
 
 if (nrow(caz_england_sf) == 0) {
-  stop("No CAZ geometries matched to the current matched schemes.")
+  stop("No CAZ geometries matched the schemes in the current analysis.")
 }
 
-# England base map only. This avoids any Scotland geometry or label.
-uk <- ne_countries(country = "United Kingdom", scale = "medium", returnclass = "sf") %>%
+if ("Newcastle" %in% matched_schemes &&
+    !any(caz_england_sf$display_name == "Tyneside")) {
+  stop("The Newcastle CAZ geometry was not retained for display as Tyneside.")
+}
+
+uk <- ne_countries(
+  country = "United Kingdom",
+  scale = "medium",
+  returnclass = "sf"
+) %>%
   st_transform(target_crs)
 
+# Clip the UK geometry to an England-focused plotting extent. The northern
+# limit must extend beyond 550,000 metres to retain Newcastle/Tyneside.
 england_box <- st_as_sfc(st_bbox(c(
-  xmin = -200000, xmax = 700000,
-  ymin = -100000, ymax = 550000
+  xmin = -200000,
+  xmax = 700000,
+  ymin = -100000,
+  ymax = 660000
 ), crs = target_crs))
 
 england <- st_intersection(uk, england_box)
 
 # =============================================================================
-# 3. Label positions
+# 3. Construct label positions
 # =============================================================================
 
 caz_centroids <- caz_england_sf %>%
-  st_centroid() %>%
+  st_point_on_surface() %>%
   mutate(
     cx = st_coordinates(.)[, 1],
     cy = st_coordinates(.)[, 2]
@@ -141,23 +119,33 @@ caz_centroids <- caz_england_sf %>%
   arrange(desc(cy))
 
 england_bbox <- st_bbox(england)
-matched_bbox <- st_bbox(matched_oa_sf)
-
+caz_bbox <- st_bbox(caz_england_sf)
 label_x_left <- as.numeric(england_bbox["xmin"]) - 90000
+
+# Keep the first and last labels inside the plotting panel. Without this cap,
+# the Tyneside label is positioned above the northern map boundary and clipped.
+label_y_top <- min(
+  as.numeric(caz_bbox["ymax"]) + 10000,
+  as.numeric(england_bbox["ymax"]) - 25000
+)
+label_y_bottom <- max(
+  as.numeric(caz_bbox["ymin"]) - 10000,
+  as.numeric(england_bbox["ymin"]) + 25000
+)
 
 caz_labels <- caz_centroids %>%
   mutate(
     label_x = label_x_left,
     label_y = seq(
-      from = as.numeric(matched_bbox["ymax"]) + 20000,
-      to = as.numeric(matched_bbox["ymin"]) - 20000,
+      from = label_y_top,
+      to = label_y_bottom,
       length.out = n()
     ),
     line_end_x = label_x_left + 15000
   )
 
 # =============================================================================
-# 4. Map
+# 4. Draw the zones-only map
 # =============================================================================
 
 england_caz_map <- ggplot() +
@@ -168,22 +156,10 @@ england_caz_map <- ggplot() +
     linewidth = 0.45
   ) +
   geom_sf(
-    data = matched_oa_sf %>% filter(group == "Matched control OA"),
-    fill = "#9ecae1",
-    colour = NA,
-    alpha = 0.45
-  ) +
-  geom_sf(
-    data = matched_oa_sf %>% filter(group == "Treated OA"),
-    fill = "#fdae6b",
-    colour = NA,
-    alpha = 0.75
-  ) +
-  geom_sf(
     data = caz_england_sf,
     fill = "#E63946",
     colour = "#9B1D20",
-    linewidth = 0.55,
+    linewidth = 0.65,
     alpha = 0.88
   ) +
   geom_segment(
@@ -200,12 +176,19 @@ england_caz_map <- ggplot() +
     colour = "#9B1D20",
     size = 2.2
   ) +
-  geom_text(
+  # Use a borderless background label rather than plain text. Because the
+  # connector segments are drawn first, this background masks the part of a
+  # line that would otherwise run through a scheme name.
+  geom_label(
     data = caz_labels,
-    aes(x = label_x, y = label_y, label = zone_name),
+    aes(x = label_x, y = label_y, label = display_name),
     hjust = 0,
     size = 4.2,
     colour = "grey10",
+    fill = "#eaf4fb",
+    linewidth = 0,
+    label.padding = unit(0.08, "lines"),
+    label.r = unit(0, "lines"),
     lineheight = 0.9
   ) +
   annotate(
@@ -234,10 +217,21 @@ england_caz_map <- ggplot() +
   ) +
   coord_sf(
     crs = target_crs,
-    xlim = c(label_x_left - 10000, as.numeric(england_bbox["xmax"]) + 50000),
-    ylim = c(as.numeric(england_bbox["ymin"]) - 10000,
-             as.numeric(england_bbox["ymax"]) + 10000),
+    xlim = c(
+      label_x_left - 10000,
+      as.numeric(england_bbox["xmax"]) + 50000
+    ),
+    ylim = c(
+      as.numeric(england_bbox["ymin"]) - 10000,
+      as.numeric(england_bbox["ymax"]) + 10000
+    ),
     expand = FALSE
+  ) +
+  labs(
+    title = "Clean Air Zones in England",
+    subtitle = "Schemes included in the pooled analysis",
+    x = NULL,
+    y = NULL
   ) +
   theme_minimal(base_size = 14) +
   theme(
@@ -248,18 +242,12 @@ england_caz_map <- ggplot() +
     axis.ticks = element_blank(),
     plot.background = element_rect(fill = "white", colour = NA),
     panel.background = element_rect(fill = "#eaf4fb", colour = NA)
-  ) +
-  labs(
-    title = "Clean Air Zones and Recent Matched OA Sample",
-    subtitle = "England only; treated and matched-control OAs from OA_matched_full_pooled.rds",
-    x = NULL,
-    y = NULL
   )
 
 print(england_caz_map)
 
 ggsave(
-  here("outputs", "England_CAZ_recent_matching_map.png"),
+  here("outputs", "England_CAZ_zones_only_map.png"),
   england_caz_map,
   width = 14,
   height = 11,
@@ -267,15 +255,5 @@ ggsave(
   bg = "white"
 )
 
-matched_map_summary <- matched_oa %>%
-  count(scheme, group, name = "n_oas") %>%
-  arrange(scheme, group)
-
-write_csv(
-  matched_map_summary,
-  here("outputs", "England_CAZ_recent_matching_map_summary.csv")
-)
-
 cat("\nSaved:\n")
-cat("  outputs/England_CAZ_recent_matching_map.png\n")
-cat("  outputs/England_CAZ_recent_matching_map_summary.csv\n")
+cat("  outputs/England_CAZ_zones_only_map.png\n")

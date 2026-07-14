@@ -1305,3 +1305,74 @@ list.files(outdir, pattern = "\\.csv$") %>%
 cat("\nFigure outputs:\n")
 list.files(outdir, pattern = "\\.png$") %>%
   walk(~ cat("  ", .x, "\n"))
+
+
+###### 
+
+
+
+trajectory_vars <- c(
+  "trend_total_pkm",
+  "recent_minus_mid_total_pkm",
+  "mid_minus_early_total_pkm",
+  "covid_minus_precovid_total_pkm",
+  "recovery_minus_covid_total_pkm"
+)
+
+trajectory_balance <- smd_all_schemes %>%
+  filter(variable %in% trajectory_vars) %>%
+  mutate(
+    label = coalesce(var_labels[variable], variable)
+  ) %>%
+  pivot_longer(
+    c(smd_before, smd_after),
+    names_to = "matching_stage",
+    values_to = "smd"
+  ) %>%
+  mutate(
+    matching_stage = recode(
+      matching_stage,
+      smd_before = "Before matching",
+      smd_after = "After three-slope matching"
+    ),
+    matching_stage = factor(
+      matching_stage,
+      levels = c("Before matching", "After three-slope matching")
+    )
+  )
+
+p_trajectory_balance <- ggplot(
+  trajectory_balance,
+  aes(x = abs(smd), y = label, colour = matching_stage, shape = matching_stage)
+) +
+  geom_vline(xintercept = 0.10, linetype = "dashed", colour = "grey60") +
+  geom_line(aes(group = interaction(scheme, label)), colour = "grey85") +
+  geom_point(size = 3) +
+  facet_wrap(~scheme, ncol = 4) +
+  scale_colour_manual(values = c(
+    "Before matching" = "#E74C3C",
+    "After three-slope matching" = "#2ECC71"
+  )) +
+  labs(
+    title = "Three-slope matching improves pre-treatment trajectory balance",
+    subtitle = "Lower |SMD| after matching means controls better reproduce treated-road pre-period dynamics",
+    x = "Absolute standardised mean difference",
+    y = NULL,
+    colour = NULL,
+    shape = NULL,
+    caption = "Dashed line = 0.10 balance threshold"
+  ) +
+  theme_diag() +
+  theme(legend.position = "bottom")
+
+
+p_trajectory_balance
+
+
+save_fig(
+  p_trajectory_balance,
+  "fig_three_slope_matching_balance.png",
+  width = 16,
+  height = 10
+)
+

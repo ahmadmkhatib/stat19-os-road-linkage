@@ -1,15 +1,15 @@
 scheme,group,n_oas
-Bath,Matched control OA,45
+Bath,Matched control OA,90
 Bath,Treated OA,45
-Birmingham,Matched control OA,225
+Birmingham,Matched control OA,231
 Birmingham,Treated OA,120
-Bradford,Matched control OA,469
+Bradford,Matched control OA,1158
 Bradford,Treated OA,258
-Bristol,Matched control OA,130
+Bristol,Matched control OA,135
 Bristol,Treated OA,47
-Newcastle,Matched control OA,107
+Newcastle,Matched control OA,105
 Newcastle,Treated OA,27
-Portsmouth,Matched control OA,251
+Portsmouth,Matched control OA,55
 Portsmouth,Treated OA,55
-Sheffield,Matched control OA,69
+Sheffield,Matched control OA,38
 Sheffield,Treated OA,39

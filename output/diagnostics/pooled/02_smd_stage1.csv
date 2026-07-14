@@ -1,23 +1,23 @@
 stage,variable,label,smd_before,smd_after,balanced
-Stage 1,log1p_road_length_km,Road length (log),-0.2644,0.0133,TRUE
-Stage 1,log1p_pop_density,Pop. density (log),0.6694,0.2573,FALSE
-Stage 1,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8803,-0.3118,FALSE
-Stage 1,log1p_road_density_m_km2,Road density (log),0.6132,0.2924,FALSE
-Stage 1,log1p_business_retail_per_km2,Retail density (log),1.5501,0.6659,FALSE
-Stage 1,log_area_km2,Area (log),-0.6199,-0.2261,FALSE
-Stage 1,pct_A_road,% A road,0.3251,0.1027,FALSE
-Stage 1,pct_B_road,% B road,0.1039,0.1057,FALSE
-Stage 1,pct_minor_road,% Minor road,-0.3418,-0.1416,FALSE
-Stage 1,IMD,IMD,0.701,0.4117,FALSE
-Stage 1,ethnic_minority_pct,% Ethnic minority,1.2651,0.6246,FALSE
-Stage 1,no_car_households_pct,% No car household,1.2938,0.5727,FALSE
-Stage 1,two_plus_car_households_pct,% 2+ car household,-1.2799,-0.5692,FALSE
-Stage 1,car_commute_pct,% Car commute,-1.4305,-0.5373,FALSE
-Stage 1,public_transport_to_work_pct,% Public/paid transport to work,0.6949,0.29,FALSE
-Stage 1,active_travel_to_work_pct,% Active travel to work,1.2808,0.4614,FALSE
-Stage 1,work_from_home_pct,% Work from home,-0.0204,0.1023,FALSE
-Stage 1,children_0_19_pct,% Aged 0-19,0.0777,0.0411,TRUE
-Stage 1,young_people_5_19_pct,% Aged 5-19,0.1079,0.0654,TRUE
-Stage 1,young_adults_20_34_pct,% Aged 20-34,0.9986,0.4404,FALSE
-Stage 1,working_age_20_64_pct,% Aged 20-64,0.6502,0.2402,FALSE
-Stage 1,older_65plus_pct,% Aged 65+,-1.0151,-0.5034,FALSE
+Stage 1,log1p_road_length_km,Road length (log),-0.2644,-0.0737,TRUE
+Stage 1,log1p_pop_density,Pop. density (log),0.6694,0.3782,FALSE
+Stage 1,log1p_dist_BUA_centroid,Dist. to BUA centroid (log),-0.8803,-0.4572,FALSE
+Stage 1,log1p_road_density_m_km2,Road density (log),0.6132,0.3589,FALSE
+Stage 1,log1p_business_retail_per_km2,Retail density (log),1.5501,0.8487,FALSE
+Stage 1,log_area_km2,Area (log),-0.6199,-0.3327,FALSE
+Stage 1,pct_A_road,% A road,0.3251,0.093,TRUE
+Stage 1,pct_B_road,% B road,0.1039,0.0878,TRUE
+Stage 1,pct_minor_road,% Minor road,-0.3418,-0.1177,FALSE
+Stage 1,IMD,IMD,0.701,0.3908,FALSE
+Stage 1,ethnic_minority_pct,% Ethnic minority,1.2651,0.7669,FALSE
+Stage 1,no_car_households_pct,% No car household,1.2938,0.6746,FALSE
+Stage 1,two_plus_car_households_pct,% 2+ car household,-1.2799,-0.6774,FALSE
+Stage 1,car_commute_pct,% Car commute,-1.4305,-0.7044,FALSE
+Stage 1,public_transport_to_work_pct,% Public/paid transport to work,0.6949,0.2876,FALSE
+Stage 1,active_travel_to_work_pct,% Active travel to work,1.2808,0.6601,FALSE
+Stage 1,work_from_home_pct,% Work from home,-0.0204,0.1669,FALSE
+Stage 1,children_0_19_pct,% Aged 0-19,0.0777,0.0357,TRUE
+Stage 1,young_people_5_19_pct,% Aged 5-19,0.1079,0.0822,TRUE
+Stage 1,young_adults_20_34_pct,% Aged 20-34,0.9986,0.5741,FALSE
+Stage 1,working_age_20_64_pct,% Aged 20-64,0.6502,0.33,FALSE
+Stage 1,older_65plus_pct,% Aged 65+,-1.0151,-0.6232,FALSE
